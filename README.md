@@ -47,6 +47,11 @@ pnpm test:run  # Vitest single pass
 - **OS media integration** via the Media Session API — lock-screen
   artwork, Bluetooth headphone keys, macOS Now Playing widget, Windows
   SMTC, Linux MPRIS
+- **Gapless playback** — next track preloaded on a second audio element
+  for seamless album transitions
+- **ReplayGain** — per-track volume normalization from embedded RG tags
+- **5-band equalizer** — Off / Bass Boost / Vocal Boost / Treble Boost /
+  Acoustic presets, persisted across reloads
 
 ## Project layout
 

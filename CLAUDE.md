@@ -42,6 +42,34 @@
   with `pic.data as BlobPart` — don't "fix" it by importing or generic-
   parameterizing; the cast is correct.
 
+## Audio engine
+
+- `useAudioEngine` (`src/hooks/useAudioEngine.ts`) owns the entire audio
+  graph. **Do not** call `new AudioContext()` or `createMediaElementSource`
+  anywhere else — both are constrained to be called once.
+- **Single AudioContext for the page's lifetime.** No cleanup on unmount;
+  the browser handles teardown on tab close. This is intentional: React 18
+  StrictMode runs effects twice in dev, and `createMediaElementSource`
+  permanently marks an audio element — closing the context doesn't free it.
+- **Two `<audio>` elements** (`audioRefA`, `audioRefB`), one MediaElementSource
+  each, mixed before the analyser. Always render both in App.tsx (no
+  conditional). The hook handles which is active via `activeRef`.
+- **Gapless model**: preload `nextSong` on the inactive element when active
+  reports `currentTime > duration - 5`. On `ended`, if inactive has the
+  expected next song loaded, flip + play instantly, *then* call onEnded so
+  App can update React state (avoids audible gap between flip and React commit).
+- **ReplayGain**: per-song dB value comes from `Song.replayGainDb`. Captured
+  from `meta.common.replaygain_track_gain?.dB` (note: it's an `IRatio` object,
+  not a plain number). Applied via the active element's `GainNode`.
+- **EQ band map**: 5 `BiquadFilterNode`s per element, `type='peaking'`, `Q=1`,
+  frequencies `[60, 230, 910, 3600, 14000] Hz`. Presets and `applyPreset`
+  live in `src/lib/eq.ts`. The preset name persists via `storage.getEqPreset`/
+  `saveEqPreset`. Apply changes via `setValueAtTime` for sample-accuracy.
+- **Why the `onEnded` ref dance in App.tsx**: handleEnded references engine
+  returns (`seek`, `togglePlayPause`, `playNext`) defined *after* useAudioEngine
+  in source order. We pass a stable `() => onEndedRef.current()` to the hook
+  and update `onEndedRef.current = playNext` after definitions exist.
+
 ## Keyboard shortcuts
 
 - `useKeyboardShortcuts(handlers, options?)` (`src/hooks/useKeyboardShortcuts.ts`)
