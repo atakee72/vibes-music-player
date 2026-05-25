@@ -6,3 +6,4 @@ dist
 .playwright/
 .playwright-cli/
 *.png
+.vercel

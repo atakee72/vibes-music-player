@@ -51,6 +51,27 @@
   that `pnpm dev` silently skips, so run it before claiming a change is
   done.
 
+## Testing
+
+- `pnpm test` — Vitest watch mode
+- `pnpm test:run` — single pass (use before commits)
+- Stack: **Vitest 3** + **happy-dom** + **React Testing Library**.
+- **Config**: `vitest.config.ts` uses `mergeConfig(viteConfig, ...)` so it
+  inherits the `react()` plugin. Don't add a separate Vite config for tests.
+- **Type globals** (`describe`, `it`, `expect`, `vi`, jest-dom matchers) are
+  registered via triple-slash refs in `src/vite-env.d.ts`. **Do not** add
+  `"types"` to `tsconfig.json`'s `compilerOptions` — that field overrides
+  TypeScript's `@types/*` auto-discovery.
+- Test files are **co-located** (`Sidebar.test.tsx` next to `Sidebar.tsx`).
+- `src/test-utils.ts` has `makeSong` / `makePlaylist` factories. Use them
+  instead of hand-rolling fixtures in each test.
+- **`App.tsx` has no tests** by design — it's coupled to `AudioContext` and
+  RAF, and the mocking surface isn't worth it until we refactor that
+  pipeline (slated for the gapless-playback work).
+- The Sidebar trash-button test specifically uses `fireEvent.click` (not a
+  direct prop call) because the test exists to verify `stopPropagation`,
+  which only matters when a real DOM event bubbles.
+
 ## Visual verification
 
 - `playwright-cli` (Microsoft `@playwright/cli` v0.1.x, installed globally)

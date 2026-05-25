@@ -18,9 +18,11 @@ your machine.
 
 ```bash
 pnpm install
-pnpm dev      # http://localhost:5173
-pnpm build    # tsc + vite build → dist/
-pnpm preview  # serve the built bundle
+pnpm dev       # http://localhost:5173
+pnpm build     # tsc + vite build → dist/
+pnpm preview   # serve the built bundle
+pnpm test      # Vitest in watch mode
+pnpm test:run  # Vitest single pass
 ```
 
 ## Features

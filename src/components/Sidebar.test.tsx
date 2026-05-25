@@ -1,0 +1,56 @@
+import { render, screen, fireEvent } from '@testing-library/react';
+import { Sidebar } from './Sidebar';
+import { makePlaylist } from '../test-utils';
+
+function renderSidebar(overrides: Partial<Parameters<typeof Sidebar>[0]> = {}) {
+  const onSelect = vi.fn();
+  const onCreate = vi.fn();
+  const onDelete = vi.fn();
+  const onClose = vi.fn();
+  const library = makePlaylist({ id: 'library', name: 'Library' });
+  const mix = makePlaylist({ id: 'mix-1', name: 'Mix' });
+
+  const utils = render(
+    <Sidebar
+      playlists={[library, mix]}
+      activePlaylistId="library"
+      onSelect={onSelect}
+      onCreate={onCreate}
+      onDelete={onDelete}
+      isOpen={false}
+      onClose={onClose}
+      {...overrides}
+    />,
+  );
+  return { ...utils, onSelect, onCreate, onDelete, onClose, library, mix };
+}
+
+describe('Sidebar', () => {
+  it('renders the Vibes heading, New Playlist button, and each playlist name', () => {
+    renderSidebar();
+    expect(screen.getByRole('heading', { name: 'Vibes' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'New Playlist' })).toBeInTheDocument();
+    expect(screen.getByText('Library')).toBeInTheDocument();
+    expect(screen.getByText('Mix')).toBeInTheDocument();
+  });
+
+  it('clicking a non-active playlist row fires onSelect then onClose', () => {
+    const { onSelect, onClose, mix } = renderSidebar();
+    fireEvent.click(screen.getByText('Mix'));
+    expect(onSelect).toHaveBeenCalledWith(mix.id);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('clicking a trash button on a non-library playlist fires onDelete and does NOT fire onSelect', () => {
+    const { onSelect, onDelete, mix } = renderSidebar();
+    const trash = screen.getByRole('button', { name: /Delete Mix/i });
+    fireEvent.click(trash);
+    expect(onDelete).toHaveBeenCalledWith(mix.id);
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('does not render a trash button on the library row', () => {
+    renderSidebar();
+    expect(screen.queryByRole('button', { name: /Delete Library/i })).not.toBeInTheDocument();
+  });
+});
