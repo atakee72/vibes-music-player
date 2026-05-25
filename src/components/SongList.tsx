@@ -8,7 +8,13 @@ interface SongListProps {
   onPlay: (song: Song) => void;
   onPause: () => void;
   onDelete: (id: string) => void;
+  emptyHint?: { primary: string; secondary: string };
 }
+
+const DEFAULT_EMPTY_HINT = {
+  primary: 'No songs in this playlist',
+  secondary: 'Add some music files to get started',
+};
 
 const formatTime = (s: number) =>
   `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}`;
@@ -20,6 +26,7 @@ export function SongList({
   onPlay,
   onPause,
   onDelete,
+  emptyHint = DEFAULT_EMPTY_HINT,
 }: SongListProps) {
   if (songs.length === 0) {
     return (
@@ -28,8 +35,8 @@ export function SongList({
           <div className="w-20 h-20 bg-gradient-to-r from-purple-500/20 to-pink-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
             <Music className="h-10 w-10 text-purple-400" />
           </div>
-          <p className="text-lg mb-2 font-medium">No songs in this playlist</p>
-          <p className="text-sm text-white/40">Add some music files to get started</p>
+          <p className="text-lg mb-2 font-medium">{emptyHint.primary}</p>
+          <p className="text-sm text-white/40">{emptyHint.secondary}</p>
         </div>
       </div>
     );

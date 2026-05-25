@@ -27,6 +27,12 @@ describe('SongList', () => {
     expect(screen.getByText('Add some music files to get started')).toBeInTheDocument();
   });
 
+  it('renders the custom emptyHint copy when provided', () => {
+    renderSongList({ emptyHint: { primary: 'No matches for "beat"', secondary: 'Try a different search' } });
+    expect(screen.getByText('No matches for "beat"')).toBeInTheDocument();
+    expect(screen.getByText('Try a different search')).toBeInTheDocument();
+  });
+
   it('renders one row per song with title and artist', () => {
     const a = makeSong({ title: 'Alpha', artist: 'Artist A' });
     const b = makeSong({ title: 'Bravo', artist: 'Artist B' });

@@ -8,6 +8,7 @@ import { SongList } from './components/SongList';
 import { PlayerBar } from './components/PlayerBar';
 import * as storage from './lib/storage';
 import { ingestDirectoryHandle } from './lib/ingest';
+import { filterSongs } from './lib/filter';
 
 type LibraryStatus = 'loading' | 'ready' | 'needs-prompt';
 
@@ -34,12 +35,15 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const loadedRef = useRef(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const { extractMetadata } = useMetadataExtractor();
 
   const activePlaylist = playlists.find((p) => p.id === activePlaylistId);
+  const filteredSongs = filterSongs(activePlaylist?.songs ?? [], searchQuery);
 
   // Audio element + Web Audio API analyser wiring.
   useEffect(() => {
@@ -276,8 +280,19 @@ export default function App() {
       Space: togglePlayPause,
       ArrowRight: playNext,
       ArrowLeft: playPrev,
+      Slash: () => searchInputRef.current?.focus(),
       Escape: () => {
-        if (showUpload) setShowUpload(false);
+        if (showUpload) {
+          setShowUpload(false);
+          return;
+        }
+        if (searchQuery.length > 0) {
+          setSearchQuery('');
+          return;
+        }
+        if (document.activeElement === searchInputRef.current) {
+          searchInputRef.current?.blur();
+        }
       },
     },
     { isBlocked: showUpload },
@@ -365,6 +380,11 @@ export default function App() {
                 </button>
                 <h2 className="text-xl lg:text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
                   {activePlaylist?.name}
+                  {searchQuery.trim() && activePlaylist && (
+                    <span className="ml-2 text-sm font-normal text-white/50 bg-clip-border bg-none [-webkit-text-fill-color:initial]">
+                      {filteredSongs.length} of {activePlaylist.songs.length}
+                    </span>
+                  )}
                 </h2>
                 <button
                   onClick={() => setShowUpload(true)}
@@ -375,8 +395,19 @@ export default function App() {
               </div>
             </header>
 
+            <div className="px-4 lg:px-6 pt-3">
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search this playlist… (press / to focus)"
+                className="w-full bg-white/5 text-sm text-white placeholder-white/40 rounded-lg border border-white/10 focus:border-purple-400 focus:outline-none px-3 py-2 transition-colors"
+              />
+            </div>
+
             <SongList
-              songs={activePlaylist?.songs || []}
+              songs={filteredSongs}
               currentSong={currentSong}
               isPlaying={isPlaying}
               onPlay={(song) => {
@@ -393,6 +424,14 @@ export default function App() {
                   setIsPlaying(false);
                 }
               }}
+              emptyHint={
+                searchQuery.trim()
+                  ? {
+                      primary: `No matches for "${searchQuery.trim()}"`,
+                      secondary: 'Try a different search',
+                    }
+                  : undefined
+              }
             />
           </div>
         </div>
