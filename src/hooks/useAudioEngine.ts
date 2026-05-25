@@ -249,6 +249,28 @@ export function useAudioEngine({
     resumeAndPlay(active);
   }, [song]);
 
+  // ---- ReplayGain: apply per-song gain on whichever element is loading it ----
+  useEffect(() => {
+    const ctx = ctxRef.current;
+    if (!ctx) return;
+    const chain = activeRef.current === 'A' ? chainARef.current : chainBRef.current;
+    if (!chain) return;
+    const ratio =
+      song?.replayGainDb !== undefined ? Math.pow(10, song.replayGainDb / 20) : 1;
+    chain.gain.gain.setValueAtTime(ratio, ctx.currentTime);
+  }, [song]);
+
+  // Same for the inactive element when nextSong is set (so gapless swap has correct gain)
+  useEffect(() => {
+    const ctx = ctxRef.current;
+    if (!ctx) return;
+    const chain = activeRef.current === 'A' ? chainBRef.current : chainARef.current;
+    if (!chain) return;
+    const ratio =
+      nextSong?.replayGainDb !== undefined ? Math.pow(10, nextSong.replayGainDb / 20) : 1;
+    chain.gain.gain.setValueAtTime(ratio, ctx.currentTime);
+  }, [nextSong]);
+
   const togglePlayPause = useCallback(() => {
     const activeAudio =
       activeRef.current === 'A' ? audioRefA.current : audioRefB.current;

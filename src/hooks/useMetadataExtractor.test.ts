@@ -38,6 +38,25 @@ describe('useMetadataExtractor', () => {
     expect(song!.file).toBe(file);
   });
 
+  it('captures replayGainDb from meta.common.replaygain_track_gain.dB', async () => {
+    parseBlobMock.mockResolvedValue({
+      common: {
+        title: 'X',
+        artist: 'Y',
+        album: 'Z',
+        replaygain_track_gain: { dB: -6.4, ratio: 0.479 },
+      },
+      format: { duration: 100 },
+    });
+
+    const { result } = renderHook(() => useMetadataExtractor());
+    let song: Awaited<ReturnType<typeof result.current.extractMetadata>>;
+    await act(async () => {
+      song = await result.current.extractMetadata(new File([], 'rg.mp3'));
+    });
+    expect(song!.replayGainDb).toBe(-6.4);
+  });
+
   it('extracts coverArt when picture data is present', async () => {
     parseBlobMock.mockResolvedValue({
       common: {

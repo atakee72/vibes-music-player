@@ -11,6 +11,7 @@ export interface Song {
   coverArt?: string;
   file: File;
   fileHandle?: FileSystemFileHandle;
+  replayGainDb?: number;
 }
 
 export interface Playlist {

@@ -29,6 +29,7 @@ export function useMetadataExtractor() {
         bitrate: meta.format.bitrate,
         coverArt,
         file,
+        replayGainDb: meta.common.replaygain_track_gain?.dB,
       };
     } catch (err) {
       console.error('Error extracting metadata:', err);
