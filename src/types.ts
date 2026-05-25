@@ -10,6 +10,7 @@ export interface Song {
   bitrate?: number;
   coverArt?: string;
   file: File;
+  fileHandle?: FileSystemFileHandle;
 }
 
 export interface Playlist {
@@ -20,3 +21,10 @@ export interface Playlist {
 }
 
 export type RepeatMode = 'none' | 'all' | 'one';
+
+export interface LibraryRoot {
+  id: string;
+  name: string;
+  handle: FileSystemDirectoryHandle;
+  addedAt: Date;
+}

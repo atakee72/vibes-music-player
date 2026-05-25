@@ -42,6 +42,37 @@
   with `pic.data as BlobPart` — don't "fix" it by importing or generic-
   parameterizing; the cast is correct.
 
+## Persistence
+
+- Storage layer: `src/lib/storage.ts`, a thin wrapper over `idb-keyval`.
+  Two keys: `library-roots` (array of `LibraryRoot`) and `playlists`
+  (array of `StoredPlaylist`). All persistence touches IDB through this
+  module — no other file should import `idb-keyval` directly.
+- **Song persistence rule**: only songs with a `fileHandle` are persisted.
+  Songs from single-file drops have no handle and are session-only. The
+  `toStored`/`fromStored` helpers in storage.ts handle the strip
+  (drop `file` + `url`) and rehydrate (`fileHandle.getFile()` → recreate
+  blob URL) so the rest of the code never sees the split.
+- **Song IDs are path-based**: `${root.id}/${relativePath}` for folder-
+  ingested songs (stable across sessions so playlist membership survives
+  reload); `crypto.randomUUID()` for legacy file-drop songs (session-only,
+  ID stability doesn't matter).
+- **Browser compatibility**:
+  - Chromium (Chrome/Edge/Brave/Opera): full feature — folder drop +
+    picker + persistence
+  - Firefox/Safari: folder drop works via `webkitGetAsEntry`, but no
+    handles means no persistence; the upload modal shows a note explaining
+    this
+- **Permission reality**: Chrome does NOT remember FS Access grants across
+  browser restarts by default. After reload, `queryPermission` returns
+  `'prompt'` even for previously-granted handles. The app shows a
+  "Welcome back. Click to restore your library." banner; one click and
+  it's back. Don't promise silent restore in UI — it's the exception.
+- **Save-effect race guard**: `App.tsx` uses a `loadedRef` to suppress
+  the first `useEffect([playlists])` write that would otherwise overwrite
+  stored data with the initial empty `playlists` state before mount-load
+  completes. If you touch the load-or-save lifecycle, keep this guard.
+
 ## Dev loop
 
 - `pnpm dev` (Vite HMR) is enough for almost everything. **No need to

@@ -1,4 +1,5 @@
 import '@testing-library/jest-dom/vitest';
+import 'fake-indexeddb/auto';
 
 // Note: src/App.tsx is intentionally not tested in Phase 0.
 // It's deeply coupled to AudioContext, createMediaElementSource, and

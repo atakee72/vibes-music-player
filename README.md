@@ -27,13 +27,20 @@ pnpm test:run  # Vitest single pass
 
 ## Features
 
-- Drag-and-drop or click-to-upload audio files
+- **Drop a folder** (or individual files) — recursive ingest of every audio
+  file inside
+- **Library persists across reloads** (Chrome / Edge / Brave / Opera) via
+  the File System Access API + IndexedDB. One click to re-grant on each
+  browser session; no re-dropping
 - Per-file metadata: title, artist, album, duration, cover art, file size
-- Multiple playlists (create / delete); "Library" is the always-present default
+- Multiple playlists (create / delete); "Library" is the always-present
+  default
 - Transport controls (play / pause / prev / next), seek bar, repeat modes
   (off / all / one)
-- Live frequency visualizer driven by the `<audio>` element via Web Audio API
-- Responsive layout — sidebar collapses on mobile, controls reflow under `lg`
+- Live frequency visualizer driven by the `<audio>` element via Web Audio
+  API
+- Responsive layout — sidebar collapses on mobile, controls reflow under
+  `lg`
 
 ## Project layout
 
