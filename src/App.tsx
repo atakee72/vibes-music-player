@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Upload } from 'lucide-react';
 import type { LibraryRoot, Playlist, RepeatMode, Song } from './types';
 import { useMetadataExtractor } from './hooks/useMetadataExtractor';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { Sidebar } from './components/Sidebar';
 import { SongList } from './components/SongList';
 import { PlayerBar } from './components/PlayerBar';
@@ -269,6 +270,18 @@ export default function App() {
   };
 
   const supportsFolderPicker = typeof window !== 'undefined' && 'showDirectoryPicker' in window;
+
+  useKeyboardShortcuts(
+    {
+      Space: togglePlayPause,
+      ArrowRight: playNext,
+      ArrowLeft: playPrev,
+      Escape: () => {
+        if (showUpload) setShowUpload(false);
+      },
+    },
+    { isBlocked: showUpload },
+  );
 
   return (
     <div
