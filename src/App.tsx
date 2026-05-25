@@ -12,6 +12,7 @@ import * as storage from './lib/storage';
 import { ingestDirectoryHandle } from './lib/ingest';
 import { filterSongs } from './lib/filter';
 import { nextInPlaylist } from './lib/queue';
+import type { EqPreset } from './lib/eq';
 
 type LibraryStatus = 'loading' | 'ready' | 'needs-prompt';
 
@@ -35,6 +36,7 @@ export default function App() {
   const [repeatMode, setRepeatMode] = useState<RepeatMode>('none');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [eqPreset, setEqPreset] = useState<EqPreset>('Off');
 
   const loadedRef = useRef(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -58,6 +60,7 @@ export default function App() {
   } = useAudioEngine({
     song: currentSong,
     nextSong,
+    eqPreset,
     onEnded: () => onEndedRef.current(),
   });
 
@@ -76,8 +79,10 @@ export default function App() {
         }
 
         const loaded = needsPrompt ? [] : await storage.getPlaylists();
+        const storedEq = await storage.getEqPreset();
         setLibraryRoots(roots);
         setPlaylists(ensureLibrary(loaded));
+        setEqPreset(storedEq);
         setLibraryStatus(needsPrompt ? 'needs-prompt' : 'ready');
       } catch (err) {
         console.error('Library load failed:', err);
@@ -94,6 +99,12 @@ export default function App() {
     if (!loadedRef.current) return;
     storage.savePlaylists(playlists).catch((err) => console.error('Save failed:', err));
   }, [playlists]);
+
+  // Persist EQ preset on change — same guard
+  useEffect(() => {
+    if (!loadedRef.current) return;
+    storage.saveEqPreset(eqPreset).catch((err) => console.error('EQ save failed:', err));
+  }, [eqPreset]);
 
   const handleFiles = useCallback(
     async (files: FileList | File[]) => {
@@ -396,11 +407,13 @@ export default function App() {
         duration={duration}
         visualizerData={visualizerData}
         repeatMode={repeatMode}
+        eqPreset={eqPreset}
         onPlayPause={togglePlayPause}
         onPrev={playPrev}
         onNext={playNext}
         onSeek={seek}
         onCycleRepeat={cycleRepeat}
+        onEqPresetChange={setEqPreset}
       />
 
       {showUpload && (

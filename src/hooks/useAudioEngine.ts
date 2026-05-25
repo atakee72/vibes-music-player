@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Song } from '../types';
-
-const EQ_FREQS = [60, 230, 910, 3600, 14000] as const;
+import { EQ_FREQS, applyPreset, type EqPreset } from '../lib/eq';
 
 interface Chain {
   source: MediaElementAudioSourceNode;
@@ -12,6 +11,7 @@ interface Chain {
 interface UseAudioEngineArgs {
   song: Song | null;
   nextSong?: Song | null;
+  eqPreset?: EqPreset;
   onEnded?: () => void;
 }
 
@@ -45,6 +45,7 @@ interface UseAudioEngineResult {
 export function useAudioEngine({
   song,
   nextSong,
+  eqPreset = 'Off',
   onEnded,
 }: UseAudioEngineArgs): UseAudioEngineResult {
   const audioRefA = useRef<HTMLAudioElement>(null);
@@ -270,6 +271,14 @@ export function useAudioEngine({
       nextSong?.replayGainDb !== undefined ? Math.pow(10, nextSong.replayGainDb / 20) : 1;
     chain.gain.gain.setValueAtTime(ratio, ctx.currentTime);
   }, [nextSong]);
+
+  // ---- EQ preset: apply to both chains ----
+  useEffect(() => {
+    const ctx = ctxRef.current;
+    if (!ctx) return;
+    if (chainARef.current) applyPreset(chainARef.current.filters, eqPreset, ctx.currentTime);
+    if (chainBRef.current) applyPreset(chainBRef.current.filters, eqPreset, ctx.currentTime);
+  }, [eqPreset]);
 
   const togglePlayPause = useCallback(() => {
     const activeAudio =

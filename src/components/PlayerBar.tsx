@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import {
   Music,
   Pause,
@@ -6,9 +7,11 @@ import {
   Repeat1,
   SkipBack,
   SkipForward,
+  Sliders,
   Volume2,
 } from 'lucide-react';
 import type { RepeatMode, Song } from '../types';
+import { EQ_PRESET_NAMES, type EqPreset } from '../lib/eq';
 
 interface PlayerBarProps {
   song: Song | null;
@@ -17,11 +20,13 @@ interface PlayerBarProps {
   duration: number;
   visualizerData: number[];
   repeatMode: RepeatMode;
+  eqPreset: EqPreset;
   onPlayPause: () => void;
   onPrev: () => void;
   onNext: () => void;
   onSeek: (t: number) => void;
   onCycleRepeat: () => void;
+  onEqPresetChange: (preset: EqPreset) => void;
 }
 
 const formatTime = (s: number) => {
@@ -36,12 +41,25 @@ export function PlayerBar({
   duration,
   visualizerData,
   repeatMode,
+  eqPreset,
   onPlayPause,
   onPrev,
   onNext,
   onSeek,
   onCycleRepeat,
+  onEqPresetChange,
 }: PlayerBarProps) {
+  const [eqOpen, setEqOpen] = useState(false);
+  const eqWrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!eqOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (!eqWrapRef.current?.contains(e.target as Node)) setEqOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [eqOpen]);
   if (!song) {
     return (
       <div className="h-20 lg:h-24 bg-slate-800/95 backdrop-blur-xl border-t border-white/10 flex items-center justify-center">
@@ -153,6 +171,38 @@ export function PlayerBar({
                 }}
               />
             ))}
+          </div>
+          <div ref={eqWrapRef} className="relative">
+            <button
+              onClick={() => setEqOpen((v) => !v)}
+              className={`p-2 hover:bg-white/10 rounded-full transition-colors ${
+                eqPreset !== 'Off' ? 'text-purple-400' : 'text-white/60'
+              }`}
+              title={`Equalizer: ${eqPreset}`}
+              aria-label="Equalizer"
+            >
+              <Sliders className="h-4 w-4 lg:h-5 lg:w-5" />
+            </button>
+            {eqOpen && (
+              <div className="absolute bottom-full right-0 mb-2 bg-slate-800/95 backdrop-blur-xl border border-white/10 rounded-lg shadow-xl py-1 min-w-[140px] z-50">
+                {EQ_PRESET_NAMES.map((name) => (
+                  <button
+                    key={name}
+                    onClick={() => {
+                      onEqPresetChange(name);
+                      setEqOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-1.5 text-sm transition-colors ${
+                      name === eqPreset
+                        ? 'bg-gradient-to-r from-purple-500/30 to-pink-500/30 text-purple-200'
+                        : 'text-white/80 hover:bg-white/5'
+                    }`}
+                  >
+                    {name}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <Volume2 className="h-4 w-4 lg:h-5 lg:w-5 text-white/60" />
         </div>

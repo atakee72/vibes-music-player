@@ -1,8 +1,10 @@
 import { get, set } from 'idb-keyval';
 import type { LibraryRoot, Playlist, Song } from '../types';
+import type { EqPreset } from './eq';
 
 const ROOTS_KEY = 'library-roots';
 const PLAYLISTS_KEY = 'playlists';
+const EQ_PRESET_KEY = 'eq-preset';
 
 type StoredSong = Omit<Song, 'file' | 'url'> & { fileHandle: FileSystemFileHandle };
 type StoredPlaylist = Omit<Playlist, 'songs'> & { songs: StoredSong[] };
@@ -66,4 +68,12 @@ export async function savePlaylists(playlists: Playlist[]): Promise<void> {
     songs: p.songs.map(toStored).filter((s): s is StoredSong => s !== null),
   }));
   await set(PLAYLISTS_KEY, stored);
+}
+
+export async function getEqPreset(): Promise<EqPreset> {
+  return (await get<EqPreset>(EQ_PRESET_KEY)) ?? 'Off';
+}
+
+export async function saveEqPreset(preset: EqPreset): Promise<void> {
+  await set(EQ_PRESET_KEY, preset);
 }

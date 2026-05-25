@@ -1,7 +1,9 @@
 import {
   addLibraryRoot,
+  getEqPreset,
   getLibraryRoots,
   getPlaylists,
+  saveEqPreset,
   savePlaylists,
 } from './storage';
 import { makePlaylist, makeSong } from '../test-utils';
@@ -102,6 +104,15 @@ describe('storage — playlists', () => {
 
     const loaded = await getPlaylists();
     expect(loaded[0].songs).toHaveLength(0);
+  });
+
+  it('getEqPreset returns "Off" when key absent', async () => {
+    expect(await getEqPreset()).toBe('Off');
+  });
+
+  it('round-trips an EQ preset', async () => {
+    await saveEqPreset('Bass Boost');
+    expect(await getEqPreset()).toBe('Bass Boost');
   });
 
   it('drops songs whose handle getFile() throws (file moved/deleted)', async () => {

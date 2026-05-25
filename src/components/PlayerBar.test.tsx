@@ -8,6 +8,7 @@ function renderPlayerBar(overrides: Partial<Parameters<typeof PlayerBar>[0]> = {
   const onNext = vi.fn();
   const onSeek = vi.fn();
   const onCycleRepeat = vi.fn();
+  const onEqPresetChange = vi.fn();
   const utils = render(
     <PlayerBar
       song={null}
@@ -16,15 +17,17 @@ function renderPlayerBar(overrides: Partial<Parameters<typeof PlayerBar>[0]> = {
       duration={0}
       visualizerData={[]}
       repeatMode="none"
+      eqPreset="Off"
       onPlayPause={onPlayPause}
       onPrev={onPrev}
       onNext={onNext}
       onSeek={onSeek}
       onCycleRepeat={onCycleRepeat}
+      onEqPresetChange={onEqPresetChange}
       {...overrides}
     />,
   );
-  return { ...utils, onPlayPause, onPrev, onNext, onSeek, onCycleRepeat };
+  return { ...utils, onPlayPause, onPrev, onNext, onSeek, onCycleRepeat, onEqPresetChange };
 }
 
 describe('PlayerBar', () => {
@@ -58,11 +61,13 @@ describe('PlayerBar', () => {
         duration={100}
         visualizerData={[]}
         repeatMode="none"
+        eqPreset="Off"
         onPlayPause={onPlayPause}
         onPrev={vi.fn()}
         onNext={vi.fn()}
         onSeek={vi.fn()}
         onCycleRepeat={vi.fn()}
+        onEqPresetChange={vi.fn()}
       />,
     );
     expect(screen.getByRole('button', { name: 'Pause' })).toBeInTheDocument();
@@ -82,11 +87,13 @@ describe('PlayerBar', () => {
         duration={100}
         visualizerData={[]}
         repeatMode="one"
+        eqPreset="Off"
         onPlayPause={vi.fn()}
         onPrev={vi.fn()}
         onNext={vi.fn()}
         onSeek={vi.fn()}
         onCycleRepeat={onCycleRepeat}
+        onEqPresetChange={vi.fn()}
       />,
     );
     expect(screen.getAllByRole('button', { name: 'Repeat: one' })).toHaveLength(2);
@@ -104,6 +111,32 @@ describe('PlayerBar', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Play' }));
     expect(onPlayPause).toHaveBeenCalledTimes(1);
+  });
+
+  it('EQ button opens a popover with all 5 presets and fires onEqPresetChange', () => {
+    const song = makeSong();
+    const { onEqPresetChange } = renderPlayerBar({ song });
+
+    const eqButton = screen.getByRole('button', { name: 'Equalizer' });
+    fireEvent.click(eqButton);
+
+    // Popover should list all five presets
+    const popoverButtons = screen.getAllByRole('button').filter(
+      (b) => ['Off', 'Bass Boost', 'Vocal Boost', 'Treble Boost', 'Acoustic'].includes(
+        b.textContent ?? '',
+      ),
+    );
+    expect(popoverButtons).toHaveLength(5);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Bass Boost' }));
+    expect(onEqPresetChange).toHaveBeenCalledWith('Bass Boost');
+  });
+
+  it('EQ button has the purple-400 tint when a non-Off preset is active', () => {
+    const song = makeSong();
+    renderPlayerBar({ song, eqPreset: 'Bass Boost' });
+    const eqButton = screen.getByRole('button', { name: 'Equalizer' });
+    expect(eqButton).toHaveClass('text-purple-400');
   });
 
   it('visualizer caps at 15 bars regardless of input length', () => {
