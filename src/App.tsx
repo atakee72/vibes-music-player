@@ -3,6 +3,7 @@ import { Upload } from 'lucide-react';
 import type { LibraryRoot, Playlist, RepeatMode, Song } from './types';
 import { useMetadataExtractor } from './hooks/useMetadataExtractor';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { useMediaSession } from './hooks/useMediaSession';
 import { Sidebar } from './components/Sidebar';
 import { SongList } from './components/SongList';
 import { PlayerBar } from './components/PlayerBar';
@@ -274,6 +275,18 @@ export default function App() {
   };
 
   const supportsFolderPicker = typeof window !== 'undefined' && 'showDirectoryPicker' in window;
+
+  useMediaSession({
+    song: currentSong,
+    isPlaying,
+    currentTime,
+    duration,
+    onPlay: togglePlayPause,
+    onPause: togglePlayPause,
+    onNext: playNext,
+    onPrev: playPrev,
+    onSeek: seek,
+  });
 
   useKeyboardShortcuts(
     {
