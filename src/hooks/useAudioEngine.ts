@@ -11,8 +11,11 @@ interface Chain {
 
 interface UseAudioEngineArgs {
   song: Song | null;
+  nextSong?: Song | null;
   onEnded?: () => void;
 }
+
+const PRELOAD_LEAD_SECONDS = 5;
 
 interface UseAudioEngineResult {
   audioRefA: React.RefObject<HTMLAudioElement>;
@@ -39,7 +42,11 @@ interface UseAudioEngineResult {
  *                                                                       ↓
  *                                                              analyser → destination
  */
-export function useAudioEngine({ song, onEnded }: UseAudioEngineArgs): UseAudioEngineResult {
+export function useAudioEngine({
+  song,
+  nextSong,
+  onEnded,
+}: UseAudioEngineArgs): UseAudioEngineResult {
   const audioRefA = useRef<HTMLAudioElement>(null);
   const audioRefB = useRef<HTMLAudioElement>(null);
 
@@ -50,15 +57,17 @@ export function useAudioEngine({ song, onEnded }: UseAudioEngineArgs): UseAudioE
   const activeRef = useRef<'A' | 'B'>('A');
   const rafRef = useRef<number | null>(null);
   const onEndedRef = useRef(onEnded);
+  const nextSongRef = useRef<Song | null>(nextSong ?? null);
 
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [visualizerData, setVisualizerData] = useState<number[]>([]);
 
-  // Keep onEnded ref fresh without re-running setup
+  // Keep onEnded + nextSong refs fresh without re-running setup
   useEffect(() => {
     onEndedRef.current = onEnded;
+    nextSongRef.current = nextSong ?? null;
   });
 
   // ---- Mount: build the entire graph exactly once ----
@@ -144,16 +153,41 @@ export function useAudioEngine({ song, onEnded }: UseAudioEngineArgs): UseAudioE
     };
     const onAudioEnded = (e: Event) => {
       if (e.target !== activeAudio()) return;
-      setIsPlaying(false);
-      if (rafRef.current !== null) {
-        cancelAnimationFrame(rafRef.current);
-        rafRef.current = null;
+
+      // Gapless swap: if next song is preloaded on the inactive element,
+      // flip + play immediately, before notifying the app.
+      const nextUrl = nextSongRef.current?.url;
+      const inactive = activeRef.current === 'A' ? audioB : audioA;
+      if (nextUrl && inactive.src === nextUrl) {
+        activeRef.current = activeRef.current === 'A' ? 'B' : 'A';
+        inactive.play().catch(console.error);
+      } else {
+        setIsPlaying(false);
+        if (rafRef.current !== null) {
+          cancelAnimationFrame(rafRef.current);
+          rafRef.current = null;
+        }
       }
       onEndedRef.current?.();
     };
     const onTime = (e: Event) => {
       if (e.target !== activeAudio()) return;
       setCurrentTime((e.target as HTMLAudioElement).currentTime);
+
+      // Preload next song on the inactive element when we're near the end
+      const target = e.target as HTMLAudioElement;
+      const nextSong = nextSongRef.current;
+      if (
+        nextSong &&
+        target.duration > 0 &&
+        target.duration - target.currentTime < PRELOAD_LEAD_SECONDS
+      ) {
+        const inactive = activeRef.current === 'A' ? audioB : audioA;
+        if (inactive.src !== nextSong.url) {
+          inactive.src = nextSong.url;
+          inactive.load();
+        }
+      }
     };
     const onLoaded = (e: Event) => {
       if (e.target !== activeAudio()) return;
@@ -171,12 +205,10 @@ export function useAudioEngine({ song, onEnded }: UseAudioEngineArgs): UseAudioE
     // No cleanup — see comment above the effect.
   }, []);
 
-  // ---- Song change: load on active element and play ----
+  // ---- Song change ----
   useEffect(() => {
     const ctx = ctxRef.current;
-    const activeAudio =
-      activeRef.current === 'A' ? audioRefA.current : audioRefB.current;
-    if (!ctx || !activeAudio) return;
+    if (!ctx) return;
 
     if (!song) {
       audioRefA.current?.pause();
@@ -184,18 +216,37 @@ export function useAudioEngine({ song, onEnded }: UseAudioEngineArgs): UseAudioE
       return;
     }
 
-    activeAudio.src = song.url;
-    activeAudio.load();
-    (async () => {
+    const active = activeRef.current === 'A' ? audioRefA.current : audioRefB.current;
+    const inactive = activeRef.current === 'A' ? audioRefB.current : audioRefA.current;
+    if (!active || !inactive) return;
+
+    // Already playing this song on the active element (e.g. ended-handler
+    // already did the gapless swap before this effect ran)
+    if (active.src === song.url) return;
+
+    const resumeAndPlay = async (audio: HTMLAudioElement) => {
       if (ctx.state === 'suspended') {
         try {
           await ctx.resume();
         } catch {
-          // ignore — will retry next user gesture
+          // ignore — retry on next user gesture
         }
       }
-      activeAudio.play().catch(console.error);
-    })();
+      audio.play().catch(console.error);
+    };
+
+    // Preloaded on inactive — flip + play
+    if (inactive.src === song.url) {
+      active.pause();
+      activeRef.current = activeRef.current === 'A' ? 'B' : 'A';
+      resumeAndPlay(inactive);
+      return;
+    }
+
+    // Random click on a non-sequential song — load on active and play
+    active.src = song.url;
+    active.load();
+    resumeAndPlay(active);
   }, [song]);
 
   const togglePlayPause = useCallback(() => {

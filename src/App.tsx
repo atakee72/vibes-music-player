@@ -11,6 +11,7 @@ import { PlayerBar } from './components/PlayerBar';
 import * as storage from './lib/storage';
 import { ingestDirectoryHandle } from './lib/ingest';
 import { filterSongs } from './lib/filter';
+import { nextInPlaylist } from './lib/queue';
 
 type LibraryStatus = 'loading' | 'ready' | 'needs-prompt';
 
@@ -41,6 +42,7 @@ export default function App() {
 
   const activePlaylist = playlists.find((p) => p.id === activePlaylistId);
   const filteredSongs = filterSongs(activePlaylist?.songs ?? [], searchQuery);
+  const nextSong = nextInPlaylist(currentSong, activePlaylist?.songs ?? [], repeatMode);
 
   const onEndedRef = useRef<() => void>(() => {});
 
@@ -53,7 +55,11 @@ export default function App() {
     visualizerData,
     togglePlayPause,
     seek,
-  } = useAudioEngine({ song: currentSong, onEnded: () => onEndedRef.current() });
+  } = useAudioEngine({
+    song: currentSong,
+    nextSong,
+    onEnded: () => onEndedRef.current(),
+  });
 
   // Mount: load roots + playlists from IndexedDB
   useEffect(() => {
@@ -152,18 +158,13 @@ export default function App() {
 
   const playNext = () => {
     if (!activePlaylist || !currentSong) return;
-    const idx = activePlaylist.songs.findIndex((s) => s.id === currentSong.id);
     if (repeatMode === 'one') {
       seek(0);
       if (!isPlaying) togglePlayPause();
       return;
     }
-    let next = idx + 1;
-    if (next >= activePlaylist.songs.length) {
-      if (repeatMode !== 'all') return;
-      next = 0;
-    }
-    if (activePlaylist.songs[next]) setCurrentSong(activePlaylist.songs[next]);
+    const next = nextInPlaylist(currentSong, activePlaylist.songs, repeatMode);
+    if (next) setCurrentSong(next);
   };
 
   const playPrev = () => {
