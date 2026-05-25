@@ -4,6 +4,7 @@ import type { LibraryRoot, Playlist, RepeatMode, Song } from './types';
 import { useMetadataExtractor } from './hooks/useMetadataExtractor';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useMediaSession } from './hooks/useMediaSession';
+import { useAudioEngine } from './hooks/useAudioEngine';
 import { Sidebar } from './components/Sidebar';
 import { SongList } from './components/SongList';
 import { PlayerBar } from './components/PlayerBar';
@@ -28,17 +29,12 @@ export default function App() {
 
   const [activePlaylistId, setActivePlaylistId] = useState<string>('library');
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [visualizerData, setVisualizerData] = useState<number[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [repeatMode, setRepeatMode] = useState<RepeatMode>('none');
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const audioRef = useRef<HTMLAudioElement>(null);
   const loadedRef = useRef(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const { extractMetadata } = useMetadataExtractor();
@@ -46,63 +42,18 @@ export default function App() {
   const activePlaylist = playlists.find((p) => p.id === activePlaylistId);
   const filteredSongs = filterSongs(activePlaylist?.songs ?? [], searchQuery);
 
-  // Audio element + Web Audio API analyser wiring.
-  useEffect(() => {
-    if (!currentSong || !audioRef.current) return;
-    const audio = audioRef.current;
+  const onEndedRef = useRef<() => void>(() => {});
 
-    try {
-      const ctx = new (window.AudioContext ||
-        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-      const analyser = ctx.createAnalyser();
-      ctx.createMediaElementSource(audio).connect(analyser);
-      analyser.connect(ctx.destination);
-      analyser.fftSize = 256;
-
-      const data = new Uint8Array(analyser.frequencyBinCount);
-      let raf: number;
-      const tick = () => {
-        analyser.getByteFrequencyData(data);
-        setVisualizerData(Array.from(data));
-        raf = requestAnimationFrame(tick);
-      };
-
-      const onPlay = () => {
-        setIsPlaying(true);
-        tick();
-      };
-      const onPause = () => {
-        setIsPlaying(false);
-        cancelAnimationFrame(raf);
-      };
-      const onEnded = () => {
-        setIsPlaying(false);
-        cancelAnimationFrame(raf);
-        playNext();
-      };
-      const onTime = () => setCurrentTime(audio.currentTime);
-      const onLoaded = () => setDuration(audio.duration);
-
-      audio.addEventListener('play', onPlay);
-      audio.addEventListener('pause', onPause);
-      audio.addEventListener('ended', onEnded);
-      audio.addEventListener('timeupdate', onTime);
-      audio.addEventListener('loadedmetadata', onLoaded);
-      audio.play().catch(console.error);
-
-      return () => {
-        audio.removeEventListener('play', onPlay);
-        audio.removeEventListener('pause', onPause);
-        audio.removeEventListener('ended', onEnded);
-        audio.removeEventListener('timeupdate', onTime);
-        audio.removeEventListener('loadedmetadata', onLoaded);
-        cancelAnimationFrame(raf);
-      };
-    } catch (err) {
-      console.error('Audio context error:', err);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentSong]);
+  const {
+    audioRefA,
+    audioRefB,
+    currentTime,
+    duration,
+    isPlaying,
+    visualizerData,
+    togglePlayPause,
+    seek,
+  } = useAudioEngine({ song: currentSong, onEnded: () => onEndedRef.current() });
 
   // Mount: load roots + playlists from IndexedDB
   useEffect(() => {
@@ -199,18 +150,12 @@ export default function App() {
     setLibraryStatus('ready');
   }, [libraryRoots]);
 
-  const togglePlayPause = () => {
-    if (!audioRef.current) return;
-    if (isPlaying) audioRef.current.pause();
-    else audioRef.current.play();
-  };
-
   const playNext = () => {
     if (!activePlaylist || !currentSong) return;
     const idx = activePlaylist.songs.findIndex((s) => s.id === currentSong.id);
-    if (repeatMode === 'one' && audioRef.current) {
-      audioRef.current.currentTime = 0;
-      audioRef.current.play();
+    if (repeatMode === 'one') {
+      seek(0);
+      if (!isPlaying) togglePlayPause();
       return;
     }
     let next = idx + 1;
@@ -228,9 +173,8 @@ export default function App() {
     if (prev >= 0) setCurrentSong(activePlaylist.songs[prev]);
   };
 
-  const seek = (t: number) => {
-    if (audioRef.current) audioRef.current.currentTime = t;
-  };
+  // Keep the engine's onEnded ref pointing at the freshest playNext closure
+  onEndedRef.current = playNext;
 
   const cycleRepeat = () => {
     setRepeatMode((m) => (m === 'none' ? 'all' : m === 'all' ? 'one' : 'none'));
@@ -423,19 +367,13 @@ export default function App() {
               songs={filteredSongs}
               currentSong={currentSong}
               isPlaying={isPlaying}
-              onPlay={(song) => {
-                audioRef.current?.pause();
-                setCurrentSong(song);
-              }}
+              onPlay={(song) => setCurrentSong(song)}
               onPause={togglePlayPause}
               onDelete={(id) => {
                 setPlaylists((prev) =>
                   prev.map((p) => ({ ...p, songs: p.songs.filter((s) => s.id !== id) })),
                 );
-                if (currentSong?.id === id) {
-                  setCurrentSong(null);
-                  setIsPlaying(false);
-                }
+                if (currentSong?.id === id) setCurrentSong(null);
               }}
               emptyHint={
                 searchQuery.trim()
@@ -512,14 +450,8 @@ export default function App() {
         </div>
       )}
 
-      {currentSong && (
-        <audio
-          ref={audioRef}
-          src={currentSong.url}
-          className="hidden"
-          crossOrigin="anonymous"
-        />
-      )}
+      <audio ref={audioRefA} className="hidden" crossOrigin="anonymous" />
+      <audio ref={audioRefB} className="hidden" crossOrigin="anonymous" />
     </div>
   );
 }
