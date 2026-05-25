@@ -29,9 +29,10 @@ pnpm test:run  # Vitest single pass
 
 - **Drop a folder** (or individual files) — recursive ingest of every audio
   file inside
-- **Library persists across reloads** (Chrome / Edge / Brave / Opera) via
-  the File System Access API + IndexedDB. One click to re-grant on each
-  browser session; no re-dropping
+- **Library persists across reloads** in every modern browser. Chromium
+  uses the File System Access API (zero data duplication, one click to
+  re-grant per session); Firefox and Safari store the audio bytes in
+  IndexedDB and restore silently on reload
 - Per-file metadata: title, artist, album, duration, cover art, file size
 - Multiple playlists (create / delete); "Library" is the always-present
   default

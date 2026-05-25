@@ -103,29 +103,42 @@
 ## Persistence
 
 - Storage layer: `src/lib/storage.ts`, a thin wrapper over `idb-keyval`.
-  Two keys: `library-roots` (array of `LibraryRoot`) and `playlists`
-  (array of `StoredPlaylist`). All persistence touches IDB through this
-  module — no other file should import `idb-keyval` directly.
-- **Song persistence rule**: only songs with a `fileHandle` are persisted.
-  Songs from single-file drops have no handle and are session-only. The
-  `toStored`/`fromStored` helpers in storage.ts handle the strip
-  (drop `file` + `url`) and rehydrate (`fileHandle.getFile()` → recreate
-  blob URL) so the rest of the code never sees the split.
+  Three keys: `library-roots` (array of `LibraryRoot`), `playlists`
+  (array of `StoredPlaylist`), and `eq-preset`. All persistence touches IDB
+  through this module — no other file should import `idb-keyval` directly.
+- **Hybrid persistence model**:
+  - Songs with a `fileHandle` (Chromium folder ingest) serialize as
+    `HandleStoredSong` — just the handle. No byte duplication. The browser
+    re-reads the file from disk on reload.
+  - Songs with only a `file` (Firefox/Safari, or Chromium single-file
+    drops) serialize as `BlobStoredSong` — the actual bytes go into IDB
+    along with the original filename. On reload, `new File([blob],
+    fileName, { type })` reconstructs the File.
+  - `StoredSong = HandleStoredSong | BlobStoredSong`. Discriminate by
+    `'fileHandle' in stored`.
+  - `toStored` prefers the handle path when both are present (no point
+    duplicating bytes when the handle works).
+- **Persistent storage**: `ensurePersisted()` is called once per session
+  on first successful ingest (inside `handleFiles` / `addFolderHandle`,
+  guarded by `persistRequestedRef`). It calls `navigator.storage.persisted()`
+  first to skip the Firefox prompt if already granted from a prior session.
+  Don't call on cold mount — that's a context-less prompt.
 - **Song IDs are path-based**: `${root.id}/${relativePath}` for folder-
   ingested songs (stable across sessions so playlist membership survives
-  reload); `crypto.randomUUID()` for legacy file-drop songs (session-only,
-  ID stability doesn't matter).
-- **Browser compatibility**:
-  - Chromium (Chrome/Edge/Brave/Opera): full feature — folder drop +
-    picker + persistence
-  - Firefox/Safari: folder drop works via `webkitGetAsEntry`, but no
-    handles means no persistence; the upload modal shows a note explaining
-    this
-- **Permission reality**: Chrome does NOT remember FS Access grants across
-  browser restarts by default. After reload, `queryPermission` returns
-  `'prompt'` even for previously-granted handles. The app shows a
-  "Welcome back. Click to restore your library." banner; one click and
-  it's back. Don't promise silent restore in UI — it's the exception.
+  reload); `crypto.randomUUID()` for legacy file-drop songs (which are
+  also persisted now via blobs — drop-the-same-file-twice creates
+  duplicate entries, accepted limitation).
+- **Browser compatibility**: Persistence works in all evergreen browsers
+  via the hybrid model. Chromium gets the efficient handle path;
+  Firefox/Safari get the blob path. **iOS Safari evicts IDB after 7 days
+  of inactivity** even with persistent storage — browser-imposed, not
+  ours to fix.
+- **Permission reality** (Chromium handle path only): Chrome does NOT
+  remember FS Access grants across browser restarts. After reload,
+  `queryPermission` returns `'prompt'`. The app shows a "Welcome back.
+  Click to restore your library." banner; one click and it's back. The
+  banner is FS-Access-specific — blob-only Firefox/Safari users never
+  see it because there's no permission to re-grant.
 - **Save-effect race guard**: `App.tsx` uses a `loadedRef` to suppress
   the first `useEffect([playlists])` write that would otherwise overwrite
   stored data with the initial empty `playlists` state before mount-load

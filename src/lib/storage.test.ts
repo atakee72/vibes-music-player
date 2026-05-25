@@ -97,13 +97,53 @@ describe('storage — playlists', () => {
     expect(loaded[0].songs[0].url).toBe('blob:re-derived');
   });
 
-  it('drops songs without a fileHandle on save (they are session-only)', async () => {
-    const sessionOnly = makeSong({ title: 'Ephemeral' });
-    const playlist = makePlaylist({ name: 'Mix', songs: [sessionOnly] });
-    await savePlaylists([playlist]);
+  it('round-trips a blob-backed song (Firefox/Safari fallback path)', async () => {
+    URL.createObjectURL = vi.fn(() => 'blob:from-blob');
+    const file = new File([new Uint8Array([1, 2, 3])], 'firefox-song.mp3', {
+      type: 'audio/mpeg',
+    });
+    // makeSong's default doesn't set fileHandle, so this is the blob-only case
+    const song = makeSong({ title: 'Firefox Song', file });
+    await savePlaylists([makePlaylist({ name: 'Mix', songs: [song] })]);
 
     const loaded = await getPlaylists();
-    expect(loaded[0].songs).toHaveLength(0);
+    expect(loaded[0].songs).toHaveLength(1);
+    expect(loaded[0].songs[0].title).toBe('Firefox Song');
+    expect(loaded[0].songs[0].file.name).toBe('firefox-song.mp3');
+    expect(loaded[0].songs[0].file.type).toBe('audio/mpeg');
+    expect(loaded[0].songs[0].url).toBe('blob:from-blob');
+  });
+
+  it('mixed playlist: one handle-backed and one blob-backed both round-trip', async () => {
+    URL.createObjectURL = vi.fn(() => 'blob:any');
+    const handleFile = new File([], 'on-disk.mp3', { type: 'audio/mpeg' });
+    const handleSong = makeSong({
+      title: 'On Disk',
+      fileHandle: fakeFileHandle('on-disk.mp3', handleFile),
+    });
+    const blobSong = makeSong({ title: 'In Browser' });
+
+    await savePlaylists([
+      makePlaylist({ name: 'Mix', songs: [handleSong, blobSong] }),
+    ]);
+    const loaded = await getPlaylists();
+    expect(loaded[0].songs).toHaveLength(2);
+    expect(loaded[0].songs.map((s) => s.title).sort()).toEqual(['In Browser', 'On Disk']);
+  });
+
+  it('prefers the fileHandle path when a song has BOTH handle and file', async () => {
+    URL.createObjectURL = vi.fn(() => 'blob:from-handle');
+    const handleFile = new File([], 'real.mp3', { type: 'audio/mpeg' });
+    const song = makeSong({
+      title: 'Both',
+      file: new File([new Uint8Array([9, 9, 9])], 'unused-blob-bytes.mp3'),
+      fileHandle: fakeFileHandle('real.mp3', handleFile),
+    });
+    await savePlaylists([makePlaylist({ name: 'Mix', songs: [song] })]);
+    const loaded = await getPlaylists();
+    // File should come from the handle.getFile(), not the blob duplicate
+    expect(loaded[0].songs[0].file).toBe(handleFile);
+    expect(loaded[0].songs[0].file.name).toBe('real.mp3');
   });
 
   it('getEqPreset returns "Off" when key absent', async () => {

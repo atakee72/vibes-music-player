@@ -39,6 +39,7 @@ export default function App() {
   const [eqPreset, setEqPreset] = useState<EqPreset>('Off');
 
   const loadedRef = useRef(false);
+  const persistRequestedRef = useRef(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const { extractMetadata } = useMetadataExtractor();
 
@@ -106,6 +107,14 @@ export default function App() {
     storage.saveEqPreset(eqPreset).catch((err) => console.error('EQ save failed:', err));
   }, [eqPreset]);
 
+  const requestPersistOnce = useCallback(() => {
+    if (persistRequestedRef.current) return;
+    persistRequestedRef.current = true;
+    storage.ensurePersisted().catch(() => {
+      // Persist denied or unsupported — IDB still works, just evictable
+    });
+  }, []);
+
   const handleFiles = useCallback(
     async (files: FileList | File[]) => {
       const arr = Array.from(files).filter((f) => f.type.startsWith('audio/'));
@@ -113,6 +122,7 @@ export default function App() {
         alert('Please select audio files (MP3, WAV, FLAC, etc.)');
         return;
       }
+      let firstIngestThisCall = false;
       for (const file of arr) {
         try {
           const song = await extractMetadata(file);
@@ -121,13 +131,17 @@ export default function App() {
               p.id === activePlaylistId ? { ...p, songs: [...p.songs, song] } : p,
             ),
           );
+          if (!firstIngestThisCall) {
+            firstIngestThisCall = true;
+            requestPersistOnce();
+          }
         } catch (err) {
           console.error('Error processing file:', file.name, err);
         }
       }
       setShowUpload(false);
     },
-    [activePlaylistId, extractMetadata],
+    [activePlaylistId, extractMetadata, requestPersistOnce],
   );
 
   const addFolderHandle = useCallback(
@@ -153,8 +167,9 @@ export default function App() {
         ),
       );
       setShowUpload(false);
+      if (songs.length > 0) requestPersistOnce();
     },
-    [activePlaylistId, extractMetadata],
+    [activePlaylistId, extractMetadata, requestPersistOnce],
   );
 
   const restoreLibrary = useCallback(async () => {
@@ -438,7 +453,7 @@ export default function App() {
               <p className="text-sm text-white/50">Supports MP3, WAV, FLAC, and more</p>
             </label>
 
-            {supportsFolderPicker ? (
+            {supportsFolderPicker && (
               <button
                 onClick={async () => {
                   try {
@@ -453,12 +468,8 @@ export default function App() {
                 }}
                 className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 px-4 py-2 rounded-lg text-sm font-medium shadow"
               >
-                Choose Folder (persists across reloads)
+                Choose Folder
               </button>
-            ) : (
-              <p className="text-xs text-white/40 text-center">
-                Library persistence requires Chrome, Edge, or Brave.
-              </p>
             )}
           </div>
         </div>

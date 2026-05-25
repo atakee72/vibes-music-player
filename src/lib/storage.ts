@@ -6,22 +6,48 @@ const ROOTS_KEY = 'library-roots';
 const PLAYLISTS_KEY = 'playlists';
 const EQ_PRESET_KEY = 'eq-preset';
 
-type StoredSong = Omit<Song, 'file' | 'url'> & { fileHandle: FileSystemFileHandle };
+type SongMeta = Omit<Song, 'file' | 'url' | 'fileHandle'>;
+type HandleStoredSong = SongMeta & { fileHandle: FileSystemFileHandle };
+type BlobStoredSong = SongMeta & { blob: Blob; fileName: string };
+type StoredSong = HandleStoredSong | BlobStoredSong;
 type StoredPlaylist = Omit<Playlist, 'songs'> & { songs: StoredSong[] };
 
 function toStored(song: Song): StoredSong | null {
-  if (!song.fileHandle) return null;
-  const { file: _file, url: _url, ...rest } = song;
-  return { ...rest, fileHandle: song.fileHandle };
+  // Prefer handle when present — no byte duplication on Chromium
+  if (song.fileHandle) {
+    const { file: _f, url: _u, fileHandle, ...rest } = song;
+    return { ...rest, fileHandle };
+  }
+  if (song.file) {
+    const { file, url: _u, fileHandle: _h, ...rest } = song;
+    return { ...rest, blob: file as Blob, fileName: file.name };
+  }
+  return null;
 }
 
 async function fromStored(stored: StoredSong): Promise<Song | null> {
-  try {
-    const file = await stored.fileHandle.getFile();
-    return { ...stored, file, url: URL.createObjectURL(file) };
-  } catch {
-    return null;
+  if ('fileHandle' in stored) {
+    try {
+      const file = await stored.fileHandle.getFile();
+      return { ...stored, file, url: URL.createObjectURL(file) };
+    } catch {
+      return null;
+    }
   }
+  const file = new File([stored.blob], stored.fileName, { type: stored.blob.type });
+  return { ...stored, file, url: URL.createObjectURL(file) };
+}
+
+/**
+ * Request persistent storage so the browser won't evict our IDB under quota
+ * pressure. Idempotent across sessions: `persisted()` short-circuits when
+ * already granted, so steady-state users never see the Firefox prompt twice.
+ */
+export async function ensurePersisted(): Promise<void> {
+  const s = navigator.storage;
+  if (!s?.persist || !s?.persisted) return;
+  if (await s.persisted()) return;
+  await s.persist();
 }
 
 export async function getLibraryRoots(): Promise<LibraryRoot[]> {
