@@ -41,6 +41,12 @@ pnpm test:run  # Vitest single pass
   API
 - Responsive layout — sidebar collapses on mobile, controls reflow under
   `lg`
+- **Keyboard shortcuts**: `Space` play/pause, `←`/`→` prev/next, `/` focus
+  search, `Esc` close modal / clear search / blur
+- **Type-to-filter** the current playlist by title, artist, or album
+- **OS media integration** via the Media Session API — lock-screen
+  artwork, Bluetooth headphone keys, macOS Now Playing widget, Windows
+  SMTC, Linux MPRIS
 
 ## Project layout
 

@@ -42,6 +42,36 @@
   with `pic.data as BlobPart` — don't "fix" it by importing or generic-
   parameterizing; the cast is correct.
 
+## Keyboard shortcuts
+
+- `useKeyboardShortcuts(handlers, options?)` (`src/hooks/useKeyboardShortcuts.ts`)
+  is the canonical way to register global shortcuts. Don't add ad-hoc
+  `document.addEventListener('keydown', ...)` calls — the hook handles
+  input-focus suppression, the ref-based fresh-closures pattern, and the
+  Space/Slash preventDefault rules.
+- Map keys are `KeyboardEvent.code` strings (`Space`, `ArrowLeft`,
+  `ArrowRight`, `Slash`, `Escape`). Never `event.key` — that breaks `/`
+  on AZERTY and gives `' '` for Space.
+- Pass `{ isBlocked: showUpload }` (or similar) to suppress everything
+  except Escape while a modal is open. The hook handles that with one
+  branch — don't sprinkle guards into individual handlers.
+- Currently wired in App.tsx: Space=play/pause, ←/→=prev/next,
+  `/`=focus search, Escape=close modal → clear search → blur input.
+
+## Media Session
+
+- `useMediaSession({ song, isPlaying, currentTime, duration, on... })`
+  (`src/hooks/useMediaSession.ts`) wires the browser's MediaSession API.
+  Don't touch `navigator.mediaSession` directly anywhere else.
+- The hook has FOUR effects, on purpose: metadata `[song]`, playbackState
+  `[isPlaying]`, action handlers `[callbacks]`, positionState
+  `[currentTime, duration]`. Keeping them split prevents the high-frequency
+  `timeupdate` cadence from thrashing the slower ones.
+- `setPositionState` is guarded by `duration > 0` — passing 0 throws,
+  which happens for every freshly-loaded song mid-`loadedmetadata`.
+- Manual verification only (no unit tests): play a song, check the OS
+  Now Playing widget / lock screen / Bluetooth headphone keys.
+
 ## Persistence
 
 - Storage layer: `src/lib/storage.ts`, a thin wrapper over `idb-keyval`.
