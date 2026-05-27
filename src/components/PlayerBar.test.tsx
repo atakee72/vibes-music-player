@@ -147,4 +147,21 @@ describe('PlayerBar', () => {
     const bars = container.querySelectorAll('.bg-gradient-to-t.from-purple-500');
     expect(bars).toHaveLength(15);
   });
+
+  it('does not render PiP button when supportsPip is false', () => {
+    renderPlayerBar({ song: makeSong(), supportsPip: false });
+    expect(screen.queryByRole('button', { name: 'Picture-in-Picture' })).not.toBeInTheDocument();
+  });
+
+  it('renders PiP button when supportsPip is true', () => {
+    renderPlayerBar({ song: makeSong(), supportsPip: true });
+    expect(screen.getByRole('button', { name: 'Picture-in-Picture' })).toBeInTheDocument();
+  });
+
+  it('fires onTogglePip when PiP button is clicked', () => {
+    const onTogglePip = vi.fn();
+    renderPlayerBar({ song: makeSong(), supportsPip: true, onTogglePip });
+    fireEvent.click(screen.getByRole('button', { name: 'Picture-in-Picture' }));
+    expect(onTogglePip).toHaveBeenCalledOnce();
+  });
 });

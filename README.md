@@ -53,6 +53,10 @@ pnpm test:run  # Vitest single pass
 - **ReplayGain** — per-track volume normalization from embedded RG tags
 - **5-band equalizer** — Off / Bass Boost / Vocal Boost / Treble Boost /
   Acoustic presets, persisted across reloads
+- **Dynamic background tint** — extracts the dominant color from the
+  playing track's cover art and tints the background to match
+- **Picture-in-Picture** — mini player window with transport controls
+  via the Document PiP API (Chromium 116+)
 
 ## Project layout
 
@@ -63,11 +67,16 @@ src/
   index.css                    Tailwind directives + base reset
   types.ts                     Song, Playlist, RepeatMode
   hooks/
+    useAudioEngine.ts          audio graph, gapless, EQ, ReplayGain
+    useDominantColor.ts        cover-art color extraction hook
     useMetadataExtractor.ts    music-metadata wrapper, returns Song objects
   components/
     Sidebar.tsx                playlist list + create / delete
     SongList.tsx               empty state + scrollable song rows
-    PlayerBar.tsx              progress, transport, visualizer
+    PlayerBar.tsx              progress, transport, visualizer, PiP
+    MiniPlayer.tsx             PiP window content
+  lib/
+    colors.ts                  dominant-color extraction from album art
 ```
 
 All app state lives in `App.tsx`; the three components are purely

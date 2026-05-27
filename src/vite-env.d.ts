@@ -34,3 +34,21 @@ interface Window {
 interface DataTransferItem {
   getAsFileSystemHandle?(): Promise<FileSystemHandle | null>;
 }
+
+// Document Picture-in-Picture API (Chromium 116+)
+interface DocumentPictureInPictureOptions {
+  width?: number;
+  height?: number;
+  disallowReturnToOpener?: boolean;
+}
+
+interface DocumentPictureInPicture extends EventTarget {
+  requestWindow(
+    options?: DocumentPictureInPictureOptions,
+  ): Promise<Window>;
+  readonly window: Window | null;
+}
+
+interface Window {
+  documentPictureInPicture?: DocumentPictureInPicture;
+}

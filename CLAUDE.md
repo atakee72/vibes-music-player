@@ -144,6 +144,29 @@
   stored data with the initial empty `playlists` state before mount-load
   completes. If you touch the load-or-save lifecycle, keep this guard.
 
+## Dynamic background tint
+
+- `extractDominantColor` / `dominantColorFromPixels` live in `src/lib/colors.ts`.
+  Canvas-based (20×20 down-sample), no external dependencies.
+- `useDominantColor(imageUrl)` in `src/hooks/useDominantColor.ts` bridges the
+  async extraction into React state with an abort guard for fast skipping.
+- The tint is a `fixed inset-0 pointer-events-none` overlay in `App.tsx` with
+  `transition-colors duration-[1500ms]` and `opacity: 0.15`. A CSS `mask-image`
+  fades it from full at the bottom (PlayerBar area) to invisible at 70% height.
+- The base gradient (`from-slate-900 via-purple-900 to-slate-900`) stays on the
+  root div — the overlay adds to it when a song with cover art is playing.
+
+## Document Picture-in-Picture
+
+- `MiniPlayer` (`src/components/MiniPlayer.tsx`) is a presentational component
+  rendered into the PiP window via `React.createPortal`.
+- PiP state (`pipWindow`) lives in `App.tsx`. `togglePip` opens/closes the
+  window, copies stylesheets from the main document so Tailwind works in PiP.
+- **Chromium 116+ only** — feature-detected via `'documentPictureInPicture' in
+  window`. The PiP button in PlayerBar is hidden when the API is unavailable.
+- The PiP window auto-closes when `currentSong` becomes null.
+- Type declarations for the Document PiP API are in `src/vite-env.d.ts`.
+
 ## Dev loop
 
 - `pnpm dev` (Vite HMR) is enough for almost everything. **No need to

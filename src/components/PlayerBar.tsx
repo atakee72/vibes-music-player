@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Music,
   Pause,
+  PictureInPicture2,
   Play,
   Repeat,
   Repeat1,
@@ -27,6 +28,9 @@ interface PlayerBarProps {
   onSeek: (t: number) => void;
   onCycleRepeat: () => void;
   onEqPresetChange: (preset: EqPreset) => void;
+  onTogglePip?: () => void;
+  supportsPip?: boolean;
+  isPipOpen?: boolean;
 }
 
 const formatTime = (s: number) => {
@@ -48,6 +52,9 @@ export function PlayerBar({
   onSeek,
   onCycleRepeat,
   onEqPresetChange,
+  onTogglePip,
+  supportsPip,
+  isPipOpen,
 }: PlayerBarProps) {
   const [eqOpen, setEqOpen] = useState(false);
   const eqWrapRef = useRef<HTMLDivElement>(null);
@@ -172,6 +179,18 @@ export function PlayerBar({
               />
             ))}
           </div>
+          {supportsPip && (
+            <button
+              onClick={onTogglePip}
+              className={`p-2 hover:bg-white/10 rounded-full transition-colors ${
+                isPipOpen ? 'text-purple-400' : 'text-white/60'
+              }`}
+              title="Picture-in-Picture"
+              aria-label="Picture-in-Picture"
+            >
+              <PictureInPicture2 className="h-4 w-4 lg:h-5 lg:w-5" />
+            </button>
+          )}
           <div ref={eqWrapRef} className="relative">
             <button
               onClick={() => setEqOpen((v) => !v)}
