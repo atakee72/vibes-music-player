@@ -16,6 +16,9 @@ import { nextInPlaylist } from './lib/queue';
 import type { EqPreset } from './lib/eq';
 import { useDominantColor } from './hooks/useDominantColor';
 import { MiniPlayer } from './components/MiniPlayer';
+import { parseM3U, parsePLS, matchImportEntries } from './lib/playlist-import';
+import { parseLRC } from './lib/lrc';
+import { LyricsPanel } from './components/LyricsPanel';
 
 type LibraryStatus = 'loading' | 'ready' | 'needs-prompt';
 
@@ -41,6 +44,8 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [eqPreset, setEqPreset] = useState<EqPreset>('Off');
   const [pipWindow, setPipWindow] = useState<Window | null>(null);
+  const [notification, setNotification] = useState<string | null>(null);
+  const [showLyrics, setShowLyrics] = useState(false);
 
   const loadedRef = useRef(false);
   const persistRequestedRef = useRef(false);
@@ -120,13 +125,89 @@ export default function App() {
     });
   }, []);
 
+  const PLAYLIST_EXTS = new Set(['.m3u', '.m3u8', '.pls']);
+  const isPlaylistFile = (f: File) =>
+    PLAYLIST_EXTS.has(f.name.toLowerCase().replace(/^.*(\.[^.]+)$/, '$1'));
+  const isLrcFile = (f: File) => f.name.toLowerCase().endsWith('.lrc');
+
+  const handlePlaylistImport = useCallback(
+    async (files: File[]) => {
+      const libraryPlaylist = playlists.find((p) => p.id === 'library');
+      const librarySongs = libraryPlaylist?.songs ?? [];
+
+      for (const file of files) {
+        const text = await file.text();
+        const ext = file.name.toLowerCase().replace(/^.*(\.[^.]+)$/, '$1');
+        const entries = ext === '.pls' ? parsePLS(text) : parseM3U(text);
+        if (entries.length === 0) continue;
+
+        const { matched, unmatched } = matchImportEntries(entries, librarySongs);
+        const name = file.name.replace(/\.[^.]+$/, '');
+        const playlist = {
+          id: crypto.randomUUID(),
+          name,
+          songs: matched,
+          createdAt: new Date(),
+        };
+
+        setPlaylists((prev) => [...prev, playlist]);
+        setNotification(
+          `Created "${name}" with ${matched.length} of ${entries.length} tracks` +
+            (unmatched.length > 0 ? ` (${unmatched.length} not found)` : ''),
+        );
+      }
+      setShowUpload(false);
+    },
+    [playlists],
+  );
+
+  const handleLrcImport = useCallback(
+    async (files: File[]) => {
+      for (const file of files) {
+        const text = await file.text();
+        const lyrics = parseLRC(text);
+        if (lyrics.length === 0) continue;
+
+        const baseName = file.name.replace(/\.lrc$/i, '').toLowerCase();
+
+        setPlaylists((prev) =>
+          prev.map((p) => ({
+            ...p,
+            songs: p.songs.map((s) => {
+              const songBase = s.file.name.replace(/\.[^.]+$/, '').toLowerCase();
+              if (songBase === baseName && !s.lyrics) return { ...s, lyrics };
+              return s;
+            }),
+          })),
+        );
+        setCurrentSong((prev) => {
+          if (!prev) return prev;
+          const songBase = prev.file.name.replace(/\.[^.]+$/, '').toLowerCase();
+          if (songBase === baseName && !prev.lyrics) return { ...prev, lyrics };
+          return prev;
+        });
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!notification) return;
+    const timer = setTimeout(() => setNotification(null), 5000);
+    return () => clearTimeout(timer);
+  }, [notification]);
+
   const handleFiles = useCallback(
     async (files: FileList | File[]) => {
-      const arr = Array.from(files).filter((f) => f.type.startsWith('audio/'));
-      if (arr.length === 0) {
+      const allFiles = Array.from(files);
+      const playlistFiles = allFiles.filter(isPlaylistFile);
+      const lrcFiles = allFiles.filter(isLrcFile);
+      const arr = allFiles.filter((f) => f.type.startsWith('audio/'));
+      if (arr.length === 0 && playlistFiles.length === 0 && lrcFiles.length === 0) {
         alert('Please select audio files (MP3, WAV, FLAC, etc.)');
         return;
       }
+      if (playlistFiles.length > 0) await handlePlaylistImport(playlistFiles);
       let firstIngestThisCall = false;
       for (const file of arr) {
         try {
@@ -144,9 +225,10 @@ export default function App() {
           console.error('Error processing file:', file.name, err);
         }
       }
+      if (lrcFiles.length > 0) await handleLrcImport(lrcFiles);
       setShowUpload(false);
     },
-    [activePlaylistId, extractMetadata, requestPersistOnce],
+    [activePlaylistId, extractMetadata, requestPersistOnce, handlePlaylistImport, handleLrcImport],
   );
 
   const addFolderHandle = useCallback(
@@ -211,6 +293,23 @@ export default function App() {
   const cycleRepeat = () => {
     setRepeatMode((m) => (m === 'none' ? 'all' : m === 'all' ? 'one' : 'none'));
   };
+
+  const handleBatchDelete = useCallback((ids: string[]) => {
+    const idSet = new Set(ids);
+    setPlaylists((prev) =>
+      prev.map((p) => ({ ...p, songs: p.songs.filter((s) => !idSet.has(s.id)) })),
+    );
+    setCurrentSong((prev) => (prev && idSet.has(prev.id) ? null : prev));
+  }, []);
+
+  const handleReorder = useCallback(
+    (reorderedSongs: Song[]) => {
+      setPlaylists((prev) =>
+        prev.map((p) => (p.id === activePlaylistId ? { ...p, songs: reorderedSongs } : p)),
+      );
+    },
+    [activePlaylistId],
+  );
 
   const togglePip = useCallback(async () => {
     if (pipWindow) {
@@ -321,6 +420,7 @@ export default function App() {
       ArrowRight: playNext,
       ArrowLeft: playPrev,
       Slash: () => searchInputRef.current?.focus(),
+      KeyL: () => setShowLyrics((v) => !v),
       Escape: () => {
         if (showUpload) {
           setShowUpload(false);
@@ -435,12 +535,26 @@ export default function App() {
                     </span>
                   )}
                 </h2>
-                <button
-                  onClick={() => setShowUpload(true)}
-                  className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 px-4 py-2 rounded-lg transition-all duration-200 text-sm font-medium shadow-lg"
-                >
-                  Add Music
-                </button>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => setShowLyrics((v) => !v)}
+                    className={`px-3 py-2 rounded-lg transition-all duration-200 text-sm font-medium ${
+                      showLyrics
+                        ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                        : 'bg-white/5 text-white/60 hover:bg-white/10'
+                    }`}
+                    title="Toggle lyrics"
+                    aria-label="Toggle lyrics"
+                  >
+                    Lyrics
+                  </button>
+                  <button
+                    onClick={() => setShowUpload(true)}
+                    className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 px-4 py-2 rounded-lg transition-all duration-200 text-sm font-medium shadow-lg"
+                  >
+                    Add Music
+                  </button>
+                </div>
               </div>
             </header>
 
@@ -455,27 +569,39 @@ export default function App() {
               />
             </div>
 
-            <SongList
-              songs={filteredSongs}
-              currentSong={currentSong}
-              isPlaying={isPlaying}
-              onPlay={(song) => setCurrentSong(song)}
-              onPause={togglePlayPause}
-              onDelete={(id) => {
-                setPlaylists((prev) =>
-                  prev.map((p) => ({ ...p, songs: p.songs.filter((s) => s.id !== id) })),
-                );
-                if (currentSong?.id === id) setCurrentSong(null);
-              }}
-              emptyHint={
-                searchQuery.trim()
-                  ? {
-                      primary: `No matches for "${searchQuery.trim()}"`,
-                      secondary: 'Try a different search',
-                    }
-                  : undefined
-              }
-            />
+            <div className="flex flex-1 min-h-0">
+              <SongList
+                songs={filteredSongs}
+                currentSong={currentSong}
+                isPlaying={isPlaying}
+                onPlay={(song) => setCurrentSong(song)}
+                onPause={togglePlayPause}
+                onDelete={(id) => {
+                  setPlaylists((prev) =>
+                    prev.map((p) => ({ ...p, songs: p.songs.filter((s) => s.id !== id) })),
+                  );
+                  if (currentSong?.id === id) setCurrentSong(null);
+                }}
+                onBatchDelete={handleBatchDelete}
+                onReorder={handleReorder}
+                isFilterActive={searchQuery.trim().length > 0}
+                emptyHint={
+                  searchQuery.trim()
+                    ? {
+                        primary: `No matches for "${searchQuery.trim()}"`,
+                        secondary: 'Try a different search',
+                      }
+                    : undefined
+                }
+              />
+              {showLyrics && (
+                <LyricsPanel
+                  lyrics={currentSong?.lyrics}
+                  currentTime={currentTime}
+                  onClose={() => setShowLyrics(false)}
+                />
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -526,7 +652,7 @@ export default function App() {
               <input
                 type="file"
                 multiple
-                accept="audio/*"
+                accept="audio/*,.m3u,.m3u8,.pls,.lrc"
                 className="hidden"
                 onChange={(e) => e.target.files && handleFiles(e.target.files)}
               />
@@ -554,6 +680,12 @@ export default function App() {
               </button>
             )}
           </div>
+        </div>
+      )}
+
+      {notification && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[60] bg-slate-800/95 backdrop-blur-xl border border-white/10 rounded-lg px-4 py-2 text-sm text-white shadow-xl">
+          {notification}
         </div>
       )}
 

@@ -1,4 +1,29 @@
-import { Clock, MoreHorizontal, Music, Pause, Play, Trash2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { arrayMove } from '@dnd-kit/sortable';
+import {
+  Clock,
+  GripVertical,
+  MoreHorizontal,
+  Music,
+  Pause,
+  Play,
+  Trash2,
+} from 'lucide-react';
 import type { Song } from '../types';
 
 interface SongListProps {
@@ -8,6 +33,9 @@ interface SongListProps {
   onPlay: (song: Song) => void;
   onPause: () => void;
   onDelete: (id: string) => void;
+  onBatchDelete: (ids: string[]) => void;
+  onReorder: (songs: Song[]) => void;
+  isFilterActive: boolean;
   emptyHint?: { primary: string; secondary: string };
 }
 
@@ -19,6 +47,167 @@ const DEFAULT_EMPTY_HINT = {
 const formatTime = (s: number) =>
   `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}`;
 
+interface SortableRowProps {
+  song: Song;
+  active: boolean;
+  activePlaying: boolean;
+  selected: boolean;
+  isFilterActive: boolean;
+  onPlay: (song: Song) => void;
+  onPause: () => void;
+  onDelete: (id: string) => void;
+  onRowClick: (song: Song, e: React.MouseEvent) => void;
+}
+
+function SortableRow({
+  song,
+  active,
+  activePlaying,
+  selected,
+  isFilterActive,
+  onPlay,
+  onPause,
+  onDelete,
+  onRowClick,
+}: SortableRowProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: song.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      onClick={(e) => onRowClick(song, e)}
+      className={
+        'group flex items-center space-x-3 p-3 lg:p-4 rounded-xl hover:bg-white/5 transition-all duration-200 cursor-default ' +
+        (selected ? 'ring-2 ring-purple-400/50 ' : '') +
+        (active
+          ? 'bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/20'
+          : '')
+      }
+    >
+      {!isFilterActive && (
+        <div
+          {...listeners}
+          className="flex-shrink-0 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-60 transition-opacity"
+          aria-label="Drag to reorder"
+        >
+          <GripVertical className="h-4 w-4 text-white/40" />
+        </div>
+      )}
+
+      <div className="relative flex-shrink-0 w-12 h-12">
+        {song.coverArt ? (
+          <img
+            src={song.coverArt}
+            alt={song.album}
+            className="w-12 h-12 rounded-lg object-cover shadow-lg"
+          />
+        ) : (
+          <div className="w-12 h-12 bg-gradient-to-br from-slate-700 to-slate-800 rounded-lg flex items-center justify-center border border-white/10">
+            <Music className="h-6 w-6 text-white/40" />
+          </div>
+        )}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            activePlaying ? onPause() : onPlay(song);
+          }}
+          className="absolute inset-0 bg-black/60 rounded-lg opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all duration-200 backdrop-blur-sm"
+          aria-label={activePlaying ? 'Pause' : 'Play'}
+        >
+          {activePlaying ? (
+            <Pause className="h-5 w-5 text-white" fill="white" />
+          ) : (
+            <Play className="h-5 w-5 text-white" fill="white" />
+          )}
+        </button>
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0 flex-1">
+            <p
+              className={
+                'text-sm lg:text-base font-medium truncate ' +
+                (active ? 'text-purple-300' : 'text-white')
+              }
+            >
+              {song.title}
+            </p>
+            <p className="text-xs lg:text-sm text-white/60 truncate">
+              {song.artist}
+              {song.album && song.album !== 'Unknown Album' && ` • ${song.album}`}
+            </p>
+            <div className="flex items-center space-x-3 mt-1 lg:hidden">
+              {song.duration ? (
+                <div className="flex items-center space-x-1 text-xs text-white/40">
+                  <Clock className="h-3 w-3" />
+                  <span>{formatTime(song.duration)}</span>
+                </div>
+              ) : null}
+              {song.file && (
+                <span className="text-xs text-white/40">
+                  {(song.file.size / 1048576).toFixed(1)} MB
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="hidden lg:flex items-center space-x-4">
+            {song.duration ? (
+              <span className="text-sm text-white/60">{formatTime(song.duration)}</span>
+            ) : null}
+            <div className="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(song.id);
+                }}
+                className="p-2 hover:bg-red-500/20 rounded-lg transition-colors"
+                aria-label="Delete song"
+              >
+                <Trash2 className="h-4 w-4 text-red-400" />
+              </button>
+              <button
+                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                aria-label="More"
+              >
+                <MoreHorizontal className="h-4 w-4 text-white/60" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex lg:hidden items-center space-x-2">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(song.id);
+          }}
+          className="p-2 hover:bg-red-500/20 rounded-lg transition-colors"
+          aria-label="Delete song"
+        >
+          <Trash2 className="h-4 w-4 text-red-400" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function SongList({
   songs,
   currentSong,
@@ -26,8 +215,79 @@ export function SongList({
   onPlay,
   onPause,
   onDelete,
+  onBatchDelete,
+  onReorder,
+  isFilterActive,
   emptyHint = DEFAULT_EMPTY_HINT,
 }: SongListProps) {
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const lastClickedRef = useRef<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [songs]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code === 'Delete' && selectedIds.size > 0) {
+        e.preventDefault();
+        onBatchDelete(Array.from(selectedIds));
+        setSelectedIds(new Set());
+      }
+    };
+    container.addEventListener('keydown', onKey);
+    return () => container.removeEventListener('keydown', onKey);
+  }, [selectedIds, onBatchDelete]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor),
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = songs.findIndex((s) => s.id === active.id);
+    const newIndex = songs.findIndex((s) => s.id === over.id);
+    if (oldIndex !== -1 && newIndex !== -1) {
+      onReorder(arrayMove(songs, oldIndex, newIndex));
+    }
+  };
+
+  const handleRowClick = (song: Song, e: React.MouseEvent) => {
+    if (e.shiftKey && lastClickedRef.current) {
+      const lastIdx = songs.findIndex((s) => s.id === lastClickedRef.current);
+      const curIdx = songs.findIndex((s) => s.id === song.id);
+      if (lastIdx !== -1 && curIdx !== -1) {
+        const from = Math.min(lastIdx, curIdx);
+        const to = Math.max(lastIdx, curIdx);
+        const range = songs.slice(from, to + 1).map((s) => s.id);
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          range.forEach((id) => next.add(id));
+          return next;
+        });
+      }
+    } else if (e.ctrlKey || e.metaKey) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(song.id)) next.delete(song.id);
+        else next.add(song.id);
+        return next;
+      });
+      lastClickedRef.current = song.id;
+    } else {
+      setSelectedIds((prev) => {
+        if (prev.size === 1 && prev.has(song.id)) return new Set();
+        return new Set([song.id]);
+      });
+      lastClickedRef.current = song.id;
+    }
+  };
+
   if (songs.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center p-8">
@@ -43,111 +303,57 @@ export function SongList({
   }
 
   return (
-    <div className="flex-1 overflow-y-auto">
-      <div className="space-y-1 p-2 lg:p-4">
-        {songs.map((song) => {
-          const active = currentSong?.id === song.id;
-          const activePlaying = active && isPlaying;
-          return (
-            <div
-              key={song.id}
-              className={
-                'group flex items-center space-x-3 p-3 lg:p-4 rounded-xl hover:bg-white/5 transition-all duration-200 ' +
-                (active
-                  ? 'bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/20'
-                  : '')
-              }
-            >
-              <div className="relative flex-shrink-0 w-12 h-12">
-                {song.coverArt ? (
-                  <img
-                    src={song.coverArt}
-                    alt={song.album}
-                    className="w-12 h-12 rounded-lg object-cover shadow-lg"
-                  />
-                ) : (
-                  <div className="w-12 h-12 bg-gradient-to-br from-slate-700 to-slate-800 rounded-lg flex items-center justify-center border border-white/10">
-                    <Music className="h-6 w-6 text-white/40" />
-                  </div>
-                )}
-                <button
-                  onClick={() => (activePlaying ? onPause() : onPlay(song))}
-                  className="absolute inset-0 bg-black/60 rounded-lg opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all duration-200 backdrop-blur-sm"
-                  aria-label={activePlaying ? 'Pause' : 'Play'}
-                >
-                  {activePlaying ? (
-                    <Pause className="h-5 w-5 text-white" fill="white" />
-                  ) : (
-                    <Play className="h-5 w-5 text-white" fill="white" />
-                  )}
-                </button>
-              </div>
-
-              <div className="flex-1 min-w-0">
-                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
-                  <div className="min-w-0 flex-1">
-                    <p
-                      className={
-                        'text-sm lg:text-base font-medium truncate ' +
-                        (active ? 'text-purple-300' : 'text-white')
-                      }
-                    >
-                      {song.title}
-                    </p>
-                    <p className="text-xs lg:text-sm text-white/60 truncate">
-                      {song.artist}
-                      {song.album && song.album !== 'Unknown Album' && ` • ${song.album}`}
-                    </p>
-                    <div className="flex items-center space-x-3 mt-1 lg:hidden">
-                      {song.duration ? (
-                        <div className="flex items-center space-x-1 text-xs text-white/40">
-                          <Clock className="h-3 w-3" />
-                          <span>{formatTime(song.duration)}</span>
-                        </div>
-                      ) : null}
-                      {song.file && (
-                        <span className="text-xs text-white/40">
-                          {(song.file.size / 1048576).toFixed(1)} MB
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="hidden lg:flex items-center space-x-4">
-                    {song.duration ? (
-                      <span className="text-sm text-white/60">{formatTime(song.duration)}</span>
-                    ) : null}
-                    <div className="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button
-                        onClick={() => onDelete(song.id)}
-                        className="p-2 hover:bg-red-500/20 rounded-lg transition-colors"
-                        aria-label="Delete song"
-                      >
-                        <Trash2 className="h-4 w-4 text-red-400" />
-                      </button>
-                      <button
-                        className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-                        aria-label="More"
-                      >
-                        <MoreHorizontal className="h-4 w-4 text-white/60" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex lg:hidden items-center space-x-2">
-                <button
-                  onClick={() => onDelete(song.id)}
-                  className="p-2 hover:bg-red-500/20 rounded-lg transition-colors"
-                  aria-label="Delete song"
-                >
-                  <Trash2 className="h-4 w-4 text-red-400" />
-                </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+    <div ref={containerRef} className="flex-1 overflow-y-auto outline-none" tabIndex={0}>
+      {selectedIds.size > 0 && (
+        <div className="sticky top-0 z-10 flex items-center justify-between bg-slate-800/95 backdrop-blur-xl border-b border-white/10 px-4 py-2">
+          <span className="text-sm text-white/80">
+            {selectedIds.size} selected
+          </span>
+          <button
+            onClick={() => {
+              onBatchDelete(Array.from(selectedIds));
+              setSelectedIds(new Set());
+            }}
+            className="flex items-center space-x-1 px-3 py-1 bg-red-500/20 hover:bg-red-500/30 rounded-lg text-red-400 text-sm transition-colors"
+            aria-label="Delete selected"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            <span>Delete</span>
+          </button>
+        </div>
+      )}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
+        <SortableContext
+          items={songs.map((s) => s.id)}
+          strategy={verticalListSortingStrategy}
+          disabled={isFilterActive}
+        >
+          <div className="space-y-1 p-2 lg:p-4">
+            {songs.map((song) => {
+              const active = currentSong?.id === song.id;
+              const activePlaying = active && isPlaying;
+              return (
+                <SortableRow
+                  key={song.id}
+                  song={song}
+                  active={active}
+                  activePlaying={activePlaying}
+                  selected={selectedIds.has(song.id)}
+                  isFilterActive={isFilterActive}
+                  onPlay={onPlay}
+                  onPause={onPause}
+                  onDelete={onDelete}
+                  onRowClick={handleRowClick}
+                />
+              );
+            })}
+          </div>
+        </SortableContext>
+      </DndContext>
     </div>
   );
 }

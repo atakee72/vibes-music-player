@@ -6,6 +6,8 @@ function renderSongList(overrides: Partial<Parameters<typeof SongList>[0]> = {})
   const onPlay = vi.fn();
   const onPause = vi.fn();
   const onDelete = vi.fn();
+  const onBatchDelete = vi.fn();
+  const onReorder = vi.fn();
   const utils = render(
     <SongList
       songs={[]}
@@ -14,10 +16,13 @@ function renderSongList(overrides: Partial<Parameters<typeof SongList>[0]> = {})
       onPlay={onPlay}
       onPause={onPause}
       onDelete={onDelete}
+      onBatchDelete={onBatchDelete}
+      onReorder={onReorder}
+      isFilterActive={false}
       {...overrides}
     />,
   );
-  return { ...utils, onPlay, onPause, onDelete };
+  return { ...utils, onPlay, onPause, onDelete, onBatchDelete, onReorder };
 }
 
 describe('SongList', () => {
@@ -39,7 +44,6 @@ describe('SongList', () => {
     renderSongList({ songs: [a, b] });
     expect(screen.getByText('Alpha')).toBeInTheDocument();
     expect(screen.getByText('Bravo')).toBeInTheDocument();
-    // artist + album joined with " • "
     expect(screen.getByText(/Artist A/)).toBeInTheDocument();
     expect(screen.getByText(/Artist B/)).toBeInTheDocument();
   });
@@ -48,12 +52,10 @@ describe('SongList', () => {
     const song = makeSong({ title: 'Target' });
     const { onPlay, onPause, rerender } = renderSongList({ songs: [song] });
 
-    // Non-active state — overlay should call onPlay
     fireEvent.click(screen.getByRole('button', { name: 'Play' }));
     expect(onPlay).toHaveBeenCalledWith(song);
     expect(onPause).not.toHaveBeenCalled();
 
-    // Now rerender with this song active + playing — overlay should call onPause
     rerender(
       <SongList
         songs={[song]}
@@ -62,6 +64,9 @@ describe('SongList', () => {
         onPlay={onPlay}
         onPause={onPause}
         onDelete={vi.fn()}
+        onBatchDelete={vi.fn()}
+        onReorder={vi.fn()}
+        isFilterActive={false}
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Pause' }));
@@ -72,5 +77,47 @@ describe('SongList', () => {
     const song = makeSong({ title: 'Highlighted' });
     renderSongList({ songs: [song], currentSong: song });
     expect(screen.getByText('Highlighted')).toHaveClass('text-purple-300');
+  });
+
+  it('shows drag handles when isFilterActive is false', () => {
+    const song = makeSong();
+    renderSongList({ songs: [song], isFilterActive: false });
+    expect(screen.getByLabelText('Drag to reorder')).toBeInTheDocument();
+  });
+
+  it('hides drag handles when isFilterActive is true', () => {
+    const song = makeSong();
+    renderSongList({ songs: [song], isFilterActive: true });
+    expect(screen.queryByLabelText('Drag to reorder')).not.toBeInTheDocument();
+  });
+
+  it('shows batch delete toolbar when songs are selected via click', () => {
+    const songs = [makeSong({ title: 'A' }), makeSong({ title: 'B' })];
+    renderSongList({ songs });
+
+    fireEvent.click(screen.getByText('A'));
+    expect(screen.getByText('1 selected')).toBeInTheDocument();
+    expect(screen.getByLabelText('Delete selected')).toBeInTheDocument();
+  });
+
+  it('fires onBatchDelete with selected IDs when delete toolbar is clicked', () => {
+    const songs = [makeSong({ title: 'A' }), makeSong({ title: 'B' })];
+    const { onBatchDelete } = renderSongList({ songs });
+
+    fireEvent.click(screen.getByText('A'));
+    fireEvent.click(screen.getByLabelText('Delete selected'));
+    expect(onBatchDelete).toHaveBeenCalledWith([songs[0].id]);
+  });
+
+  it('Ctrl+click toggles individual selection', () => {
+    const songs = [makeSong({ title: 'A' }), makeSong({ title: 'B' })];
+    renderSongList({ songs });
+
+    fireEvent.click(screen.getByText('A'));
+    fireEvent.click(screen.getByText('B'), { ctrlKey: true });
+    expect(screen.getByText('2 selected')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('A'), { ctrlKey: true });
+    expect(screen.getByText('1 selected')).toBeInTheDocument();
   });
 });
