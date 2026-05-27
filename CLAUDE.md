@@ -167,6 +167,39 @@
 - The PiP window auto-closes when `currentSong` becomes null.
 - Type declarations for the Document PiP API are in `src/vite-env.d.ts`.
 
+## Drag-to-reorder + multi-select
+
+- `@dnd-kit/core` + `@dnd-kit/sortable` handle the drag UX. The song list
+  wraps rows in `<DndContext>` + `<SortableContext>`, each row uses
+  `useSortable()`. Drag is disabled when a search filter is active.
+- **Selection state is local to SongList** (`selectedIds: Set<string>`).
+  Same convention-break as PlayerBar's `eqOpen`. Exposed via
+  `onBatchDelete(ids)` callback.
+- `GripVertical` icon is the drag handle, visible on hover. 8px pointer
+  sensor activation distance prevents accidental drags on tap.
+
+## Playlist import
+
+- `src/lib/playlist-import.ts` parses M3U/PLS files and matches entries
+  by filename (case-insensitive) against the Library playlist's songs.
+- Imported playlists appear in the sidebar with a notification showing
+  how many tracks were matched.
+- File routing in `handleFiles`: playlist files (`.m3u`, `.m3u8`, `.pls`)
+  and LRC files (`.lrc`) are separated from audio files and processed
+  after audio ingest completes.
+
+## Lyrics
+
+- `LyricLine = { time: number; text: string }` lives in `src/types.ts`,
+  added as optional `lyrics?` field on `Song`.
+- Three sources: embedded SYLT (synced, from `music-metadata`'s
+  `common.lyrics[].syncText`), embedded USLT (unsynced, `.text`), and
+  dropped `.lrc` files parsed by `src/lib/lrc.ts`.
+- `LyricsPanel` (`src/components/LyricsPanel.tsx`) is a slide-in panel
+  right of SongList. Auto-scrolls to the active line via
+  `scrollIntoView`, only when `activeLyricIndex` changes.
+- Toggle: `L` key or "Lyrics" button in header.
+
 ## Dev loop
 
 - `pnpm dev` (Vite HMR) is enough for almost everything. **No need to

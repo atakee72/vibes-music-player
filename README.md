@@ -57,6 +57,12 @@ pnpm test:run  # Vitest single pass
   playing track's cover art and tints the background to match
 - **Picture-in-Picture** — mini player window with transport controls
   via the Document PiP API (Chromium 116+)
+- **Drag-to-reorder** — grab song rows to rearrange playlist order,
+  with multi-select (Shift/Ctrl+click) and batch delete
+- **M3U / PLS import** — drop a playlist file to create a new playlist
+  matched against your library
+- **Synced lyrics** — LRC file drop, embedded SYLT/USLT tags, or plain
+  text; auto-scrolling lyrics panel toggled with `L`
 
 ## Project layout
 
