@@ -353,10 +353,9 @@ export default function App() {
       <div
         className="fixed inset-0 pointer-events-none transition-colors duration-[1500ms]"
         style={{
-          backgroundColor: tintColor ?? 'transparent',
-          opacity: 0.15,
-          maskImage: 'linear-gradient(to top, black 0%, transparent 70%)',
-          WebkitMaskImage: 'linear-gradient(to top, black 0%, transparent 70%)',
+          background: tintColor
+            ? `radial-gradient(ellipse at 50% 100%, ${tintColor} 0%, transparent 70%)`
+            : 'none',
         }}
       />
 

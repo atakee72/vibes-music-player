@@ -65,9 +65,9 @@ describe('dominantColorFromPixels', () => {
     const result = dominantColorFromPixels(data, 4, 4)!;
     const sat = parseInt(result.match(/(\d+)%/)![1]);
     const lit = parseInt(result.match(/(\d+)%,\s*(\d+)%/)![2]);
-    expect(sat).toBeGreaterThanOrEqual(40);
-    expect(sat).toBeLessThanOrEqual(70);
-    expect(lit).toBeGreaterThanOrEqual(30);
-    expect(lit).toBeLessThanOrEqual(50);
+    expect(sat).toBeGreaterThanOrEqual(50);
+    expect(sat).toBeLessThanOrEqual(80);
+    expect(lit).toBeGreaterThanOrEqual(35);
+    expect(lit).toBeLessThanOrEqual(55);
   });
 });

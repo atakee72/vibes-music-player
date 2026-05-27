@@ -33,7 +33,7 @@ export function dominantColorFromPixels(
   for (let i = 0; i < total; i++) {
     const off = i * 4;
     const [h, s, l] = rgbToHsl(data[off], data[off + 1], data[off + 2]);
-    if (l < 15 || l > 85 || s < 20) continue;
+    if (l < 10 || l > 90 || s < 10) continue;
     const bucket = Math.min(Math.floor(h / bucketSize), bucketCount - 1);
     counts[bucket]++;
     satSums[bucket] += s;
@@ -52,8 +52,8 @@ export function dominantColorFromPixels(
   if (best === -1) return null;
 
   const hue = Math.round((best + 0.5) * bucketSize);
-  const sat = Math.round(Math.max(40, Math.min(70, satSums[best] / counts[best])));
-  const lit = Math.round(Math.max(30, Math.min(50, litSums[best] / counts[best])));
+  const sat = Math.round(Math.max(50, Math.min(80, satSums[best] / counts[best])));
+  const lit = Math.round(Math.max(35, Math.min(55, litSums[best] / counts[best])));
   return `hsl(${hue}, ${sat}%, ${lit}%)`;
 }
 
@@ -67,15 +67,10 @@ export async function extractDominantColor(imageUrl: string): Promise<string | n
       el.src = imageUrl;
     });
 
-    let ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
-    if (typeof OffscreenCanvas !== 'undefined') {
-      ctx = new OffscreenCanvas(size, size).getContext('2d');
-    } else {
-      const c = document.createElement('canvas');
-      c.width = size;
-      c.height = size;
-      ctx = c.getContext('2d');
-    }
+    const c = document.createElement('canvas');
+    c.width = size;
+    c.height = size;
+    const ctx = c.getContext('2d');
     if (!ctx) return null;
 
     ctx.drawImage(img, 0, 0, size, size);
