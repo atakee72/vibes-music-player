@@ -267,28 +267,42 @@ true via every path now.
 
 ---
 
-## Phase 4 — Visual polish (planned, next up)
+## Phase 4 — Visual polish (shipped)
 
-Status: 📋 planned.
+Status: ✅ merged (`8bc1a2d`).
 
-Two pure-UI additions, no audio risk, biggest visual payoff so far:
+Two pure-UI additions, no audio engine changes:
 
-- **Cover-art color extraction** — sample the playing song's cover art
-  and tint the background gradient accordingly (Plexamp pattern). The
-  brand gradient becomes dynamic per-track. Likely via a Canvas pixel
-  sample + simple dominant-color algorithm (or `color-thief` library, ~3KB).
-- **Picture-in-Picture mini player** — `Picture-in-Picture API` on the
-  `<audio>` element (via a hidden `<video>` element acting as a host, or
-  the newer Document PiP). Lets users keep transport controls visible
-  while doing other browser work.
+- **Dynamic background tint** — extracts the dominant color from the
+  playing track's cover art via a 20×20 canvas downsample + HSL hue
+  bucketing (`src/lib/colors.ts`). Applied as a radial gradient glow
+  emanating from the bottom center, transitioning over 1.5s on song
+  change. `useDominantColor` hook bridges async extraction to React
+  state with an abort guard for fast skipping.
+- **Document Picture-in-Picture mini player** — `MiniPlayer` component
+  rendered into a PiP window via `React.createPortal`. Stylesheets
+  copied from the main document so Tailwind works in PiP. Chromium 116+
+  only (feature-detected; button hidden elsewhere). Auto-closes when
+  `currentSong` becomes null.
 
-Both fall under Tier 2/3 of the roadmap I sketched in chat. Pure
-presentational changes; no engine touch. Estimated one branch, two
-commits.
+**Key files added**:
+- `src/lib/colors.ts` + test — dominant-color extraction
+- `src/hooks/useDominantColor.ts` — extraction hook
+- `src/components/MiniPlayer.tsx` + test — PiP content
+- `src/vite-env.d.ts` — Document PiP API type declarations
+
+**Notable decisions**:
+- **Regular canvas, not OffscreenCanvas** — avoids `drawImage` edge cases
+  with blob URLs in some browser contexts.
+- **Radial gradient glow, not flat overlay** — an early flat overlay at
+  low opacity was invisible. The radial gradient centered at the bottom
+  creates a visible, natural-looking glow.
+- **No Video PiP fallback** — consistent with the "Chromium gets rich
+  features, Firefox/Safari get graceful degradation" pattern.
 
 ---
 
-## Phase 5 — Library editing & import (planned)
+## Phase 5 — Library editing & import (planned, next up)
 
 Status: 📋 planned.
 
@@ -344,5 +358,6 @@ Last phase before the player feels "done":
 | 2 | `6ef9332` — `docs: Keyboard shortcuts + Media Session sections` (final of 4 commits) |
 | 3 | `43b12b8` — `docs: Audio engine section + Phase 3 features in README` (final of 5 commits) |
 | 3.5 | `b09eff9` — `feat: persist library via IDB blobs as fallback for Firefox/Safari` |
+| 4 | `8bc1a2d` — `fix: boost tint visibility with radial gradient glow` (final of 3 commits) |
 
-Total: ~57 tests, all green; `pnpm build` clean; production live.
+Total: 75 tests, all green; `pnpm build` clean; production live.
