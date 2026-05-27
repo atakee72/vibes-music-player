@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Upload } from 'lucide-react';
 import type { LibraryRoot, Playlist, RepeatMode, Song } from './types';
 import { useMetadataExtractor } from './hooks/useMetadataExtractor';
@@ -13,6 +14,8 @@ import { ingestDirectoryHandle } from './lib/ingest';
 import { filterSongs } from './lib/filter';
 import { nextInPlaylist } from './lib/queue';
 import type { EqPreset } from './lib/eq';
+import { useDominantColor } from './hooks/useDominantColor';
+import { MiniPlayer } from './components/MiniPlayer';
 
 type LibraryStatus = 'loading' | 'ready' | 'needs-prompt';
 
@@ -37,6 +40,7 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [eqPreset, setEqPreset] = useState<EqPreset>('Off');
+  const [pipWindow, setPipWindow] = useState<Window | null>(null);
 
   const loadedRef = useRef(false);
   const persistRequestedRef = useRef(false);
@@ -46,6 +50,7 @@ export default function App() {
   const activePlaylist = playlists.find((p) => p.id === activePlaylistId);
   const filteredSongs = filterSongs(activePlaylist?.songs ?? [], searchQuery);
   const nextSong = nextInPlaylist(currentSong, activePlaylist?.songs ?? [], repeatMode);
+  const tintColor = useDominantColor(currentSong?.coverArt);
 
   const onEndedRef = useRef<() => void>(() => {});
 
@@ -207,6 +212,57 @@ export default function App() {
     setRepeatMode((m) => (m === 'none' ? 'all' : m === 'all' ? 'one' : 'none'));
   };
 
+  const togglePip = useCallback(async () => {
+    if (pipWindow) {
+      pipWindow.close();
+      setPipWindow(null);
+      return;
+    }
+    if (!window.documentPictureInPicture) return;
+    try {
+      const pip = await window.documentPictureInPicture.requestWindow({
+        width: 380,
+        height: 220,
+      });
+      for (const sheet of document.styleSheets) {
+        try {
+          if (sheet.href) {
+            const link = pip.document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = sheet.href;
+            pip.document.head.appendChild(link);
+          } else if (sheet.cssRules) {
+            const style = pip.document.createElement('style');
+            style.textContent = Array.from(sheet.cssRules)
+              .map((r) => r.cssText)
+              .join('\n');
+            pip.document.head.appendChild(style);
+          }
+        } catch {
+          // cross-origin stylesheet — skip
+        }
+      }
+      pip.addEventListener('pagehide', () => setPipWindow(null));
+      setPipWindow(pip);
+    } catch (err) {
+      console.error('PiP open failed:', err);
+    }
+  }, [pipWindow]);
+
+  useEffect(() => {
+    if (!pipWindow) return;
+    return () => {
+      pipWindow.close();
+    };
+  }, [pipWindow]);
+
+  useEffect(() => {
+    if (pipWindow && !currentSong) {
+      pipWindow.close();
+      setPipWindow(null);
+    }
+  }, [pipWindow, currentSong]);
+
   const onDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -294,6 +350,16 @@ export default function App() {
         setIsDragging(false);
       }}
     >
+      <div
+        className="fixed inset-0 pointer-events-none transition-colors duration-[1500ms]"
+        style={{
+          backgroundColor: tintColor ?? 'transparent',
+          opacity: 0.15,
+          maskImage: 'linear-gradient(to top, black 0%, transparent 70%)',
+          WebkitMaskImage: 'linear-gradient(to top, black 0%, transparent 70%)',
+        }}
+      />
+
       {isDragging && (
         <div className="fixed inset-0 bg-purple-500/20 backdrop-blur-sm z-50 flex items-center justify-center border-4 border-dashed border-purple-400">
           <div className="text-center">
@@ -429,7 +495,24 @@ export default function App() {
         onSeek={seek}
         onCycleRepeat={cycleRepeat}
         onEqPresetChange={setEqPreset}
+        onTogglePip={togglePip}
+        supportsPip={'documentPictureInPicture' in window}
+        isPipOpen={pipWindow !== null}
       />
+
+      {pipWindow &&
+        currentSong &&
+        createPortal(
+          <MiniPlayer
+            song={currentSong}
+            isPlaying={isPlaying}
+            tintColor={tintColor}
+            onPlayPause={togglePlayPause}
+            onPrev={playPrev}
+            onNext={playNext}
+          />,
+          pipWindow.document.body,
+        )}
 
       {showUpload && (
         <div
