@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { parseBlob } from 'music-metadata';
-import type { Song } from '../types';
+import type { LyricLine, Song } from '../types';
 
 export function useMetadataExtractor() {
   const [isLoading, setIsLoading] = useState(false);
@@ -17,6 +17,18 @@ export function useMetadataExtractor() {
         coverArt = URL.createObjectURL(blob);
       }
 
+      let lyrics: LyricLine[] | undefined;
+      if (meta.common.lyrics?.length) {
+        const tag = meta.common.lyrics[0];
+        if (tag.syncText?.length) {
+          lyrics = tag.syncText
+            .filter((s) => s.timestamp != null)
+            .map((s) => ({ time: s.timestamp! / 1000, text: s.text }));
+        } else if (tag.text?.trim()) {
+          lyrics = [{ time: 0, text: tag.text.trim() }];
+        }
+      }
+
       return {
         id: crypto.randomUUID(),
         url: URL.createObjectURL(file),
@@ -30,6 +42,7 @@ export function useMetadataExtractor() {
         coverArt,
         file,
         replayGainDb: meta.common.replaygain_track_gain?.dB,
+        lyrics,
       };
     } catch (err) {
       console.error('Error extracting metadata:', err);

@@ -1,3 +1,8 @@
+export interface LyricLine {
+  time: number;
+  text: string;
+}
+
 export interface Song {
   id: string;
   url: string;
@@ -12,6 +17,7 @@ export interface Song {
   file: File;
   fileHandle?: FileSystemFileHandle;
   replayGainDb?: number;
+  lyrics?: LyricLine[];
 }
 
 export interface Playlist {
