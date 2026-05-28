@@ -12,6 +12,7 @@ interface UseAudioEngineArgs {
   song: Song | null;
   nextSong?: Song | null;
   eqPreset?: EqPreset;
+  volume?: number;
   onEnded?: () => void;
 }
 
@@ -46,6 +47,7 @@ export function useAudioEngine({
   song,
   nextSong,
   eqPreset = 'Off',
+  volume = 1,
   onEnded,
 }: UseAudioEngineArgs): UseAudioEngineResult {
   const audioRefA = useRef<HTMLAudioElement>(null);
@@ -295,6 +297,11 @@ export function useAudioEngine({
       activeAudio.pause();
     }
   }, []);
+
+  useEffect(() => {
+    if (audioRefA.current) audioRefA.current.volume = volume;
+    if (audioRefB.current) audioRefB.current.volume = volume;
+  }, [volume]);
 
   const seek = useCallback((t: number) => {
     const activeAudio =

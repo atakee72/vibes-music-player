@@ -4,10 +4,10 @@ export type EqPreset = 'Off' | 'Bass Boost' | 'Vocal Boost' | 'Treble Boost' | '
 
 export const EQ_PRESETS: Record<EqPreset, number[]> = {
   Off: [0, 0, 0, 0, 0],
-  'Bass Boost': [6, 4, 0, 0, 0],
-  'Vocal Boost': [0, 0, 3, 4, 0],
-  'Treble Boost': [0, 0, 0, 3, 5],
-  Acoustic: [3, 2, 1, 2, 3],
+  'Bass Boost': [8, 5, 0, 0, 0],
+  'Vocal Boost': [-2, 0, 5, 6, 1],
+  'Treble Boost': [0, 0, 0, 5, 7],
+  Acoustic: [5, 3, -2, 4, 5],
 };
 
 export const EQ_PRESET_NAMES: EqPreset[] = [

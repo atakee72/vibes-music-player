@@ -9,6 +9,7 @@ function renderPlayerBar(overrides: Partial<Parameters<typeof PlayerBar>[0]> = {
   const onSeek = vi.fn();
   const onCycleRepeat = vi.fn();
   const onEqPresetChange = vi.fn();
+  const onVolumeChange = vi.fn();
   const utils = render(
     <PlayerBar
       song={null}
@@ -18,16 +19,18 @@ function renderPlayerBar(overrides: Partial<Parameters<typeof PlayerBar>[0]> = {
       visualizerData={[]}
       repeatMode="none"
       eqPreset="Off"
+      volume={1}
       onPlayPause={onPlayPause}
       onPrev={onPrev}
       onNext={onNext}
       onSeek={onSeek}
       onCycleRepeat={onCycleRepeat}
       onEqPresetChange={onEqPresetChange}
+      onVolumeChange={onVolumeChange}
       {...overrides}
     />,
   );
-  return { ...utils, onPlayPause, onPrev, onNext, onSeek, onCycleRepeat, onEqPresetChange };
+  return { ...utils, onPlayPause, onPrev, onNext, onSeek, onCycleRepeat, onEqPresetChange, onVolumeChange };
 }
 
 describe('PlayerBar', () => {
@@ -62,12 +65,14 @@ describe('PlayerBar', () => {
         visualizerData={[]}
         repeatMode="none"
         eqPreset="Off"
+        volume={1}
         onPlayPause={onPlayPause}
         onPrev={vi.fn()}
         onNext={vi.fn()}
         onSeek={vi.fn()}
         onCycleRepeat={vi.fn()}
         onEqPresetChange={vi.fn()}
+        onVolumeChange={vi.fn()}
       />,
     );
     expect(screen.getByRole('button', { name: 'Pause' })).toBeInTheDocument();
@@ -88,12 +93,14 @@ describe('PlayerBar', () => {
         visualizerData={[]}
         repeatMode="one"
         eqPreset="Off"
+        volume={1}
         onPlayPause={vi.fn()}
         onPrev={vi.fn()}
         onNext={vi.fn()}
         onSeek={vi.fn()}
         onCycleRepeat={onCycleRepeat}
         onEqPresetChange={vi.fn()}
+        onVolumeChange={vi.fn()}
       />,
     );
     expect(screen.getAllByRole('button', { name: 'Repeat: one' })).toHaveLength(2);
@@ -163,5 +170,24 @@ describe('PlayerBar', () => {
     renderPlayerBar({ song: makeSong(), supportsPip: true, onTogglePip });
     fireEvent.click(screen.getByRole('button', { name: 'Picture-in-Picture' }));
     expect(onTogglePip).toHaveBeenCalledOnce();
+  });
+
+  it('volume slider fires onVolumeChange when moved', () => {
+    const { onVolumeChange } = renderPlayerBar({ song: makeSong(), volume: 1 });
+    fireEvent.change(screen.getByLabelText('Volume'), { target: { value: '50' } });
+    expect(onVolumeChange).toHaveBeenCalledWith(0.5);
+  });
+
+  it('mute button toggles to 0 when volume > 0', () => {
+    const { onVolumeChange } = renderPlayerBar({ song: makeSong(), volume: 0.8 });
+    fireEvent.click(screen.getByRole('button', { name: 'Mute' }));
+    expect(onVolumeChange).toHaveBeenCalledWith(0);
+  });
+
+  it('mute button restores previous volume when muted', () => {
+    const { onVolumeChange } = renderPlayerBar({ song: makeSong(), volume: 0 });
+    fireEvent.click(screen.getByRole('button', { name: 'Unmute' }));
+    // Restores to the default lastVolumeRef (1 on first mount with volume=0)
+    expect(onVolumeChange).toHaveBeenCalledWith(1);
   });
 });

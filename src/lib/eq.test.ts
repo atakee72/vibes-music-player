@@ -18,8 +18,8 @@ describe('EQ presets', () => {
 
     applyPreset(filters, 'Bass Boost', 1.234);
 
-    expect(filters[0].gain.setValueAtTime).toHaveBeenCalledWith(6, 1.234);
-    expect(filters[1].gain.setValueAtTime).toHaveBeenCalledWith(4, 1.234);
+    expect(filters[0].gain.setValueAtTime).toHaveBeenCalledWith(8, 1.234);
+    expect(filters[1].gain.setValueAtTime).toHaveBeenCalledWith(5, 1.234);
     expect(filters[2].gain.setValueAtTime).toHaveBeenCalledWith(0, 1.234);
     expect(filters[3].gain.setValueAtTime).toHaveBeenCalledWith(0, 1.234);
     expect(filters[4].gain.setValueAtTime).toHaveBeenCalledWith(0, 1.234);

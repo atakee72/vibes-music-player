@@ -9,7 +9,10 @@ import {
   SkipBack,
   SkipForward,
   Sliders,
+  Volume,
+  Volume1,
   Volume2,
+  VolumeX,
 } from 'lucide-react';
 import type { RepeatMode, Song } from '../types';
 import { EQ_PRESET_NAMES, type EqPreset } from '../lib/eq';
@@ -31,6 +34,8 @@ interface PlayerBarProps {
   onTogglePip?: () => void;
   supportsPip?: boolean;
   isPipOpen?: boolean;
+  volume: number;
+  onVolumeChange: (v: number) => void;
 }
 
 const formatTime = (s: number) => {
@@ -55,9 +60,24 @@ export function PlayerBar({
   onTogglePip,
   supportsPip,
   isPipOpen,
+  volume,
+  onVolumeChange,
 }: PlayerBarProps) {
   const [eqOpen, setEqOpen] = useState(false);
   const eqWrapRef = useRef<HTMLDivElement>(null);
+  const lastVolumeRef = useRef(volume > 0 ? volume : 1);
+
+  useEffect(() => {
+    if (volume > 0) lastVolumeRef.current = volume;
+  }, [volume]);
+
+  const VolumeIcon =
+    volume === 0 ? VolumeX : volume < 0.34 ? Volume : volume < 0.67 ? Volume1 : Volume2;
+
+  const toggleMute = () => {
+    if (volume === 0) onVolumeChange(lastVolumeRef.current);
+    else onVolumeChange(0);
+  };
 
   useEffect(() => {
     if (!eqOpen) return;
@@ -223,7 +243,26 @@ export function PlayerBar({
               </div>
             )}
           </div>
-          <Volume2 className="h-4 w-4 lg:h-5 lg:w-5 text-white/60" />
+          <div className="flex items-center space-x-1">
+            <button
+              onClick={toggleMute}
+              className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/60"
+              title={volume === 0 ? 'Unmute' : 'Mute'}
+              aria-label={volume === 0 ? 'Unmute' : 'Mute'}
+            >
+              <VolumeIcon className="h-4 w-4 lg:h-5 lg:w-5" />
+            </button>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={Math.round(volume * 100)}
+              onChange={(e) => onVolumeChange(Number(e.target.value) / 100)}
+              className="w-16 lg:w-20 accent-purple-500"
+              aria-label="Volume"
+              title={`Volume: ${Math.round(volume * 100)}%`}
+            />
+          </div>
         </div>
       </div>
     </div>

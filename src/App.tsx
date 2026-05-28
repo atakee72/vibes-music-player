@@ -43,6 +43,7 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [eqPreset, setEqPreset] = useState<EqPreset>('Off');
+  const [volume, setVolume] = useState(1);
   const [pipWindow, setPipWindow] = useState<Window | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
   const [showLyrics, setShowLyrics] = useState(false);
@@ -72,6 +73,7 @@ export default function App() {
     song: currentSong,
     nextSong,
     eqPreset,
+    volume,
     onEnded: () => onEndedRef.current(),
   });
 
@@ -91,9 +93,11 @@ export default function App() {
 
         const loaded = needsPrompt ? [] : await storage.getPlaylists();
         const storedEq = await storage.getEqPreset();
+        const storedVolume = await storage.getVolume();
         setLibraryRoots(roots);
         setPlaylists(ensureLibrary(loaded));
         setEqPreset(storedEq);
+        setVolume(storedVolume);
         setLibraryStatus(needsPrompt ? 'needs-prompt' : 'ready');
       } catch (err) {
         console.error('Library load failed:', err);
@@ -162,6 +166,11 @@ export default function App() {
     if (!loadedRef.current) return;
     storage.saveEqPreset(eqPreset).catch((err) => console.error('EQ save failed:', err));
   }, [eqPreset]);
+
+  useEffect(() => {
+    if (!loadedRef.current) return;
+    storage.saveVolume(volume).catch((err) => console.error('Volume save failed:', err));
+  }, [volume]);
 
   const requestPersistOnce = useCallback(() => {
     if (persistRequestedRef.current) return;
@@ -666,6 +675,8 @@ export default function App() {
         onSeek={seek}
         onCycleRepeat={cycleRepeat}
         onEqPresetChange={setEqPreset}
+        volume={volume}
+        onVolumeChange={setVolume}
         onTogglePip={togglePip}
         supportsPip={'documentPictureInPicture' in window}
         isPipOpen={pipWindow !== null}
