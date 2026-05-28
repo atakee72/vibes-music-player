@@ -10,7 +10,7 @@ import {
   type DragEndEvent,
 } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
-import { Download, RefreshCw, Upload } from 'lucide-react';
+import { Download, PanelLeftOpen, RefreshCw, Upload } from 'lucide-react';
 import type { LibraryRoot, Playlist, RepeatMode, Song } from './types';
 import { useMetadataExtractor } from './hooks/useMetadataExtractor';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
@@ -787,13 +787,9 @@ export default function App() {
                   <button
                     onClick={() => setSidebarOpen(true)}
                     className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-                    aria-label="Open menu"
+                    aria-label="Open sidebar"
                   >
-                    <div className="w-6 h-6 flex flex-col justify-center space-y-1">
-                      <div className="w-full h-0.5 bg-white rounded" />
-                      <div className="w-full h-0.5 bg-white rounded" />
-                      <div className="w-full h-0.5 bg-white rounded" />
-                    </div>
+                    <PanelLeftOpen className="h-5 w-5" />
                   </button>
                 )}
                 <h2 className="text-xl lg:text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">

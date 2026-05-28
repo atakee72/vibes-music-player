@@ -1,5 +1,5 @@
 import { useDroppable } from '@dnd-kit/core';
-import { Music, Plus, Trash2, X } from 'lucide-react';
+import { Music, PanelLeftClose, Plus, Trash2 } from 'lucide-react';
 import type { Playlist } from '../types';
 
 interface SidebarProps {
@@ -87,7 +87,7 @@ export function Sidebar({
             className="p-2 hover:bg-white/10 rounded-lg transition-colors"
             aria-label="Close sidebar"
           >
-            <X className="h-5 w-5" />
+            <PanelLeftClose className="h-5 w-5" />
           </button>
         </div>
         <button
