@@ -302,24 +302,52 @@ Two pure-UI additions, no audio engine changes:
 
 ---
 
-## Phase 5 — Library editing & import (planned, next up)
+## Phase 5 — Library editing & import (shipped)
 
-Status: 📋 planned.
+Status: ✅ merged (`5c6b972`).
 
-A grab-bag of "manage your library" features that all touch `SongList` +
-the ingest pipeline:
+Three independent "manage your library" features in one phase:
 
-- **Drag-to-reorder + multi-select delete** in `SongList`. Today you can
-  delete one song at a time; reordering doesn't exist.
-- **M3U / PLS playlist import**. Drop an `.m3u` file → parse line-by-line
-  → resolve each path against existing library handles → build a playlist.
-- **LRC synced lyrics**. Drop an `.lrc` next to an audio file (or have
-  the metadata embed it) → display synced lyrics in PlayerBar or a
-  dedicated overlay.
+- **Drag-to-reorder + multi-select delete** — `@dnd-kit/core` +
+  `@dnd-kit/sortable` power the drag UX. `GripVertical` icon as the
+  drag handle, visible on hover, hidden when search filter is active
+  (reordering a filtered subset is ambiguous). Click / Shift+click /
+  Ctrl+click selection with a floating toolbar showing "N selected" +
+  batch delete. Delete key works when songs are selected.
+- **M3U / PLS playlist import** — `src/lib/playlist-import.ts` parses
+  both formats. Entries match by filename (case-insensitive) against
+  Library songs. Imported playlists appear in the sidebar; a
+  notification shows match results (e.g., "Created 'Mix' with 8 of 10
+  tracks (2 not found)"). Auto-dismisses after 5s.
+- **LRC synced lyrics** — three sources: embedded SYLT (synced tags
+  via `music-metadata`'s `common.lyrics[].syncText`), embedded USLT
+  (unsynced text via `.text`), and dropped `.lrc` files parsed by
+  `src/lib/lrc.ts`. `LyricsPanel` slides in right of SongList (full
+  overlay on mobile), auto-scrolls to the active line via
+  `scrollIntoView` (only when index changes, not every tick). Toggle
+  with `L` key or "Lyrics" header button.
+
+**Key files added**:
+- `src/lib/playlist-import.ts` + test — M3U/PLS parsing + matching
+- `src/lib/lrc.ts` + test — LRC parsing + `activeLyricIndex`
+- `src/components/LyricsPanel.tsx` + test
+
+**Notable decisions**:
+- **Selection state local to SongList** (not in App.tsx) — same
+  precedent as PlayerBar's `eqOpen`. Selection is UI-only state with
+  no cross-component consumer until the user acts (delete).
+- **`@dnd-kit` dependency justified** — ~15KB gzipped for touch
+  support, keyboard accessibility, and smooth animations. HTML5 DnD
+  has poor touch UX.
+- **File routing in `handleFiles`** — playlist and LRC files are
+  separated before the audio loop, then processed in order (audio
+  first so LRC matching has songs to match against).
+- **Lyrics persist via `SongMeta`** — no storage.ts changes needed;
+  the `lyrics` field flows through existing `toStored`/`fromStored`.
 
 ---
 
-## Phase 6 — Distribution (planned)
+## Phase 6 — Distribution (planned, next up)
 
 Status: 📋 planned.
 
@@ -359,5 +387,6 @@ Last phase before the player feels "done":
 | 3 | `43b12b8` — `docs: Audio engine section + Phase 3 features in README` (final of 5 commits) |
 | 3.5 | `b09eff9` — `feat: persist library via IDB blobs as fallback for Firefox/Safari` |
 | 4 | `8bc1a2d` — `fix: boost tint visibility with radial gradient glow` (final of 3 commits) |
+| 5 | `5c6b972` — `docs: Phase 5 features in CLAUDE.md and README` (final of 4 commits) |
 
-Total: 75 tests, all green; `pnpm build` clean; production live.
+Total: 111 tests, all green; `pnpm build` clean; production live.
