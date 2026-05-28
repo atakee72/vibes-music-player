@@ -139,7 +139,7 @@ function SortableRow({
       onPointerCancel={handlePointerUpOrCancel}
       onPointerLeave={handlePointerUpOrCancel}
       className={
-        'group flex items-center space-x-3 p-3 lg:p-4 rounded-xl hover:bg-white/5 transition-all duration-200 cursor-default ' +
+        'group flex items-center space-x-3 p-3 lg:p-4 rounded-xl hover:bg-white/5 transition-all duration-200 cursor-default select-none ' +
         (selected ? 'ring-2 ring-purple-400/50 ' : '') +
         (active
           ? 'bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/20'

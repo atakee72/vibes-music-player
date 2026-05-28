@@ -30,7 +30,7 @@ function PlaylistRow({ playlist, active, onSelect, onDelete, onClose }: Playlist
         onClose();
       }}
       className={
-        'group flex items-center justify-between px-3 py-3 rounded-lg cursor-pointer transition-all duration-200 mb-1 ' +
+        'group flex items-center justify-between px-3 py-3 rounded-lg cursor-pointer transition-all duration-200 mb-1 select-none ' +
         (isOver ? 'ring-2 ring-purple-400 ' : '') +
         (active
           ? 'bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-purple-300 border border-purple-500/30'
