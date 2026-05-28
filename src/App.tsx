@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import { arrayMove } from '@dnd-kit/sortable';
 import { Upload } from 'lucide-react';
 import type { LibraryRoot, Playlist, RepeatMode, Song } from './types';
 import { useMetadataExtractor } from './hooks/useMetadataExtractor';
@@ -397,6 +407,77 @@ export default function App() {
     [activePlaylistId],
   );
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor),
+  );
+
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over, activatorEvent } = event;
+      if (!over) return;
+
+      const overId = String(over.id);
+
+      // Drop on a Sidebar playlist row
+      if (overId.startsWith('playlist-')) {
+        const targetId = overId.slice('playlist-'.length);
+        if (targetId === activePlaylistId) return;
+        const ids = (active.data.current?.ids as string[] | undefined) ?? [
+          String(active.id),
+        ];
+        const songsToCopy = playlists
+          .find((p) => p.id === activePlaylistId)
+          ?.songs.filter((s) => ids.includes(s.id)) ?? [];
+        if (songsToCopy.length === 0) return;
+
+        const isMove =
+          ((activatorEvent as PointerEvent | KeyboardEvent | MouseEvent | null)?.ctrlKey ||
+            (activatorEvent as PointerEvent | KeyboardEvent | MouseEvent | null)?.metaKey) ??
+          false;
+        // Special case: never move from Library (always copy)
+        const effectiveMove = isMove && activePlaylistId !== 'library';
+
+        setPlaylists((prev) =>
+          prev.map((p) => {
+            if (p.id === targetId) {
+              const existing = new Set(p.songs.map((s) => s.id));
+              const toAdd = songsToCopy.filter((s) => !existing.has(s.id));
+              return { ...p, songs: [...p.songs, ...toAdd] };
+            }
+            if (effectiveMove && p.id === activePlaylistId) {
+              const idSet = new Set(ids);
+              return { ...p, songs: p.songs.filter((s) => !idSet.has(s.id)) };
+            }
+            return p;
+          }),
+        );
+
+        const targetName =
+          playlists.find((p) => p.id === targetId)?.name ?? 'playlist';
+        setNotification(
+          `${effectiveMove ? 'Moved' : 'Added'} ${songsToCopy.length} ${
+            songsToCopy.length === 1 ? 'song' : 'songs'
+          } ${effectiveMove ? 'to' : 'to'} "${targetName}"`,
+        );
+        setSelectionMode(false);
+        return;
+      }
+
+      // Drop on another song row → reorder (only when not in selection mode)
+      if (selectionMode) return;
+      if (active.id === over.id) return;
+      const activePlaylist = playlists.find((p) => p.id === activePlaylistId);
+      if (!activePlaylist) return;
+      const oldIndex = activePlaylist.songs.findIndex((s) => s.id === active.id);
+      const newIndex = activePlaylist.songs.findIndex((s) => s.id === over.id);
+      if (oldIndex !== -1 && newIndex !== -1) {
+        handleReorder(arrayMove(activePlaylist.songs, oldIndex, newIndex));
+      }
+    },
+    [playlists, activePlaylistId, selectionMode, handleReorder],
+  );
+
   const togglePip = useCallback(async () => {
     if (pipWindow) {
       pipWindow.close();
@@ -548,6 +629,12 @@ export default function App() {
             : 'none',
         }}
       />
+
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
 
       {isDragging && (
         <div className="fixed inset-0 bg-purple-500/20 backdrop-blur-sm z-50 flex items-center justify-center border-4 border-dashed border-purple-400">
@@ -748,6 +835,8 @@ export default function App() {
         supportsPip={'documentPictureInPicture' in window}
         isPipOpen={pipWindow !== null}
       />
+
+      </DndContext>
 
       {pipWindow &&
         currentSong &&

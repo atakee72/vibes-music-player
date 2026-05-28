@@ -1,20 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  DndContext,
-  closestCenter,
-  PointerSensor,
-  KeyboardSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from '@dnd-kit/core';
-import {
   SortableContext,
   useSortable,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { arrayMove } from '@dnd-kit/sortable';
 import {
   Check,
   Clock,
@@ -61,6 +51,7 @@ interface SortableRowProps {
   selected: boolean;
   selectionMode: boolean;
   isFilterActive: boolean;
+  dragIds: string[];
   onPlay: (song: Song) => void;
   onPause: () => void;
   onDelete: (id: string) => void;
@@ -75,6 +66,7 @@ function SortableRow({
   selected,
   selectionMode,
   isFilterActive,
+  dragIds,
   onPlay,
   onPause,
   onDelete,
@@ -88,7 +80,7 @@ function SortableRow({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: song.id });
+  } = useSortable({ id: song.id, data: { type: 'song', ids: dragIds } });
 
   const longPressTimerRef = useRef<number | null>(null);
   const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -128,11 +120,17 @@ function SortableRow({
     opacity: isDragging ? 0.5 : 1,
   };
 
+  // In selection mode (and this row is selected), attach drag listeners to the
+  // whole row body so the user can drag the selection to another playlist.
+  // Outside selection mode, listeners attach only to the GripVertical handle.
+  const rowListeners = selectionMode && selected ? listeners : undefined;
+
   return (
     <div
       ref={setNodeRef}
       style={style}
       {...attributes}
+      {...rowListeners}
       onClick={(e) => onRowClick(song, e)}
       onDoubleClick={() => onPlay(song)}
       onPointerDown={handlePointerDown}
@@ -296,21 +294,6 @@ export function SongList({
     }
   }, [selectionMode]);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(KeyboardSensor),
-  );
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const oldIndex = songs.findIndex((s) => s.id === active.id);
-    const newIndex = songs.findIndex((s) => s.id === over.id);
-    if (oldIndex !== -1 && newIndex !== -1) {
-      onReorder(arrayMove(songs, oldIndex, newIndex));
-    }
-  };
-
   const handleLongPress = (song: Song) => {
     if (selectionMode) return;
     onSelectionModeChange(true);
@@ -410,40 +393,40 @@ export function SongList({
           </div>
         </div>
       )}
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragEnd={handleDragEnd}
+      <SortableContext
+        items={songs.map((s) => s.id)}
+        strategy={verticalListSortingStrategy}
+        disabled={isFilterActive || selectionMode}
       >
-        <SortableContext
-          items={songs.map((s) => s.id)}
-          strategy={verticalListSortingStrategy}
-          disabled={isFilterActive || selectionMode}
-        >
-          <div className="space-y-1 p-2 lg:p-4">
-            {songs.map((song) => {
-              const active = currentSong?.id === song.id;
-              const activePlaying = active && isPlaying;
-              return (
-                <SortableRow
-                  key={song.id}
-                  song={song}
-                  active={active}
-                  activePlaying={activePlaying}
-                  selected={selectedIds.has(song.id)}
-                  selectionMode={selectionMode}
-                  isFilterActive={isFilterActive}
-                  onPlay={onPlay}
-                  onPause={onPause}
-                  onDelete={onDelete}
-                  onRowClick={handleRowClick}
-                  onLongPress={handleLongPress}
-                />
-              );
-            })}
-          </div>
-        </SortableContext>
-      </DndContext>
+        <div className="space-y-1 p-2 lg:p-4">
+          {songs.map((song) => {
+            const active = currentSong?.id === song.id;
+            const activePlaying = active && isPlaying;
+            const isSelected = selectedIds.has(song.id);
+            return (
+              <SortableRow
+                key={song.id}
+                song={song}
+                active={active}
+                activePlaying={activePlaying}
+                selected={isSelected}
+                selectionMode={selectionMode}
+                isFilterActive={isFilterActive}
+                dragIds={
+                  selectionMode && isSelected
+                    ? Array.from(selectedIds)
+                    : [song.id]
+                }
+                onPlay={onPlay}
+                onPause={onPause}
+                onDelete={onDelete}
+                onRowClick={handleRowClick}
+                onLongPress={handleLongPress}
+              />
+            );
+          })}
+        </div>
+      </SortableContext>
     </div>
   );
 }

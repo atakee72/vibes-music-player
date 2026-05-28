@@ -1,4 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react';
+import { DndContext } from '@dnd-kit/core';
 import { Sidebar } from './Sidebar';
 import { makePlaylist } from '../test-utils';
 
@@ -11,16 +12,18 @@ function renderSidebar(overrides: Partial<Parameters<typeof Sidebar>[0]> = {}) {
   const mix = makePlaylist({ id: 'mix-1', name: 'Mix' });
 
   const utils = render(
-    <Sidebar
-      playlists={[library, mix]}
-      activePlaylistId="library"
-      onSelect={onSelect}
-      onCreate={onCreate}
-      onDelete={onDelete}
-      isOpen={false}
-      onClose={onClose}
-      {...overrides}
-    />,
+    <DndContext>
+      <Sidebar
+        playlists={[library, mix]}
+        activePlaylistId="library"
+        onSelect={onSelect}
+        onCreate={onCreate}
+        onDelete={onDelete}
+        isOpen={false}
+        onClose={onClose}
+        {...overrides}
+      />
+    </DndContext>,
   );
   return { ...utils, onSelect, onCreate, onDelete, onClose, library, mix };
 }
@@ -52,5 +55,14 @@ describe('Sidebar', () => {
   it('does not render a trash button on the library row', () => {
     renderSidebar();
     expect(screen.queryByRole('button', { name: /Delete Library/i })).not.toBeInTheDocument();
+  });
+
+  it('renders each playlist row inside a droppable wrapper (under DndContext)', () => {
+    // The presence of useDroppable means each row gets a setNodeRef wrapper.
+    // We assert the rows render without throwing, which is the main contract:
+    // if useDroppable was outside a DndContext it would throw.
+    renderSidebar();
+    expect(screen.getByText('Mix')).toBeInTheDocument();
+    expect(screen.getByText('Library')).toBeInTheDocument();
   });
 });

@@ -1,3 +1,4 @@
+import { useDroppable } from '@dnd-kit/core';
 import { Music, Plus, Trash2, X } from 'lucide-react';
 import type { Playlist } from '../types';
 
@@ -9,6 +10,51 @@ interface SidebarProps {
   onDelete: (id: string) => void;
   isOpen: boolean;
   onClose: () => void;
+}
+
+interface PlaylistRowProps {
+  playlist: Playlist;
+  active: boolean;
+  onSelect: (id: string) => void;
+  onDelete: (id: string) => void;
+  onClose: () => void;
+}
+
+function PlaylistRow({ playlist, active, onSelect, onDelete, onClose }: PlaylistRowProps) {
+  const { setNodeRef, isOver } = useDroppable({ id: `playlist-${playlist.id}` });
+  return (
+    <div
+      ref={setNodeRef}
+      onClick={() => {
+        onSelect(playlist.id);
+        onClose();
+      }}
+      className={
+        'group flex items-center justify-between px-3 py-3 rounded-lg cursor-pointer transition-all duration-200 mb-1 ' +
+        (isOver ? 'ring-2 ring-purple-400 ' : '') +
+        (active
+          ? 'bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-purple-300 border border-purple-500/30'
+          : 'text-white/70 hover:bg-white/5 hover:text-white')
+      }
+    >
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium truncate">{playlist.name}</p>
+        <p className="text-xs text-white/50">{playlist.songs.length} songs</p>
+      </div>
+      {playlist.id !== 'library' && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(playlist.id);
+          }}
+          className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-500/20 rounded transition-all"
+          aria-label={`Delete ${playlist.name}`}
+        >
+          <Trash2 className="h-3 w-3 text-red-400" />
+        </button>
+      )}
+    </div>
+  );
 }
 
 export function Sidebar({
@@ -54,41 +100,16 @@ export function Sidebar({
       </div>
 
       <div className="flex-1 overflow-y-auto p-2">
-        {playlists.map((p) => {
-          const active = p.id === activePlaylistId;
-          return (
-            <div
-              key={p.id}
-              onClick={() => {
-                onSelect(p.id);
-                onClose();
-              }}
-              className={
-                'group flex items-center justify-between px-3 py-3 rounded-lg cursor-pointer transition-all duration-200 mb-1 ' +
-                (active
-                  ? 'bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-purple-300 border border-purple-500/30'
-                  : 'text-white/70 hover:bg-white/5 hover:text-white')
-              }
-            >
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{p.name}</p>
-                <p className="text-xs text-white/50">{p.songs.length} songs</p>
-              </div>
-              {p.id !== 'library' && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete(p.id);
-                  }}
-                  className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-500/20 rounded transition-all"
-                  aria-label={`Delete ${p.name}`}
-                >
-                  <Trash2 className="h-3 w-3 text-red-400" />
-                </button>
-              )}
-            </div>
-          );
-        })}
+        {playlists.map((p) => (
+          <PlaylistRow
+            key={p.id}
+            playlist={p}
+            active={p.id === activePlaylistId}
+            onSelect={onSelect}
+            onDelete={onDelete}
+            onClose={onClose}
+          />
+        ))}
       </div>
     </div>
   );

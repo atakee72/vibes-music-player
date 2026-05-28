@@ -1,4 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react';
+import { DndContext } from '@dnd-kit/core';
 import { SongList } from './SongList';
 import { makeSong } from '../test-utils';
 
@@ -10,20 +11,22 @@ function renderSongList(overrides: Partial<Parameters<typeof SongList>[0]> = {})
   const onReorder = vi.fn();
   const onSelectionModeChange = vi.fn();
   const utils = render(
-    <SongList
-      songs={[]}
-      currentSong={null}
-      isPlaying={false}
-      selectionMode={false}
-      onSelectionModeChange={onSelectionModeChange}
-      onPlay={onPlay}
-      onPause={onPause}
-      onDelete={onDelete}
-      onBatchDelete={onBatchDelete}
-      onReorder={onReorder}
-      isFilterActive={false}
-      {...overrides}
-    />,
+    <DndContext>
+      <SongList
+        songs={[]}
+        currentSong={null}
+        isPlaying={false}
+        selectionMode={false}
+        onSelectionModeChange={onSelectionModeChange}
+        onPlay={onPlay}
+        onPause={onPause}
+        onDelete={onDelete}
+        onBatchDelete={onBatchDelete}
+        onReorder={onReorder}
+        isFilterActive={false}
+        {...overrides}
+      />
+    </DndContext>,
   );
   return { ...utils, onPlay, onPause, onDelete, onBatchDelete, onReorder, onSelectionModeChange };
 }
@@ -60,19 +63,21 @@ describe('SongList', () => {
     expect(onPause).not.toHaveBeenCalled();
 
     rerender(
-      <SongList
-        songs={[song]}
-        currentSong={song}
-        isPlaying={true}
-        selectionMode={false}
-        onSelectionModeChange={vi.fn()}
-        onPlay={onPlay}
-        onPause={onPause}
-        onDelete={vi.fn()}
-        onBatchDelete={vi.fn()}
-        onReorder={vi.fn()}
-        isFilterActive={false}
-      />,
+      <DndContext>
+        <SongList
+          songs={[song]}
+          currentSong={song}
+          isPlaying={true}
+          selectionMode={false}
+          onSelectionModeChange={vi.fn()}
+          onPlay={onPlay}
+          onPause={onPause}
+          onDelete={vi.fn()}
+          onBatchDelete={vi.fn()}
+          onReorder={vi.fn()}
+          isFilterActive={false}
+        />
+      </DndContext>,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Pause' }));
     expect(onPause).toHaveBeenCalledTimes(1);
