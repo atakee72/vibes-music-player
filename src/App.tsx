@@ -52,7 +52,9 @@ export default function App() {
   const [isDragging, setIsDragging] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [repeatMode, setRepeatMode] = useState<RepeatMode>('none');
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(
+    typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches,
+  );
   const [searchQuery, setSearchQuery] = useState('');
   const [eqPreset, setEqPreset] = useState<EqPreset>('Off');
   const [volume, setVolume] = useState(1);
@@ -781,17 +783,19 @@ export default function App() {
           <div className="flex-1 flex flex-col min-w-0">
             <header className="p-4 lg:p-6 border-b border-white/10">
               <div className="flex items-center justify-between mb-4">
-                <button
-                  onClick={() => setSidebarOpen(true)}
-                  className="lg:hidden p-2 hover:bg-white/10 rounded-lg transition-colors"
-                  aria-label="Open menu"
-                >
-                  <div className="w-6 h-6 flex flex-col justify-center space-y-1">
-                    <div className="w-full h-0.5 bg-white rounded" />
-                    <div className="w-full h-0.5 bg-white rounded" />
-                    <div className="w-full h-0.5 bg-white rounded" />
-                  </div>
-                </button>
+                {!sidebarOpen && (
+                  <button
+                    onClick={() => setSidebarOpen(true)}
+                    className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                    aria-label="Open menu"
+                  >
+                    <div className="w-6 h-6 flex flex-col justify-center space-y-1">
+                      <div className="w-full h-0.5 bg-white rounded" />
+                      <div className="w-full h-0.5 bg-white rounded" />
+                      <div className="w-full h-0.5 bg-white rounded" />
+                    </div>
+                  </button>
+                )}
                 <h2 className="text-xl lg:text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
                   {activePlaylist?.name}
                   {searchQuery.trim() && activePlaylist && (

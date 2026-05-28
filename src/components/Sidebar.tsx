@@ -68,8 +68,8 @@ export function Sidebar({
 }: SidebarProps) {
   return (
     <div
-      className={`fixed lg:relative inset-y-0 left-0 z-50 w-64 lg:w-64 bg-slate-800/95 backdrop-blur-xl border-r border-white/10 flex flex-col transform transition-transform duration-300 ease-in-out ${
-        isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+      className={`${isOpen ? 'flex' : 'hidden'} fixed lg:relative inset-y-0 left-0 z-50 w-64 lg:w-64 bg-slate-800/95 backdrop-blur-xl border-r border-white/10 flex-col transform transition-transform duration-300 ease-in-out ${
+        isOpen ? 'translate-x-0' : '-translate-x-full'
       }`}
     >
       <div className="p-4 border-b border-white/10">
@@ -84,7 +84,7 @@ export function Sidebar({
           </div>
           <button
             onClick={onClose}
-            className="lg:hidden p-2 hover:bg-white/10 rounded-lg transition-colors"
+            className="p-2 hover:bg-white/10 rounded-lg transition-colors"
             aria-label="Close sidebar"
           >
             <X className="h-5 w-5" />
