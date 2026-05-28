@@ -73,7 +73,7 @@ export function Sidebar({
       }`}
     >
       <div className="p-4 border-b border-white/10">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-12">
           <div className="flex items-center space-x-2">
             <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
               <Music className="h-5 w-5 text-white" />
