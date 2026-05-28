@@ -10,7 +10,7 @@ import {
   type DragEndEvent,
 } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
-import { Download, PanelLeftOpen, RefreshCw, Upload } from 'lucide-react';
+import { Download, Music, PanelLeftOpen, RefreshCw, Upload } from 'lucide-react';
 import type { LibraryRoot, Playlist, RepeatMode, Song } from './types';
 import { useMetadataExtractor } from './hooks/useMetadataExtractor';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
@@ -784,13 +784,23 @@ export default function App() {
             <header className="p-4 lg:p-6 border-b border-white/10">
               <div className="flex items-center justify-between mb-4">
                 {!sidebarOpen && (
-                  <button
-                    onClick={() => setSidebarOpen(true)}
-                    className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-                    aria-label="Open sidebar"
-                  >
-                    <PanelLeftOpen className="h-5 w-5" />
-                  </button>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => setSidebarOpen(true)}
+                      className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                      aria-label="Open sidebar"
+                    >
+                      <PanelLeftOpen className="h-5 w-5" />
+                    </button>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+                        <Music className="h-5 w-5 text-white" />
+                      </div>
+                      <h1 className="text-lg font-semibold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+                        Vibes
+                      </h1>
+                    </div>
+                  </div>
                 )}
                 <h2 className="text-xl lg:text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
                   {activePlaylist?.name}
