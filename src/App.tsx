@@ -10,7 +10,7 @@ import {
   type DragEndEvent,
 } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
-import { Upload } from 'lucide-react';
+import { Download, RefreshCw, Upload } from 'lucide-react';
 import type { LibraryRoot, Playlist, RepeatMode, Song } from './types';
 import { useMetadataExtractor } from './hooks/useMetadataExtractor';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
@@ -30,6 +30,7 @@ import { parseM3U, parsePLS, matchImportEntries } from './lib/playlist-import';
 import { parseLRC } from './lib/lrc';
 import { LyricsPanel } from './components/LyricsPanel';
 import { ConfirmModal } from './components/ConfirmModal';
+import { serializeM3U, sanitizeFilename } from './lib/playlist-export';
 
 type LibraryStatus = 'loading' | 'ready' | 'needs-prompt';
 
@@ -407,6 +408,85 @@ export default function App() {
     [activePlaylistId],
   );
 
+  const exportPlaylist = useCallback(
+    (playlistId: string) => {
+      const playlist = playlists.find((p) => p.id === playlistId);
+      if (!playlist) return;
+      const text = serializeM3U(playlist);
+      const blob = new Blob([text], { type: 'audio/x-mpegurl' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${sanitizeFilename(playlist.name)}.m3u`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    },
+    [playlists],
+  );
+
+  const refreshLibrary = useCallback(async () => {
+    if (libraryRoots.length === 0) return;
+    for (const root of libraryRoots) {
+      const perm = await root.handle.requestPermission?.({ mode: 'read' });
+      if (perm !== 'granted') {
+        setNotification('Permission denied for library folder');
+        return;
+      }
+    }
+
+    const existingIds = new Set(
+      playlists
+        .find((p) => p.id === 'library')
+        ?.songs.map((s) => s.id) ?? [],
+    );
+    const seenIds = new Set<string>();
+    const newSongs: Song[] = [];
+
+    for (const root of libraryRoots) {
+      const ingested = await ingestDirectoryHandle(root.handle);
+      for (const { file, fileHandle, relativePath } of ingested) {
+        const id = `${root.id}/${relativePath}`;
+        seenIds.add(id);
+        if (existingIds.has(id)) continue;
+        try {
+          const base = await extractMetadata(file);
+          newSongs.push({ ...base, id, fileHandle });
+        } catch (err) {
+          console.error('Refresh: skipping', file.name, err);
+        }
+      }
+    }
+
+    const removedIds = new Set(
+      Array.from(existingIds).filter((id) => !seenIds.has(id)),
+    );
+
+    setPlaylists((prev) =>
+      prev.map((p) => {
+        if (p.id === 'library') {
+          const kept = p.songs.filter((s) => !removedIds.has(s.id));
+          return { ...p, songs: [...kept, ...newSongs] };
+        }
+        // Also drop orphans from user playlists
+        return {
+          ...p,
+          songs: p.songs.filter((s) => !removedIds.has(s.id)),
+        };
+      }),
+    );
+    setCurrentSong((prev) => (prev && removedIds.has(prev.id) ? null : prev));
+
+    if (newSongs.length === 0 && removedIds.size === 0) {
+      setNotification('Library is up to date');
+    } else {
+      setNotification(
+        `Refreshed: +${newSongs.length} ${newSongs.length === 1 ? 'song' : 'songs'}, -${removedIds.size} removed`,
+      );
+    }
+  }, [libraryRoots, playlists, extractMetadata]);
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor),
@@ -745,6 +825,26 @@ export default function App() {
                   >
                     Lyrics
                   </button>
+                  {activePlaylistId === 'library' && libraryRoots.length > 0 && (
+                    <button
+                      onClick={refreshLibrary}
+                      className="p-2 rounded-lg bg-white/5 text-white/60 hover:bg-white/10 transition-all"
+                      title="Refresh library from disk"
+                      aria-label="Refresh library"
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                    </button>
+                  )}
+                  {activePlaylist && activePlaylist.songs.length > 0 && (
+                    <button
+                      onClick={() => exportPlaylist(activePlaylistId)}
+                      className="p-2 rounded-lg bg-white/5 text-white/60 hover:bg-white/10 transition-all"
+                      title="Export as M3U"
+                      aria-label="Export playlist"
+                    >
+                      <Download className="h-4 w-4" />
+                    </button>
+                  )}
                   <button
                     onClick={() => setShowUpload(true)}
                     className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 px-4 py-2 rounded-lg transition-all duration-200 text-sm font-medium shadow-lg"
