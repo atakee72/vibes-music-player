@@ -782,27 +782,31 @@ export default function App() {
 
           <div className="flex-1 flex flex-col min-w-0">
             <header className="p-4 lg:p-6 border-b border-white/10">
+              {!sidebarOpen && (
+                <div className="flex items-center justify-center space-x-2 mb-3">
+                  <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+                    <Music className="h-5 w-5 text-white" />
+                  </div>
+                  <h1 className="text-lg font-semibold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+                    Vibes
+                  </h1>
+                </div>
+              )}
               <div className="flex items-center justify-between mb-4">
                 {!sidebarOpen && (
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => setSidebarOpen(true)}
-                      className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-                      aria-label="Open sidebar"
-                    >
-                      <PanelLeftOpen className="h-5 w-5" />
-                    </button>
-                    <div className="flex items-center space-x-2">
-                      <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
-                        <Music className="h-5 w-5 text-white" />
-                      </div>
-                      <h1 className="text-lg font-semibold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-                        Vibes
-                      </h1>
-                    </div>
-                  </div>
+                  <button
+                    onClick={() => setSidebarOpen(true)}
+                    className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                    aria-label="Open sidebar"
+                  >
+                    <PanelLeftOpen className="h-5 w-5" />
+                  </button>
                 )}
-                <h2 className="text-xl lg:text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+                <h2
+                  className={`font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent ${
+                    sidebarOpen ? 'text-xl lg:text-2xl' : 'text-base lg:text-lg'
+                  }`}
+                >
                   {activePlaylist?.name}
                   {searchQuery.trim() && activePlaylist && (
                     <span className="ml-2 text-sm font-normal text-white/50 bg-clip-border bg-none [-webkit-text-fill-color:initial]">
