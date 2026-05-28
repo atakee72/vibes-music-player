@@ -72,6 +72,9 @@ pnpm test:run  # Vitest single pass
 - **Synced lyrics** — LRC file drop, embedded SYLT/USLT tags, or plain
   text; auto-scrolling lyrics panel toggled with `L`
 - **Double-click a row to play**; click the play overlay also plays
+- **Collapsible sidebar** — hide the playlist sidebar on desktop for a
+  wider song list view (icon: `PanelLeftClose` to close, `PanelLeftOpen`
+  to reopen)
 
 ## Project layout
 

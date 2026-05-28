@@ -250,6 +250,34 @@
   destructive actions route through it: delete song, batch delete,
   delete playlist.
 
+## Prompt modal (no native prompt!)
+
+- `PromptModal` (`src/components/PromptModal.tsx`) is the React-based
+  text-input modal, used by "New Playlist". Same shape as ConfirmModal:
+  `promptState: { title, placeholder?, defaultValue?, confirmLabel?,
+  onConfirm: (value) => void } | null` in App.tsx.
+- **Never use native `window.prompt()`, `alert()`, or `confirm()`** —
+  they block the main thread, and **the audio engine pauses while
+  blocked**. The "music stops when creating a playlist" bug was caused
+  by `prompt()` blocking — PromptModal is the fix.
+
+## Sidebar collapse
+
+- The Sidebar is collapsible on both mobile AND desktop. State lives in
+  App.tsx as `sidebarOpen: boolean`, initialized via `matchMedia(
+  '(min-width: 1024px)').matches` (open on desktop, closed on mobile).
+- When collapsed, the Sidebar's outer container uses `hidden` instead
+  of just `translate-x-full` so it doesn't occupy layout space on
+  desktop. Content area expands to fill the width.
+- Close icon: `PanelLeftClose` (`<-|`) inside Sidebar header. Open
+  icon: `PanelLeftOpen` (`|->`) in the App header, rendered only when
+  `!sidebarOpen`. When collapsed, the Vibes logo is mirrored into the
+  App header (centered, larger) so brand presence persists.
+- **Auto-close on selection is mobile-only**: PlaylistRow's onClick
+  calls `onClose()` only when `!matchMedia('(min-width: 1024px)').
+  matches`. Don't remove this guard — closing the persistent desktop
+  sidebar on every playlist click is annoying.
+
 ## Refresh library + M3U export
 
 - **Refresh** (Library only, Chromium only — requires FS Access handle):
