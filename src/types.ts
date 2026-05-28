@@ -14,6 +14,7 @@ export interface Song {
   year?: number;
   bitrate?: number;
   coverArt?: string;
+  coverBlob?: Blob;
   file: File;
   fileHandle?: FileSystemFileHandle;
   replayGainDb?: number;

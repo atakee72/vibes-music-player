@@ -5,8 +5,9 @@ import type { EqPreset } from './eq';
 const ROOTS_KEY = 'library-roots';
 const PLAYLISTS_KEY = 'playlists';
 const EQ_PRESET_KEY = 'eq-preset';
+const VOLUME_KEY = 'volume';
 
-type SongMeta = Omit<Song, 'file' | 'url' | 'fileHandle'>;
+type SongMeta = Omit<Song, 'file' | 'url' | 'fileHandle' | 'coverArt'>;
 type HandleStoredSong = SongMeta & { fileHandle: FileSystemFileHandle };
 type BlobStoredSong = SongMeta & { blob: Blob; fileName: string };
 type StoredSong = HandleStoredSong | BlobStoredSong;
@@ -15,27 +16,32 @@ type StoredPlaylist = Omit<Playlist, 'songs'> & { songs: StoredSong[] };
 function toStored(song: Song): StoredSong | null {
   // Prefer handle when present — no byte duplication on Chromium
   if (song.fileHandle) {
-    const { file: _f, url: _u, fileHandle, ...rest } = song;
+    const { file: _f, url: _u, coverArt: _c, fileHandle, ...rest } = song;
     return { ...rest, fileHandle };
   }
   if (song.file) {
-    const { file, url: _u, fileHandle: _h, ...rest } = song;
+    const { file, url: _u, coverArt: _c, fileHandle: _h, ...rest } = song;
     return { ...rest, blob: file as Blob, fileName: file.name };
   }
   return null;
+}
+
+function rehydrateSong(stored: StoredSong, file: File): Song {
+  const coverArt = stored.coverBlob ? URL.createObjectURL(stored.coverBlob) : undefined;
+  return { ...stored, file, url: URL.createObjectURL(file), coverArt };
 }
 
 async function fromStored(stored: StoredSong): Promise<Song | null> {
   if ('fileHandle' in stored) {
     try {
       const file = await stored.fileHandle.getFile();
-      return { ...stored, file, url: URL.createObjectURL(file) };
+      return rehydrateSong(stored, file);
     } catch {
       return null;
     }
   }
   const file = new File([stored.blob], stored.fileName, { type: stored.blob.type });
-  return { ...stored, file, url: URL.createObjectURL(file) };
+  return rehydrateSong(stored, file);
 }
 
 /**
@@ -102,4 +108,13 @@ export async function getEqPreset(): Promise<EqPreset> {
 
 export async function saveEqPreset(preset: EqPreset): Promise<void> {
   await set(EQ_PRESET_KEY, preset);
+}
+
+export async function getVolume(): Promise<number> {
+  const v = await get<number>(VOLUME_KEY);
+  return typeof v === 'number' && v >= 0 && v <= 1 ? v : 1;
+}
+
+export async function saveVolume(volume: number): Promise<void> {
+  await set(VOLUME_KEY, volume);
 }

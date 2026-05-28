@@ -11,10 +11,11 @@ export function useMetadataExtractor() {
       const meta = await parseBlob(file);
 
       let coverArt: string | undefined;
+      let coverBlob: Blob | undefined;
       if (meta.common.picture && meta.common.picture.length > 0) {
         const pic = meta.common.picture[0];
-        const blob = new Blob([pic.data as BlobPart], { type: pic.format });
-        coverArt = URL.createObjectURL(blob);
+        coverBlob = new Blob([pic.data as BlobPart], { type: pic.format });
+        coverArt = URL.createObjectURL(coverBlob);
       }
 
       let lyrics: LyricLine[] | undefined;
@@ -40,6 +41,7 @@ export function useMetadataExtractor() {
         year: meta.common.year,
         bitrate: meta.format.bitrate,
         coverArt,
+        coverBlob,
         file,
         replayGainDb: meta.common.replaygain_track_gain?.dB,
         lyrics,

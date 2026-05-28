@@ -111,6 +111,52 @@ export default function App() {
     storage.savePlaylists(playlists).catch((err) => console.error('Save failed:', err));
   }, [playlists]);
 
+  // Self-heal cover art for songs persisted before the coverBlob fix (Phase 5.5).
+  // Runs once after initial load; re-extracts metadata for any song missing both
+  // coverArt and coverBlob and updates state, which triggers a save with the blob.
+  const healedCoversRef = useRef(false);
+  useEffect(() => {
+    if (!loadedRef.current || healedCoversRef.current) return;
+    if (libraryStatus !== 'ready') return;
+    healedCoversRef.current = true;
+
+    (async () => {
+      const updates = new Map<string, { coverArt?: string; coverBlob?: Blob }>();
+      for (const p of playlists) {
+        for (const s of p.songs) {
+          if (s.coverArt || s.coverBlob || updates.has(s.id)) continue;
+          try {
+            const { parseBlob } = await import('music-metadata');
+            const meta = await parseBlob(s.file);
+            const pic = meta.common.picture?.[0];
+            if (pic) {
+              const blob = new Blob([pic.data as BlobPart], { type: pic.format });
+              updates.set(s.id, { coverArt: URL.createObjectURL(blob), coverBlob: blob });
+            } else {
+              updates.set(s.id, {});
+            }
+          } catch {
+            updates.set(s.id, {});
+          }
+        }
+      }
+      const realUpdates = new Map(
+        [...updates].filter(([, v]) => v.coverArt && v.coverBlob),
+      );
+      if (realUpdates.size === 0) return;
+
+      setPlaylists((prev) =>
+        prev.map((p) => ({
+          ...p,
+          songs: p.songs.map((s) => {
+            const u = realUpdates.get(s.id);
+            return u ? { ...s, ...u } : s;
+          }),
+        })),
+      );
+    })();
+  }, [libraryStatus, playlists]);
+
   // Persist EQ preset on change — same guard
   useEffect(() => {
     if (!loadedRef.current) return;

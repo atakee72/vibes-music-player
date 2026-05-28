@@ -3,8 +3,10 @@ import {
   getEqPreset,
   getLibraryRoots,
   getPlaylists,
+  getVolume,
   saveEqPreset,
   savePlaylists,
+  saveVolume,
 } from './storage';
 import { makePlaylist, makeSong } from '../test-utils';
 
@@ -131,6 +133,44 @@ describe('storage — playlists', () => {
     expect(loaded[0].songs.map((s) => s.title).sort()).toEqual(['In Browser', 'On Disk']);
   });
 
+  it('persists coverBlob and regenerates coverArt URL on load', async () => {
+    const urlCalls: Blob[] = [];
+    URL.createObjectURL = vi.fn((b: Blob) => {
+      urlCalls.push(b);
+      return `blob:url-${urlCalls.length}`;
+    });
+    const file = new File([new Uint8Array([1, 2, 3])], 'song.mp3', { type: 'audio/mpeg' });
+    const coverBlob = new Blob([new Uint8Array([10, 20, 30])], { type: 'image/jpeg' });
+    const song = makeSong({
+      title: 'Cover Song',
+      file,
+      coverArt: 'blob:stale-from-prev-session',
+      coverBlob,
+    });
+    await savePlaylists([makePlaylist({ name: 'Art', songs: [song] })]);
+
+    const loaded = await getPlaylists();
+    expect(loaded[0].songs[0].coverArt).toMatch(/^blob:url-/);
+    expect(loaded[0].songs[0].coverArt).not.toBe('blob:stale-from-prev-session');
+    expect(loaded[0].songs[0].coverBlob).toBeInstanceOf(Blob);
+  });
+
+  it('does not set coverArt when coverBlob is absent (legacy songs)', async () => {
+    URL.createObjectURL = vi.fn(() => 'blob:file-url');
+    const file = new File([new Uint8Array([1, 2, 3])], 'song.mp3', { type: 'audio/mpeg' });
+    const song = makeSong({
+      title: 'Legacy',
+      file,
+      coverArt: 'blob:stale',
+      coverBlob: undefined,
+    });
+    await savePlaylists([makePlaylist({ name: 'L', songs: [song] })]);
+
+    const loaded = await getPlaylists();
+    expect(loaded[0].songs[0].coverArt).toBeUndefined();
+    expect(loaded[0].songs[0].coverBlob).toBeUndefined();
+  });
+
   it('prefers the fileHandle path when a song has BOTH handle and file', async () => {
     URL.createObjectURL = vi.fn(() => 'blob:from-handle');
     const handleFile = new File([], 'real.mp3', { type: 'audio/mpeg' });
@@ -153,6 +193,20 @@ describe('storage — playlists', () => {
   it('round-trips an EQ preset', async () => {
     await saveEqPreset('Bass Boost');
     expect(await getEqPreset()).toBe('Bass Boost');
+  });
+
+  it('getVolume defaults to 1 when key absent', async () => {
+    expect(await getVolume()).toBe(1);
+  });
+
+  it('round-trips volume', async () => {
+    await saveVolume(0.5);
+    expect(await getVolume()).toBe(0.5);
+  });
+
+  it('getVolume rejects out-of-range stored values', async () => {
+    await saveVolume(99 as number);
+    expect(await getVolume()).toBe(1);
   });
 
   it('drops songs whose handle getFile() throws (file moved/deleted)', async () => {
