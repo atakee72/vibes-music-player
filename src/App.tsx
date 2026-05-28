@@ -30,6 +30,7 @@ import { parseM3U, parsePLS, matchImportEntries } from './lib/playlist-import';
 import { parseLRC } from './lib/lrc';
 import { LyricsPanel } from './components/LyricsPanel';
 import { ConfirmModal } from './components/ConfirmModal';
+import { PromptModal } from './components/PromptModal';
 import { serializeM3U, sanitizeFilename } from './lib/playlist-export';
 
 type LibraryStatus = 'loading' | 'ready' | 'needs-prompt';
@@ -67,6 +68,13 @@ export default function App() {
     message: string;
     confirmLabel?: string;
     onConfirm: () => void;
+  } | null>(null);
+  const [promptState, setPromptState] = useState<{
+    title: string;
+    placeholder?: string;
+    defaultValue?: string;
+    confirmLabel?: string;
+    onConfirm: (value: string) => void;
   } | null>(null);
 
   const requestConfirm = useCallback(
@@ -755,13 +763,17 @@ export default function App() {
             activePlaylistId={activePlaylistId}
             onSelect={setActivePlaylistId}
             onCreate={() => {
-              const name = prompt('Enter playlist name:');
-              if (name) {
-                setPlaylists((prev) => [
-                  ...prev,
-                  { id: crypto.randomUUID(), name, songs: [], createdAt: new Date() },
-                ]);
-              }
+              setPromptState({
+                title: 'New playlist',
+                placeholder: 'Playlist name',
+                confirmLabel: 'Create',
+                onConfirm: (name) => {
+                  setPlaylists((prev) => [
+                    ...prev,
+                    { id: crypto.randomUUID(), name, songs: [], createdAt: new Date() },
+                  ]);
+                },
+              });
             }}
             onDelete={(id) => {
               if (id === 'library') return;
@@ -1024,6 +1036,19 @@ export default function App() {
           setConfirm(null);
         }}
         onCancel={() => setConfirm(null)}
+      />
+
+      <PromptModal
+        open={promptState !== null}
+        title={promptState?.title ?? ''}
+        placeholder={promptState?.placeholder}
+        defaultValue={promptState?.defaultValue}
+        confirmLabel={promptState?.confirmLabel}
+        onConfirm={(value) => {
+          promptState?.onConfirm(value);
+          setPromptState(null);
+        }}
+        onCancel={() => setPromptState(null)}
       />
 
       <audio ref={audioRefA} className="hidden" crossOrigin="anonymous" />

@@ -37,11 +37,29 @@ describe('Sidebar', () => {
     expect(screen.getByText('Mix')).toBeInTheDocument();
   });
 
-  it('clicking a non-active playlist row fires onSelect then onClose', () => {
-    const { onSelect, onClose, mix } = renderSidebar();
+  it('clicking a non-active playlist row fires onSelect', () => {
+    const { onSelect, mix } = renderSidebar();
     fireEvent.click(screen.getByText('Mix'));
     expect(onSelect).toHaveBeenCalledWith(mix.id);
+  });
+
+  it('auto-closes sidebar only on mobile-width viewports', () => {
+    const original = window.matchMedia;
+    // Mobile viewport: matches=false for "(min-width: 1024px)"
+    window.matchMedia = vi.fn().mockReturnValue({ matches: false }) as unknown as typeof window.matchMedia;
+    const { onClose } = renderSidebar();
+    fireEvent.click(screen.getByText('Mix'));
     expect(onClose).toHaveBeenCalledTimes(1);
+    window.matchMedia = original;
+  });
+
+  it('does NOT auto-close on desktop-width viewports', () => {
+    const original = window.matchMedia;
+    window.matchMedia = vi.fn().mockReturnValue({ matches: true }) as unknown as typeof window.matchMedia;
+    const { onClose } = renderSidebar();
+    fireEvent.click(screen.getByText('Mix'));
+    expect(onClose).not.toHaveBeenCalled();
+    window.matchMedia = original;
   });
 
   it('clicking a trash button on a non-library playlist fires onDelete and does NOT fire onSelect', () => {

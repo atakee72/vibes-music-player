@@ -27,7 +27,9 @@ function PlaylistRow({ playlist, active, onSelect, onDelete, onClose }: Playlist
       ref={setNodeRef}
       onClick={() => {
         onSelect(playlist.id);
-        onClose();
+        // Only auto-close on mobile (where sidebar is an overlay).
+        // On desktop the sidebar is persistent — closing it on every click is annoying.
+        if (!window.matchMedia('(min-width: 1024px)').matches) onClose();
       }}
       className={
         'group flex items-center justify-between px-3 py-3 rounded-lg cursor-pointer transition-all duration-200 mb-1 select-none ' +
