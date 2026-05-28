@@ -200,6 +200,66 @@
   `scrollIntoView`, only when `activeLyricIndex` changes.
 - Toggle: `L` key or "Lyrics" button in header.
 
+## Cover art persistence
+
+- Songs carry both `coverArt: string` (an object URL, valid only this session)
+  and `coverBlob: Blob` (the raw bytes). `storage.toStored` drops the stale
+  `coverArt` URL and persists `coverBlob`. `storage.fromStored` rebuilds
+  `coverArt = URL.createObjectURL(coverBlob)` on load.
+- **Self-healing**: `App.tsx` has a `healedCoversRef`-guarded background
+  effect that re-extracts metadata for songs lacking `coverBlob` (i.e.
+  persisted before this fix). The next save persists the blob.
+- Don't try to persist the `coverArt` URL itself — blob URLs are session-
+  scoped and will be dead after a reload.
+
+## Volume
+
+- Lives in App.tsx as `volume: number` (0–1), persisted via
+  `storage.saveVolume` / `getVolume`. Applied in `useAudioEngine` to both
+  audio elements' `.volume` whenever it changes.
+- PlayerBar has the slider + a mute toggle button. The icon swaps based
+  on level (`Volume2 / Volume1 / Volume / VolumeX`). `lastVolumeRef`
+  remembers the previous non-zero level so unmute restores it.
+
+## Selection mode + cross-playlist drag
+
+- **DndContext lifted to App.tsx**: there's a single top-level DndContext
+  that spans both Sidebar and SongList. SongList keeps its own
+  SortableContext (disabled during selection mode or filter).
+- **SongList row long-press** (500ms, ≤5px movement) enters selection
+  mode. A "Select" button in the header is the explicit alternative.
+- **Selection state stays local to SongList** (`selectedIds: Set<string>`);
+  `selectionMode: boolean` is lifted to App so Escape and the Select
+  button can drive it.
+- **Cross-playlist drag**: in selection mode, the row body becomes the
+  drag source (instead of the GripVertical handle). The drag payload in
+  `useSortable.data` carries `{ type: 'song', ids: [...selectedIds] }`.
+- **`onDragEnd` routing** in App.tsx: if `over.id` starts with
+  `playlist-`, route to cross-playlist drop (copy by default; Ctrl/Meta
+  for move; never move out of Library). Otherwise route to reorder.
+- **Escape chain priority** (App.tsx `useKeyboardShortcuts`):
+  selectionMode → close upload → clear search → blur input.
+  ConfirmModal owns its own Escape via a capture-phase listener.
+
+## Confirmation modals
+
+- `ConfirmModal` (`src/components/ConfirmModal.tsx`) is the reusable
+  confirmation primitive. Backdrop click and Escape both cancel.
+- App.tsx has a `confirm` state shape `{ title, message, confirmLabel?,
+  onConfirm } | null` driven by a `requestConfirm` helper. All
+  destructive actions route through it: delete song, batch delete,
+  delete playlist.
+
+## Refresh library + M3U export
+
+- **Refresh** (Library only, Chromium only — requires FS Access handle):
+  re-walks each `libraryRoot.handle` via `ingestDirectoryHandle`, diffs
+  by stable id (`${root.id}/${relativePath}`). Adds new files, removes
+  orphans from Library AND from any user playlist that referenced them.
+- **Export**: `src/lib/playlist-export.ts` serializes a playlist to M3U
+  (with `#EXTINF`). Triggered by a `<a download>` programmatic click.
+  Round-trips through Phase 5's `parseM3U` import on the same machine.
+
 ## Dev loop
 
 - `pnpm dev` (Vite HMR) is enough for almost everything. **No need to

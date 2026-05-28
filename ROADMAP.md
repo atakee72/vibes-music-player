@@ -347,6 +347,64 @@ Three independent "manage your library" features in one phase:
 
 ---
 
+## Phase 5.5 — Polish, fixes, and library management UX (shipped)
+
+Status: ✅ merged (`1fafece`).
+
+Manual testing after Phase 5 surfaced four bugs and several UX gaps. This
+phase was a polish + critical-fixes pass — not a new feature spike.
+
+**Bug fixes**:
+- **Cover art persistence** — `coverArt` was being stored as a stale blob
+  URL that became invalid on reload. Fix: persist the underlying `coverBlob`
+  in IDB; regenerate the URL via `URL.createObjectURL` in `fromStored`.
+  Songs ingested before this fix self-heal via a background re-extraction
+  in `App.tsx` (guarded by `healedCoversRef`).
+- **EQ presets too subtle** — bumped gain values for noticeable effect
+  (Bass Boost +8/+5, Treble Boost +5/+7, Acoustic +5/+3/-2/+4/+5).
+- **Volume control was a static icon** — replaced with a real slider in
+  PlayerBar, with mute toggle, persisted via `storage.getVolume` /
+  `saveVolume`. Icon swaps between `Volume2 / Volume1 / Volume / VolumeX`.
+- **Click no longer played** (Phase 5 regression) — restored play via
+  double-click; row body single-click is now reserved for selection mode.
+
+**New UX features**:
+- **Long-press selection mode** — 500ms press enters selection mode
+  with checkboxes per row. Select all + Cancel buttons in the toolbar.
+  Also explicit "Select" button in the header. Escape exits.
+- **Confirmation modals** — reusable `ConfirmModal` for all destructive
+  actions: delete song, batch delete, delete playlist. Backdrop click
+  and Escape cancel.
+- **Drag songs between playlists** — DndContext lifted from SongList
+  to App.tsx so it spans both Sidebar and SongList. Sidebar playlist
+  rows are now droppable. Default = copy; Ctrl/Meta+drag = move
+  (Library never deletes).
+- **Refresh library** — re-walks the FS Access handle, diffs by stable
+  ID (`${root.id}/${relativePath}`), adds new files and removes orphans
+  from the Library and any user playlist that referenced them. Chromium
+  only (Firefox/Safari blob path has no folder handle to re-walk).
+- **Export playlist as M3U** — `src/lib/playlist-export.ts` serializes
+  to M3U with `#EXTINF` headers. Round-trips through Phase 5's import.
+
+**Key files added**:
+- `src/components/ConfirmModal.tsx` + test
+- `src/lib/playlist-export.ts` + test
+
+**Notable decisions**:
+- **DndContext lifted to App.tsx** — required for cross-component drag
+  (Sidebar drop targets need to see drags from SongList). SongList keeps
+  its SortableContext for reorder.
+- **Selection mode state split**: `selectedIds` stays local to SongList;
+  `selectionMode` is lifted to App so Escape and the Select header
+  button can drive it.
+- **Confirmation modal owns its own Escape** via capture-phase listener
+  so it intercepts before the App-level chain.
+- **Library refresh removes orphans from user playlists too** — if a
+  file vanishes from disk, it's unplayable; keeping the reference would
+  be confusing. Acceptable trade-off vs. preserving manual curation.
+
+---
+
 ## Phase 6 — Distribution (planned, next up)
 
 Status: 📋 planned.
@@ -388,5 +446,6 @@ Last phase before the player feels "done":
 | 3.5 | `b09eff9` — `feat: persist library via IDB blobs as fallback for Firefox/Safari` |
 | 4 | `8bc1a2d` — `fix: boost tint visibility with radial gradient glow` (final of 3 commits) |
 | 5 | `5c6b972` — `docs: Phase 5 features in CLAUDE.md and README` (final of 4 commits) |
+| 5.5 | `1fafece` — `feat: refresh library from disk and export playlist as M3U` (final of 6 commits) |
 
-Total: 111 tests, all green; `pnpm build` clean; production live.
+Total: 139 tests, all green; `pnpm build` clean; production live.
