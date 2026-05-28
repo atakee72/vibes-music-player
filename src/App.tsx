@@ -19,6 +19,7 @@ import { MiniPlayer } from './components/MiniPlayer';
 import { parseM3U, parsePLS, matchImportEntries } from './lib/playlist-import';
 import { parseLRC } from './lib/lrc';
 import { LyricsPanel } from './components/LyricsPanel';
+import { ConfirmModal } from './components/ConfirmModal';
 
 type LibraryStatus = 'loading' | 'ready' | 'needs-prompt';
 
@@ -48,6 +49,24 @@ export default function App() {
   const [notification, setNotification] = useState<string | null>(null);
   const [showLyrics, setShowLyrics] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
+  const [confirm, setConfirm] = useState<{
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    onConfirm: () => void;
+  } | null>(null);
+
+  const requestConfirm = useCallback(
+    (
+      title: string,
+      message: string,
+      onConfirm: () => void,
+      confirmLabel?: string,
+    ) => {
+      setConfirm({ title, message, confirmLabel, onConfirm });
+    },
+    [],
+  );
 
   const loadedRef = useRef(false);
   const persistRequestedRef = useRef(false);
@@ -350,13 +369,24 @@ export default function App() {
     setRepeatMode((m) => (m === 'none' ? 'all' : m === 'all' ? 'one' : 'none'));
   };
 
-  const handleBatchDelete = useCallback((ids: string[]) => {
-    const idSet = new Set(ids);
-    setPlaylists((prev) =>
-      prev.map((p) => ({ ...p, songs: p.songs.filter((s) => !idSet.has(s.id)) })),
-    );
-    setCurrentSong((prev) => (prev && idSet.has(prev.id) ? null : prev));
-  }, []);
+  const handleBatchDelete = useCallback(
+    (ids: string[]) => {
+      const playlistName =
+        playlists.find((p) => p.id === activePlaylistId)?.name ?? 'this playlist';
+      requestConfirm(
+        `Delete ${ids.length} ${ids.length === 1 ? 'song' : 'songs'}?`,
+        `${ids.length} ${ids.length === 1 ? 'song' : 'songs'} will be removed from "${playlistName}".`,
+        () => {
+          const idSet = new Set(ids);
+          setPlaylists((prev) =>
+            prev.map((p) => ({ ...p, songs: p.songs.filter((s) => !idSet.has(s.id)) })),
+          );
+          setCurrentSong((prev) => (prev && idSet.has(prev.id) ? null : prev));
+        },
+      );
+    },
+    [playlists, activePlaylistId, requestConfirm],
+  );
 
   const handleReorder = useCallback(
     (reorderedSongs: Song[]) => {
@@ -566,8 +596,16 @@ export default function App() {
             }}
             onDelete={(id) => {
               if (id === 'library') return;
-              setPlaylists((prev) => prev.filter((p) => p.id !== id));
-              if (activePlaylistId === id) setActivePlaylistId('library');
+              const playlist = playlists.find((p) => p.id === id);
+              if (!playlist) return;
+              requestConfirm(
+                `Delete playlist "${playlist.name}"?`,
+                'Songs remain in Library.',
+                () => {
+                  setPlaylists((prev) => prev.filter((p) => p.id !== id));
+                  if (activePlaylistId === id) setActivePlaylistId('library');
+                },
+              );
             }}
             isOpen={sidebarOpen}
             onClose={() => setSidebarOpen(false)}
@@ -649,10 +687,20 @@ export default function App() {
                 onPlay={(song) => setCurrentSong(song)}
                 onPause={togglePlayPause}
                 onDelete={(id) => {
-                  setPlaylists((prev) =>
-                    prev.map((p) => ({ ...p, songs: p.songs.filter((s) => s.id !== id) })),
+                  const song = filteredSongs.find((s) => s.id === id);
+                  if (!song) return;
+                  const playlistName =
+                    playlists.find((p) => p.id === activePlaylistId)?.name ?? 'this playlist';
+                  requestConfirm(
+                    `Delete "${song.title}"?`,
+                    `Removes from "${playlistName}". ${activePlaylistId === 'library' ? '' : 'Song remains in Library.'}`,
+                    () => {
+                      setPlaylists((prev) =>
+                        prev.map((p) => ({ ...p, songs: p.songs.filter((s) => s.id !== id) })),
+                      );
+                      if (currentSong?.id === id) setCurrentSong(null);
+                    },
                   );
-                  if (currentSong?.id === id) setCurrentSong(null);
                 }}
                 onBatchDelete={handleBatchDelete}
                 onReorder={handleReorder}
@@ -764,6 +812,18 @@ export default function App() {
           {notification}
         </div>
       )}
+
+      <ConfirmModal
+        open={confirm !== null}
+        title={confirm?.title ?? ''}
+        message={confirm?.message ?? ''}
+        confirmLabel={confirm?.confirmLabel}
+        onConfirm={() => {
+          confirm?.onConfirm();
+          setConfirm(null);
+        }}
+        onCancel={() => setConfirm(null)}
+      />
 
       <audio ref={audioRefA} className="hidden" crossOrigin="anonymous" />
       <audio ref={audioRefB} className="hidden" crossOrigin="anonymous" />
