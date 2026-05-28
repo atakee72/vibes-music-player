@@ -47,6 +47,7 @@ export default function App() {
   const [pipWindow, setPipWindow] = useState<Window | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
   const [showLyrics, setShowLyrics] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
 
   const loadedRef = useRef(false);
   const persistRequestedRef = useRef(false);
@@ -477,6 +478,10 @@ export default function App() {
       Slash: () => searchInputRef.current?.focus(),
       KeyL: () => setShowLyrics((v) => !v),
       Escape: () => {
+        if (selectionMode) {
+          setSelectionMode(false);
+          return;
+        }
         if (showUpload) {
           setShowUpload(false);
           return;
@@ -592,6 +597,18 @@ export default function App() {
                 </h2>
                 <div className="flex items-center space-x-2">
                   <button
+                    onClick={() => setSelectionMode((v) => !v)}
+                    className={`px-3 py-2 rounded-lg transition-all duration-200 text-sm font-medium ${
+                      selectionMode
+                        ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                        : 'bg-white/5 text-white/60 hover:bg-white/10'
+                    }`}
+                    title="Toggle selection mode"
+                    aria-label="Toggle selection mode"
+                  >
+                    Select
+                  </button>
+                  <button
                     onClick={() => setShowLyrics((v) => !v)}
                     className={`px-3 py-2 rounded-lg transition-all duration-200 text-sm font-medium ${
                       showLyrics
@@ -640,6 +657,8 @@ export default function App() {
                 onBatchDelete={handleBatchDelete}
                 onReorder={handleReorder}
                 isFilterActive={searchQuery.trim().length > 0}
+                selectionMode={selectionMode}
+                onSelectionModeChange={setSelectionMode}
                 emptyHint={
                   searchQuery.trim()
                     ? {

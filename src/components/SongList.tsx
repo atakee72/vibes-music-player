@@ -16,6 +16,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { arrayMove } from '@dnd-kit/sortable';
 import {
+  Check,
   Clock,
   GripVertical,
   MoreHorizontal,
@@ -23,6 +24,7 @@ import {
   Pause,
   Play,
   Trash2,
+  X,
 } from 'lucide-react';
 import type { Song } from '../types';
 
@@ -30,6 +32,8 @@ interface SongListProps {
   songs: Song[];
   currentSong: Song | null;
   isPlaying: boolean;
+  selectionMode: boolean;
+  onSelectionModeChange: (active: boolean) => void;
   onPlay: (song: Song) => void;
   onPause: () => void;
   onDelete: (id: string) => void;
@@ -44,6 +48,9 @@ const DEFAULT_EMPTY_HINT = {
   secondary: 'Add some music files to get started',
 };
 
+const LONG_PRESS_MS = 500;
+const LONG_PRESS_MOVE_THRESHOLD = 5;
+
 const formatTime = (s: number) =>
   `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}`;
 
@@ -52,11 +59,13 @@ interface SortableRowProps {
   active: boolean;
   activePlaying: boolean;
   selected: boolean;
+  selectionMode: boolean;
   isFilterActive: boolean;
   onPlay: (song: Song) => void;
   onPause: () => void;
   onDelete: (id: string) => void;
   onRowClick: (song: Song, e: React.MouseEvent) => void;
+  onLongPress: (song: Song) => void;
 }
 
 function SortableRow({
@@ -64,11 +73,13 @@ function SortableRow({
   active,
   activePlaying,
   selected,
+  selectionMode,
   isFilterActive,
   onPlay,
   onPause,
   onDelete,
   onRowClick,
+  onLongPress,
 }: SortableRowProps) {
   const {
     attributes,
@@ -78,6 +89,38 @@ function SortableRow({
     transition,
     isDragging,
   } = useSortable({ id: song.id });
+
+  const longPressTimerRef = useRef<number | null>(null);
+  const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  const clearLongPress = () => {
+    if (longPressTimerRef.current !== null) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (selectionMode) return;
+    pointerStartRef.current = { x: e.clientX, y: e.clientY };
+    clearLongPress();
+    longPressTimerRef.current = window.setTimeout(() => {
+      onLongPress(song);
+      longPressTimerRef.current = null;
+    }, LONG_PRESS_MS);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!pointerStartRef.current || longPressTimerRef.current === null) return;
+    const dx = e.clientX - pointerStartRef.current.x;
+    const dy = e.clientY - pointerStartRef.current.y;
+    if (Math.hypot(dx, dy) > LONG_PRESS_MOVE_THRESHOLD) clearLongPress();
+  };
+
+  const handlePointerUpOrCancel = () => {
+    clearLongPress();
+    pointerStartRef.current = null;
+  };
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -91,6 +134,12 @@ function SortableRow({
       style={style}
       {...attributes}
       onClick={(e) => onRowClick(song, e)}
+      onDoubleClick={() => onPlay(song)}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUpOrCancel}
+      onPointerCancel={handlePointerUpOrCancel}
+      onPointerLeave={handlePointerUpOrCancel}
       className={
         'group flex items-center space-x-3 p-3 lg:p-4 rounded-xl hover:bg-white/5 transition-all duration-200 cursor-default ' +
         (selected ? 'ring-2 ring-purple-400/50 ' : '') +
@@ -99,13 +148,28 @@ function SortableRow({
           : '')
       }
     >
-      {!isFilterActive && (
+      {!isFilterActive && !selectionMode && (
         <div
           {...listeners}
           className="flex-shrink-0 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-60 transition-opacity"
           aria-label="Drag to reorder"
         >
           <GripVertical className="h-4 w-4 text-white/40" />
+        </div>
+      )}
+
+      {selectionMode && (
+        <div
+          className={`flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+            selected
+              ? 'bg-purple-500 border-purple-500'
+              : 'border-white/30 bg-transparent'
+          }`}
+          aria-label={selected ? 'Selected' : 'Not selected'}
+          role="checkbox"
+          aria-checked={selected}
+        >
+          {selected && <Check className="h-3 w-3 text-white" />}
         </div>
       )}
 
@@ -212,6 +276,8 @@ export function SongList({
   songs,
   currentSong,
   isPlaying,
+  selectionMode,
+  onSelectionModeChange,
   onPlay,
   onPause,
   onDelete,
@@ -222,25 +288,13 @@ export function SongList({
 }: SongListProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const lastClickedRef = useRef<string | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setSelectedIds(new Set());
-  }, [songs]);
-
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.code === 'Delete' && selectedIds.size > 0) {
-        e.preventDefault();
-        onBatchDelete(Array.from(selectedIds));
-        setSelectedIds(new Set());
-      }
-    };
-    container.addEventListener('keydown', onKey);
-    return () => container.removeEventListener('keydown', onKey);
-  }, [selectedIds, onBatchDelete]);
+    if (!selectionMode) {
+      setSelectedIds(new Set());
+      lastClickedRef.current = null;
+    }
+  }, [selectionMode]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -257,7 +311,16 @@ export function SongList({
     }
   };
 
+  const handleLongPress = (song: Song) => {
+    if (selectionMode) return;
+    onSelectionModeChange(true);
+    setSelectedIds(new Set([song.id]));
+    lastClickedRef.current = song.id;
+  };
+
   const handleRowClick = (song: Song, e: React.MouseEvent) => {
+    if (!selectionMode) return;
+
     if (e.shiftKey && lastClickedRef.current) {
       const lastIdx = songs.findIndex((s) => s.id === lastClickedRef.current);
       const curIdx = songs.findIndex((s) => s.id === song.id);
@@ -271,21 +334,31 @@ export function SongList({
           return next;
         });
       }
-    } else if (e.ctrlKey || e.metaKey) {
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        if (next.has(song.id)) next.delete(song.id);
-        else next.add(song.id);
-        return next;
-      });
-      lastClickedRef.current = song.id;
-    } else {
-      setSelectedIds((prev) => {
-        if (prev.size === 1 && prev.has(song.id)) return new Set();
-        return new Set([song.id]);
-      });
-      lastClickedRef.current = song.id;
+      return;
     }
+
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(song.id)) next.delete(song.id);
+      else next.add(song.id);
+      return next;
+    });
+    lastClickedRef.current = song.id;
+  };
+
+  const handleSelectAll = () => {
+    setSelectedIds(new Set(songs.map((s) => s.id)));
+  };
+
+  const handleCancel = () => {
+    onSelectionModeChange(false);
+  };
+
+  const handleBatchDelete = () => {
+    if (selectedIds.size === 0) return;
+    onBatchDelete(Array.from(selectedIds));
+    setSelectedIds(new Set());
+    onSelectionModeChange(false);
   };
 
   if (songs.length === 0) {
@@ -303,23 +376,38 @@ export function SongList({
   }
 
   return (
-    <div ref={containerRef} className="flex-1 overflow-y-auto outline-none" tabIndex={0}>
-      {selectedIds.size > 0 && (
+    <div className="flex-1 overflow-y-auto outline-none">
+      {selectionMode && (
         <div className="sticky top-0 z-10 flex items-center justify-between bg-slate-800/95 backdrop-blur-xl border-b border-white/10 px-4 py-2">
           <span className="text-sm text-white/80">
             {selectedIds.size} selected
           </span>
-          <button
-            onClick={() => {
-              onBatchDelete(Array.from(selectedIds));
-              setSelectedIds(new Set());
-            }}
-            className="flex items-center space-x-1 px-3 py-1 bg-red-500/20 hover:bg-red-500/30 rounded-lg text-red-400 text-sm transition-colors"
-            aria-label="Delete selected"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            <span>Delete</span>
-          </button>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={handleSelectAll}
+              className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded-lg text-white/80 text-sm transition-colors"
+              aria-label="Select all"
+            >
+              Select all
+            </button>
+            <button
+              onClick={handleBatchDelete}
+              disabled={selectedIds.size === 0}
+              className="flex items-center space-x-1 px-3 py-1 bg-red-500/20 hover:bg-red-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg text-red-400 text-sm transition-colors"
+              aria-label="Delete selected"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>Delete</span>
+            </button>
+            <button
+              onClick={handleCancel}
+              className="flex items-center space-x-1 px-3 py-1 bg-white/5 hover:bg-white/10 rounded-lg text-white/80 text-sm transition-colors"
+              aria-label="Cancel selection"
+            >
+              <X className="h-3.5 w-3.5" />
+              <span>Cancel</span>
+            </button>
+          </div>
         </div>
       )}
       <DndContext
@@ -330,7 +418,7 @@ export function SongList({
         <SortableContext
           items={songs.map((s) => s.id)}
           strategy={verticalListSortingStrategy}
-          disabled={isFilterActive}
+          disabled={isFilterActive || selectionMode}
         >
           <div className="space-y-1 p-2 lg:p-4">
             {songs.map((song) => {
@@ -343,11 +431,13 @@ export function SongList({
                   active={active}
                   activePlaying={activePlaying}
                   selected={selectedIds.has(song.id)}
+                  selectionMode={selectionMode}
                   isFilterActive={isFilterActive}
                   onPlay={onPlay}
                   onPause={onPause}
                   onDelete={onDelete}
                   onRowClick={handleRowClick}
+                  onLongPress={handleLongPress}
                 />
               );
             })}

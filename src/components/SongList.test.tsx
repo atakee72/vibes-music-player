@@ -8,11 +8,14 @@ function renderSongList(overrides: Partial<Parameters<typeof SongList>[0]> = {})
   const onDelete = vi.fn();
   const onBatchDelete = vi.fn();
   const onReorder = vi.fn();
+  const onSelectionModeChange = vi.fn();
   const utils = render(
     <SongList
       songs={[]}
       currentSong={null}
       isPlaying={false}
+      selectionMode={false}
+      onSelectionModeChange={onSelectionModeChange}
       onPlay={onPlay}
       onPause={onPause}
       onDelete={onDelete}
@@ -22,7 +25,7 @@ function renderSongList(overrides: Partial<Parameters<typeof SongList>[0]> = {})
       {...overrides}
     />,
   );
-  return { ...utils, onPlay, onPause, onDelete, onBatchDelete, onReorder };
+  return { ...utils, onPlay, onPause, onDelete, onBatchDelete, onReorder, onSelectionModeChange };
 }
 
 describe('SongList', () => {
@@ -61,6 +64,8 @@ describe('SongList', () => {
         songs={[song]}
         currentSong={song}
         isPlaying={true}
+        selectionMode={false}
+        onSelectionModeChange={vi.fn()}
         onPlay={onPlay}
         onPause={onPause}
         onDelete={vi.fn()}
@@ -79,9 +84,9 @@ describe('SongList', () => {
     expect(screen.getByText('Highlighted')).toHaveClass('text-purple-300');
   });
 
-  it('shows drag handles when isFilterActive is false', () => {
+  it('shows drag handles when not in selection mode and no filter', () => {
     const song = makeSong();
-    renderSongList({ songs: [song], isFilterActive: false });
+    renderSongList({ songs: [song] });
     expect(screen.getByLabelText('Drag to reorder')).toBeInTheDocument();
   });
 
@@ -91,33 +96,65 @@ describe('SongList', () => {
     expect(screen.queryByLabelText('Drag to reorder')).not.toBeInTheDocument();
   });
 
-  it('shows batch delete toolbar when songs are selected via click', () => {
-    const songs = [makeSong({ title: 'A' }), makeSong({ title: 'B' })];
-    renderSongList({ songs });
-
-    fireEvent.click(screen.getByText('A'));
-    expect(screen.getByText('1 selected')).toBeInTheDocument();
-    expect(screen.getByLabelText('Delete selected')).toBeInTheDocument();
+  it('hides drag handles in selection mode (replaced by checkboxes)', () => {
+    const song = makeSong();
+    renderSongList({ songs: [song], selectionMode: true });
+    expect(screen.queryByLabelText('Drag to reorder')).not.toBeInTheDocument();
+    expect(screen.getByRole('checkbox')).toBeInTheDocument();
   });
 
-  it('fires onBatchDelete with selected IDs when delete toolbar is clicked', () => {
-    const songs = [makeSong({ title: 'A' }), makeSong({ title: 'B' })];
-    const { onBatchDelete } = renderSongList({ songs });
-
-    fireEvent.click(screen.getByText('A'));
-    fireEvent.click(screen.getByLabelText('Delete selected'));
-    expect(onBatchDelete).toHaveBeenCalledWith([songs[0].id]);
+  it('double-click on a row fires onPlay', () => {
+    const song = makeSong({ title: 'DoubleClicked' });
+    const { onPlay } = renderSongList({ songs: [song] });
+    fireEvent.doubleClick(screen.getByText('DoubleClicked'));
+    expect(onPlay).toHaveBeenCalledWith(song);
   });
 
-  it('Ctrl+click toggles individual selection', () => {
-    const songs = [makeSong({ title: 'A' }), makeSong({ title: 'B' })];
-    renderSongList({ songs });
+  it('single-click on a row does nothing outside selection mode', () => {
+    const song = makeSong({ title: 'SingleClicked' });
+    const { onPlay } = renderSongList({ songs: [song] });
+    fireEvent.click(screen.getByText('SingleClicked'));
+    expect(onPlay).not.toHaveBeenCalled();
+  });
 
-    fireEvent.click(screen.getByText('A'));
-    fireEvent.click(screen.getByText('B'), { ctrlKey: true });
+  it('selection toolbar with all buttons appears in selection mode', () => {
+    renderSongList({ songs: [makeSong()], selectionMode: true });
+    expect(screen.getByText('0 selected')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Select all' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete selected' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancel selection' })).toBeInTheDocument();
+  });
+
+  it('Select all selects all visible songs', () => {
+    const songs = [makeSong({ title: 'A' }), makeSong({ title: 'B' })];
+    renderSongList({ songs, selectionMode: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Select all' }));
     expect(screen.getByText('2 selected')).toBeInTheDocument();
+  });
 
-    fireEvent.click(screen.getByText('A'), { ctrlKey: true });
+  it('Cancel button fires onSelectionModeChange(false)', () => {
+    const { onSelectionModeChange } = renderSongList({ songs: [makeSong()], selectionMode: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel selection' }));
+    expect(onSelectionModeChange).toHaveBeenCalledWith(false);
+  });
+
+  it('clicks toggle individual selection in selection mode', () => {
+    const songs = [makeSong({ title: 'A' }), makeSong({ title: 'B' })];
+    renderSongList({ songs, selectionMode: true });
+    fireEvent.click(screen.getByText('A'));
     expect(screen.getByText('1 selected')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('B'));
+    expect(screen.getByText('2 selected')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('A'));
+    expect(screen.getByText('1 selected')).toBeInTheDocument();
+  });
+
+  it('fires onBatchDelete with selected IDs when Delete is clicked', () => {
+    const songs = [makeSong({ title: 'A' }), makeSong({ title: 'B' })];
+    const { onBatchDelete, onSelectionModeChange } = renderSongList({ songs, selectionMode: true });
+    fireEvent.click(screen.getByText('A'));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete selected' }));
+    expect(onBatchDelete).toHaveBeenCalledWith([songs[0].id]);
+    expect(onSelectionModeChange).toHaveBeenCalledWith(false);
   });
 });
