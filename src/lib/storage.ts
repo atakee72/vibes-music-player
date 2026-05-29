@@ -56,6 +56,26 @@ export async function ensurePersisted(): Promise<void> {
   await s.persist();
 }
 
+export class StorageQuotaError extends Error {
+  constructor(message = 'Storage quota exceeded') {
+    super(message);
+    this.name = 'StorageQuotaError';
+  }
+}
+
+export async function getStorageEstimate(): Promise<{
+  usage: number;
+  quota: number;
+  percent: number;
+} | null> {
+  const s = navigator.storage;
+  if (!s?.estimate) return null;
+  const est = await s.estimate();
+  const usage = est.usage ?? 0;
+  const quota = est.quota ?? 0;
+  return { usage, quota, percent: quota > 0 ? (usage / quota) * 100 : 0 };
+}
+
 export async function getLibraryRoots(): Promise<LibraryRoot[]> {
   return (await get<LibraryRoot[]>(ROOTS_KEY)) ?? [];
 }
@@ -99,7 +119,15 @@ export async function savePlaylists(playlists: Playlist[]): Promise<void> {
     ...p,
     songs: p.songs.map(toStored).filter((s): s is StoredSong => s !== null),
   }));
-  await set(PLAYLISTS_KEY, stored);
+  try {
+    await set(PLAYLISTS_KEY, stored);
+  } catch (err) {
+    // IDB quota exceeded surfaces as a DOMException with this name.
+    if (err instanceof DOMException && err.name === 'QuotaExceededError') {
+      throw new StorageQuotaError(err.message);
+    }
+    throw err;
+  }
 }
 
 export async function getEqPreset(): Promise<EqPreset> {

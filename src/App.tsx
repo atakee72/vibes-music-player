@@ -199,7 +199,14 @@ export default function App() {
     if (!loadedRef.current) return;
     if (saveTimerRef.current !== null) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = window.setTimeout(() => {
-      storage.savePlaylists(playlists).catch((err) => console.error('Save failed:', err));
+      storage.savePlaylists(playlists).catch((err) => {
+        console.error('Save failed:', err);
+        if (err instanceof storage.StorageQuotaError) {
+          setNotification(
+            'Storage full. New songs may not survive a reload — free space or remove tracks.',
+          );
+        }
+      });
       saveTimerRef.current = null;
     }, 500);
     return () => {

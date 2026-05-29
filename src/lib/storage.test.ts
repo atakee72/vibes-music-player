@@ -7,6 +7,7 @@ import {
   saveEqPreset,
   savePlaylists,
   saveVolume,
+  StorageQuotaError,
 } from './storage';
 import { makePlaylist, makeSong } from '../test-utils';
 
@@ -184,6 +185,18 @@ describe('storage — playlists', () => {
     // File should come from the handle.getFile(), not the blob duplicate
     expect(loaded[0].songs[0].file).toBe(handleFile);
     expect(loaded[0].songs[0].file.name).toBe('real.mp3');
+  });
+
+  it('savePlaylists wraps IDB QuotaExceededError as StorageQuotaError', async () => {
+    const { set: mockSet } = await import('idb-keyval');
+    (mockSet as ReturnType<typeof vi.fn>).mockImplementationOnce(() => {
+      throw new DOMException('quota', 'QuotaExceededError');
+    });
+
+    const song = makeSong({ title: 'Big' });
+    await expect(
+      savePlaylists([makePlaylist({ name: 'Mix', songs: [song] })]),
+    ).rejects.toBeInstanceOf(StorageQuotaError);
   });
 
   it('getEqPreset returns "Off" when key absent', async () => {
