@@ -150,10 +150,23 @@ export default function App() {
     })();
   }, []);
 
-  // Persist playlists on every change — guarded so we don't write before load
+  // Persist playlists with a 500ms debounce. Bursty mutations (folder ingest,
+  // batch delete, reorder) collapse into one save instead of one per change.
+  // Trade-off: changes within 500ms of tab close may be lost.
+  const saveTimerRef = useRef<number | null>(null);
   useEffect(() => {
     if (!loadedRef.current) return;
-    storage.savePlaylists(playlists).catch((err) => console.error('Save failed:', err));
+    if (saveTimerRef.current !== null) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = window.setTimeout(() => {
+      storage.savePlaylists(playlists).catch((err) => console.error('Save failed:', err));
+      saveTimerRef.current = null;
+    }, 500);
+    return () => {
+      if (saveTimerRef.current !== null) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+    };
   }, [playlists]);
 
   // Self-heal cover art for songs persisted before the coverBlob fix (Phase 5.5).
