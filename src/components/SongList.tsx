@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   SortableContext,
   useSortable,
@@ -286,6 +287,37 @@ export function SongList({
 }: SongListProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const lastClickedRef = useRef<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const isDesktop =
+    typeof window !== 'undefined' &&
+    window.matchMedia('(min-width: 1024px)').matches;
+
+  const virtualizer = useVirtualizer({
+    count: songs.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => (isDesktop ? 76 : 104),
+    overscan: 6,
+    measureElement: (el) => el.getBoundingClientRect().height,
+    // Fallback when the scroll element has no dimensions (happy-dom in tests).
+    // Real browsers override via the inner ResizeObserver path.
+    observeElementRect: (instance, cb) => {
+      const el = instance.scrollElement as HTMLElement | null;
+      if (!el) return () => {};
+      const measure = () => {
+        const rect = el.getBoundingClientRect();
+        cb(
+          rect.width === 0 && rect.height === 0
+            ? { width: 1024, height: 5000 }
+            : { width: rect.width, height: rect.height },
+        );
+      };
+      measure();
+      const ro = new ResizeObserver(measure);
+      ro.observe(el);
+      return () => ro.disconnect();
+    },
+  });
 
   useEffect(() => {
     if (!selectionMode) {
@@ -358,8 +390,11 @@ export function SongList({
     );
   }
 
+  const virtualItems = virtualizer.getVirtualItems();
+  const totalSize = virtualizer.getTotalSize();
+
   return (
-    <div className="flex-1 overflow-y-auto outline-none">
+    <div ref={scrollRef} className="flex-1 overflow-y-auto outline-none">
       {selectionMode && (
         <div className="sticky top-0 z-10 flex items-center justify-between bg-slate-800/95 backdrop-blur-xl border-b border-white/10 px-4 py-2">
           <span className="text-sm text-white/80">
@@ -398,31 +433,47 @@ export function SongList({
         strategy={verticalListSortingStrategy}
         disabled={isFilterActive || selectionMode}
       >
-        <div className="space-y-1 p-2 lg:p-4">
-          {songs.map((song) => {
+        <div
+          className="p-2 lg:p-4"
+          style={{ position: 'relative', height: `${totalSize}px` }}
+        >
+          {virtualItems.map((virtualItem) => {
+            const song = songs[virtualItem.index];
             const active = currentSong?.id === song.id;
             const activePlaying = active && isPlaying;
             const isSelected = selectedIds.has(song.id);
             return (
-              <SortableRow
-                key={song.id}
-                song={song}
-                active={active}
-                activePlaying={activePlaying}
-                selected={isSelected}
-                selectionMode={selectionMode}
-                isFilterActive={isFilterActive}
-                dragIds={
-                  selectionMode && isSelected
-                    ? Array.from(selectedIds)
-                    : [song.id]
-                }
-                onPlay={onPlay}
-                onPause={onPause}
-                onDelete={onDelete}
-                onRowClick={handleRowClick}
-                onLongPress={handleLongPress}
-              />
+              <div
+                key={virtualItem.key}
+                ref={virtualizer.measureElement}
+                data-index={virtualItem.index}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  transform: `translateY(${virtualItem.start}px)`,
+                }}
+              >
+                <SortableRow
+                  song={song}
+                  active={active}
+                  activePlaying={activePlaying}
+                  selected={isSelected}
+                  selectionMode={selectionMode}
+                  isFilterActive={isFilterActive}
+                  dragIds={
+                    selectionMode && isSelected
+                      ? Array.from(selectedIds)
+                      : [song.id]
+                  }
+                  onPlay={onPlay}
+                  onPause={onPause}
+                  onDelete={onDelete}
+                  onRowClick={handleRowClick}
+                  onLongPress={handleLongPress}
+                />
+              </div>
             );
           })}
         </div>
