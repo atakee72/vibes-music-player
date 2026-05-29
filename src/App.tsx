@@ -150,6 +150,47 @@ export default function App() {
     })();
   }, []);
 
+  // Revoke object URLs for songs that have been removed from playlists.
+  // Without this, each song's audio URL + cover-art URL pins its blob in
+  // memory forever — a quiet leak that adds up over hundreds of songs.
+  const prevSongsRef = useRef<Map<string, Song>>(new Map());
+  const currentSongIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    currentSongIdRef.current = currentSong?.id ?? null;
+  }, [currentSong]);
+
+  useEffect(() => {
+    const next = new Map<string, Song>();
+    for (const p of playlists) {
+      for (const s of p.songs) {
+        if (!next.has(s.id)) next.set(s.id, s);
+      }
+    }
+
+    const toRevoke: Song[] = [];
+    for (const [id, song] of prevSongsRef.current) {
+      if (next.has(id)) continue;
+      // Skip the currently-playing song — the <audio> element may still
+      // reference the URL during the brief currentSong-becoming-null
+      // transition. The next diff catches it once currentSong updates.
+      if (currentSongIdRef.current === id) continue;
+      toRevoke.push(song);
+    }
+
+    prevSongsRef.current = next;
+
+    if (toRevoke.length > 0) {
+      // Defer revoke past React's commit so any consequential teardown
+      // (e.g., <audio> dropping its src) completes first.
+      setTimeout(() => {
+        for (const song of toRevoke) {
+          if (song.url) URL.revokeObjectURL(song.url);
+          if (song.coverArt) URL.revokeObjectURL(song.coverArt);
+        }
+      }, 0);
+    }
+  }, [playlists]);
+
   // Persist playlists with a 500ms debounce. Bursty mutations (folder ingest,
   // batch delete, reorder) collapse into one save instead of one per change.
   // Trade-off: changes within 500ms of tab close may be lost.
