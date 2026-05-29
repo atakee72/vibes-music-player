@@ -10,7 +10,14 @@ import {
   type DragEndEvent,
 } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
-import { Download, Music, PanelLeftOpen, RefreshCw, Upload } from 'lucide-react';
+import {
+  ArrowDownToLine,
+  Download,
+  Music,
+  PanelLeftOpen,
+  RefreshCw,
+  Upload,
+} from 'lucide-react';
 import type { LibraryRoot, Playlist, RepeatMode, Song } from './types';
 import { useMetadataExtractor } from './hooks/useMetadataExtractor';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
@@ -25,6 +32,7 @@ import { filterSongs } from './lib/filter';
 import { nextInPlaylist } from './lib/queue';
 import type { EqPreset } from './lib/eq';
 import { useDominantColor } from './hooks/useDominantColor';
+import { useInstallPrompt } from './hooks/useInstallPrompt';
 import { MiniPlayer } from './components/MiniPlayer';
 import { parseM3U, parsePLS, matchImportEntries } from './lib/playlist-import';
 import { parseLRC } from './lib/lrc';
@@ -98,6 +106,7 @@ export default function App() {
   const filteredSongs = filterSongs(activePlaylist?.songs ?? [], searchQuery);
   const nextSong = nextInPlaylist(currentSong, activePlaylist?.songs ?? [], repeatMode);
   const tintColor = useDominantColor(currentSong?.coverArt);
+  const { canInstall, promptInstall, isIOS } = useInstallPrompt();
 
   const onEndedRef = useRef<() => void>(() => {});
 
@@ -969,6 +978,23 @@ export default function App() {
                       aria-label="Export playlist"
                     >
                       <Download className="h-4 w-4" />
+                    </button>
+                  )}
+                  {(canInstall || isIOS) && (
+                    <button
+                      onClick={
+                        canInstall
+                          ? promptInstall
+                          : () =>
+                              setNotification(
+                                'To install: tap the Share button, then "Add to Home Screen".',
+                              )
+                      }
+                      className="p-2 rounded-lg bg-white/5 text-white/60 hover:bg-white/10 transition-all"
+                      title="Install Vibes"
+                      aria-label="Install Vibes"
+                    >
+                      <ArrowDownToLine className="h-4 w-4" />
                     </button>
                   )}
                   <button
