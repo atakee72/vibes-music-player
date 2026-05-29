@@ -16,6 +16,7 @@ import {
   Music,
   PanelLeftOpen,
   RefreshCw,
+  Share2,
   Upload,
 } from 'lucide-react';
 import type { LibraryRoot, Playlist, RepeatMode, Song } from './types';
@@ -40,6 +41,8 @@ import { LyricsPanel } from './components/LyricsPanel';
 import { ConfirmModal } from './components/ConfirmModal';
 import { PromptModal } from './components/PromptModal';
 import { serializeM3U, sanitizeFilename } from './lib/playlist-export';
+import { encodeSharePayload, decodeSharePayload, type SharedTrack } from './lib/share';
+import { SharedTrackModal } from './components/SharedTrackModal';
 
 type LibraryStatus = 'loading' | 'ready' | 'needs-prompt';
 
@@ -71,6 +74,7 @@ export default function App() {
   const [notification, setNotification] = useState<string | null>(null);
   const [showLyrics, setShowLyrics] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
+  const [sharedTrack, setSharedTrack] = useState<SharedTrack | null>(null);
   const [confirm, setConfirm] = useState<{
     title: string;
     message: string;
@@ -362,6 +366,47 @@ export default function App() {
     const timer = setTimeout(() => setNotification(null), 5000);
     return () => clearTimeout(timer);
   }, [notification]);
+
+  // On arrival via a share link (`#s=...`), pop the shared-track card once,
+  // then strip the hash so a reload doesn't re-open it. Ref-guarded so
+  // StrictMode's double-invoke is harmless.
+  const shareHandledRef = useRef(false);
+  useEffect(() => {
+    if (shareHandledRef.current) return;
+    shareHandledRef.current = true;
+    const track = decodeSharePayload(window.location.hash);
+    if (track) {
+      setSharedTrack(track);
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+  }, []);
+
+  const handleShare = useCallback(async () => {
+    if (!currentSong) return;
+    const url =
+      window.location.origin +
+      window.location.pathname +
+      encodeSharePayload(currentSong);
+    const shareData = {
+      title: 'Vibes',
+      text: `${currentSong.title} — ${currentSong.artist}`,
+      url,
+    };
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+        return;
+      }
+    } catch {
+      // User cancelled the native share sheet — fall through to clipboard.
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setNotification("Link copied — share what you're listening to.");
+    } catch {
+      setNotification('Could not copy the share link.');
+    }
+  }, [currentSong]);
 
   const handleFiles = useCallback(
     async (files: FileList | File[]) => {
@@ -960,6 +1005,16 @@ export default function App() {
                   >
                     Lyrics
                   </button>
+                  {currentSong && (
+                    <button
+                      onClick={handleShare}
+                      className="p-2 rounded-lg bg-white/5 text-white/60 hover:bg-white/10 transition-all"
+                      title="Share what you're listening to"
+                      aria-label="Share current track"
+                    >
+                      <Share2 className="h-4 w-4" />
+                    </button>
+                  )}
                   {activePlaylistId === 'library' && libraryRoots.length > 0 && (
                     <button
                       onClick={refreshLibrary}
@@ -1163,6 +1218,8 @@ export default function App() {
         }}
         onCancel={() => setPromptState(null)}
       />
+
+      <SharedTrackModal track={sharedTrack} onClose={() => setSharedTrack(null)} />
 
       <audio ref={audioRefA} className="hidden" crossOrigin="anonymous" />
       <audio ref={audioRefB} className="hidden" crossOrigin="anonymous" />
