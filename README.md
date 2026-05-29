@@ -75,6 +75,9 @@ pnpm test:run  # Vitest single pass
 - **Collapsible sidebar** — hide the playlist sidebar on desktop for a
   wider song list view (icon: `PanelLeftClose` to close, `PanelLeftOpen`
   to reopen)
+- **Scales to large libraries** — the song list is virtualized; only
+  the visible rows mount. Library size is ultimately bounded by your
+  browser's storage quota (typically hundreds of MB to several GB).
 
 ## Project layout
 

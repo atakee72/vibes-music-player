@@ -288,6 +288,60 @@
   (with `#EXTINF`). Triggered by a `<a download>` programmatic click.
   Round-trips through Phase 5's `parseM3U` import on the same machine.
 
+## Virtualization (SongList)
+
+- `useVirtualizer` from `@tanstack/react-virtual` renders only the rows
+  in the viewport (plus 6 overscan). DOM stays at ~25 nodes regardless
+  of song count.
+- `SortableContext` still receives **all song IDs** — sortable membership
+  is decoupled from DOM rendering. @dnd-kit works by ID, not DOM
+  position, so reorder and cross-playlist drag still function for items
+  scrolled off-screen.
+- Each row needs `ref={virtualizer.measureElement}` + `data-index` for
+  the variable-height measurement (mobile rows are taller than desktop).
+- **`observeElementRect` override**: in happy-dom tests the scroll
+  element has 0×0 dimensions, so no items would render. The custom
+  observer falls back to a 1024×5000 viewport when the real measurement
+  is zero. Real browsers use the actual rect.
+
+## Memoization gotchas
+
+- `SortableRow` is `React.memo`-wrapped. For this to actually skip
+  re-renders, ALL its props must be stable.
+- **`dragIds` is computed INSIDE the row via `useMemo`**, not passed
+  in as an array. Building the array in the parent (`[...selectedIds]`)
+  produces a new reference per render and defeats memo.
+- **`handleRowClick` uses `songsRef` and `selectionModeRef`**, not the
+  `songs` and `selectionMode` state directly. A `useCallback([songs])`
+  would recreate on every list change (add, delete, reorder, filter),
+  defeating memo across the board.
+- **Inline callbacks in App.tsx (`onPlay`, `onDelete`) are now
+  `useCallback`-wrapped** with refs for any state they need (e.g.,
+  `filteredSongsRef`, `activePlaylistIdRef`). Same reason.
+
+## Save debounce + URL revoke
+
+- Playlist save in App.tsx uses a 500ms debounce (`saveTimerRef`). 200
+  song mutations collapse into one IDB write. Trade-off: tab close
+  within 500ms of a change loses that change.
+- A separate `useEffect([playlists])` diffs the previous and current
+  song lists, calling `URL.revokeObjectURL` on the audio and cover URLs
+  of removed songs. Revoke is deferred via `setTimeout(0)` so the
+  `<audio>` element finishes any teardown first.
+- Currently-playing song's URL is skipped (`currentSongIdRef`) until
+  the next diff — the `<audio>` element may still hold the ref.
+
+## Quota awareness
+
+- `StorageQuotaError` (`src/lib/storage.ts`) wraps IDB's native
+  `DOMException('QuotaExceededError')`. `savePlaylists` catches and
+  re-throws as this tagged type.
+- App.tsx's save handler branches: on `StorageQuotaError`, shows a
+  notification ("Storage full…"). Silent failure was the root cause of
+  the "library gets reset" symptom from Phase 5.5's audit.
+- `getStorageEstimate()` wraps `navigator.storage.estimate()` for future
+  use (warning at 90%). Not currently wired into any UI.
+
 ## Dev loop
 
 - `pnpm dev` (Vite HMR) is enough for almost everything. **No need to

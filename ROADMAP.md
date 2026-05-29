@@ -405,6 +405,56 @@ phase was a polish + critical-fixes pass — not a new feature spike.
 
 ---
 
+## Phase 5.7 — Performance and scale (shipped)
+
+Status: ✅ merged (`a5ac441`).
+
+The Phase 5.5 audit listed five deferred perf items. This phase ships
+all five so the player stays smooth from ~50 to thousands of songs.
+
+- **Virtualization** (`@tanstack/react-virtual`) — SongList renders only
+  the visible rows (plus 6 overscan). DOM stays at ~25 nodes regardless
+  of library size. SortableContext still receives all IDs so @dnd-kit
+  works for reorder + cross-playlist drag on off-screen items. Custom
+  `observeElementRect` falls back to a 1024×5000 viewport in happy-dom
+  so tests still render rows.
+- **React.memo on SortableRow** with stable props. `dragIds` moved
+  inside the row as `useMemo`; parent callbacks (`handleRowClick`,
+  `handlePlaySong`, `handleDeleteSong`) wrapped in `useCallback` with
+  refs for state they read. A naive `useCallback([songs])` would
+  recreate on every list mutation and defeat memo entirely.
+- **Debounced save** — `savePlaylists` waits 500ms after the last
+  mutation. A folder of 200 songs is one save instead of 200. Trade-off
+  documented: tab close within 500ms loses pending changes.
+- **Object URL revocation** — `useEffect([playlists])` diffs the song
+  list and revokes URLs for removed songs. Deferred via `setTimeout(0)`
+  so `<audio>` element teardown completes first. `currentSongIdRef`
+  prevents revoking the URL of the currently-playing song mid-transition.
+- **Quota awareness** — `StorageQuotaError` wraps IDB's native
+  `DOMException`. Save handler branches on it to show a "Storage full"
+  notification instead of silently failing. This was likely the root
+  cause of the "library gets reset" symptom — quota overflow rejected
+  the save promise but the UI didn't know.
+
+**Key files added/touched**:
+- `src/components/SongList.tsx` — virtualizer, memo, stable handlers
+- `src/App.tsx` — debounce, URL revoke effect, quota error branch
+- `src/lib/storage.ts` — `StorageQuotaError`, `getStorageEstimate`
+
+**Notable decisions**:
+- **`@tanstack/react-virtual` over `react-window`** — modern hooks API,
+  handles variable row heights gracefully via `measureElement`.
+- **State in refs, not deps**: the perf gain from memoization only
+  materializes if callbacks are stable. Several handlers read from
+  refs (`songsRef`, `selectionModeRef`, `filteredSongsRef`,
+  `activePlaylistIdRef`, `playlistsRef`, `currentSongIdRef`) rather
+  than taking those values as `useCallback` deps.
+- **Not wired**: 90%-full warning, OPFS migration, image resizing of
+  cover blobs, Web Worker for metadata extraction. All listed as
+  "future, if needed."
+
+---
+
 ## Phase 6 — Distribution (planned, next up)
 
 Status: 📋 planned.
@@ -447,5 +497,6 @@ Last phase before the player feels "done":
 | 4 | `8bc1a2d` — `fix: boost tint visibility with radial gradient glow` (final of 3 commits) |
 | 5 | `5c6b972` — `docs: Phase 5 features in CLAUDE.md and README` (final of 4 commits) |
 | 5.5 | `1fafece` — `feat: refresh library from disk and export playlist as M3U` (final of 6 commits) |
+| 5.7 | `a5ac441` — `feat: surface quota exceeded errors with a graceful notification` (final of 5 commits) |
 
-Total: 139 tests, all green; `pnpm build` clean; production live.
+Total: 142 tests, all green; `pnpm build` clean; production live.
