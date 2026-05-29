@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   SortableContext,
@@ -52,7 +52,7 @@ interface SortableRowProps {
   selected: boolean;
   selectionMode: boolean;
   isFilterActive: boolean;
-  dragIds: string[];
+  selectedIds: Set<string>;
   onPlay: (song: Song) => void;
   onPause: () => void;
   onDelete: (id: string) => void;
@@ -60,20 +60,29 @@ interface SortableRowProps {
   onLongPress: (song: Song) => void;
 }
 
-function SortableRow({
+const SortableRow = memo(function SortableRow({
   song,
   active,
   activePlaying,
   selected,
   selectionMode,
   isFilterActive,
-  dragIds,
+  selectedIds,
   onPlay,
   onPause,
   onDelete,
   onRowClick,
   onLongPress,
 }: SortableRowProps) {
+  // Derive drag payload inside the row so it's stable when selection state
+  // hasn't changed. `selectedIds` Set reference is stable across renders
+  // that don't touch selection — so memoization actually works.
+  const dragIds = useMemo(
+    () =>
+      selectionMode && selected ? Array.from(selectedIds) : [song.id],
+    [selectionMode, selected, selectedIds, song.id],
+  );
+
   const {
     attributes,
     listeners,
@@ -269,7 +278,7 @@ function SortableRow({
       </div>
     </div>
   );
-}
+});
 
 export function SongList({
   songs,
@@ -326,23 +335,39 @@ export function SongList({
     }
   }, [selectionMode]);
 
-  const handleLongPress = (song: Song) => {
-    if (selectionMode) return;
-    onSelectionModeChange(true);
-    setSelectedIds(new Set([song.id]));
-    lastClickedRef.current = song.id;
-  };
+  // Refs to keep callbacks stable across renders. Wrapping these handlers in
+  // useCallback([songs, selectionMode]) would defeat React.memo on SortableRow
+  // because the callback identity would change on every list mutation.
+  const songsRef = useRef(songs);
+  const selectionModeRef = useRef(selectionMode);
+  useEffect(() => {
+    songsRef.current = songs;
+  }, [songs]);
+  useEffect(() => {
+    selectionModeRef.current = selectionMode;
+  }, [selectionMode]);
 
-  const handleRowClick = (song: Song, e: React.MouseEvent) => {
-    if (!selectionMode) return;
+  const handleLongPress = useCallback(
+    (song: Song) => {
+      if (selectionModeRef.current) return;
+      onSelectionModeChange(true);
+      setSelectedIds(new Set([song.id]));
+      lastClickedRef.current = song.id;
+    },
+    [onSelectionModeChange],
+  );
+
+  const handleRowClick = useCallback((song: Song, e: React.MouseEvent) => {
+    if (!selectionModeRef.current) return;
+    const list = songsRef.current;
 
     if (e.shiftKey && lastClickedRef.current) {
-      const lastIdx = songs.findIndex((s) => s.id === lastClickedRef.current);
-      const curIdx = songs.findIndex((s) => s.id === song.id);
+      const lastIdx = list.findIndex((s) => s.id === lastClickedRef.current);
+      const curIdx = list.findIndex((s) => s.id === song.id);
       if (lastIdx !== -1 && curIdx !== -1) {
         const from = Math.min(lastIdx, curIdx);
         const to = Math.max(lastIdx, curIdx);
-        const range = songs.slice(from, to + 1).map((s) => s.id);
+        const range = list.slice(from, to + 1).map((s) => s.id);
         setSelectedIds((prev) => {
           const next = new Set(prev);
           range.forEach((id) => next.add(id));
@@ -359,7 +384,7 @@ export function SongList({
       return next;
     });
     lastClickedRef.current = song.id;
-  };
+  }, []);
 
   const handleSelectAll = () => {
     setSelectedIds(new Set(songs.map((s) => s.id)));
@@ -462,11 +487,7 @@ export function SongList({
                   selected={isSelected}
                   selectionMode={selectionMode}
                   isFilterActive={isFilterActive}
-                  dragIds={
-                    selectionMode && isSelected
-                      ? Array.from(selectedIds)
-                      : [song.id]
-                  }
+                  selectedIds={selectedIds}
                   onPlay={onPlay}
                   onPause={onPause}
                   onDelete={onDelete}

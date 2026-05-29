@@ -418,6 +418,47 @@ export default function App() {
     [activePlaylistId],
   );
 
+  const handlePlaySong = useCallback((song: Song) => {
+    setCurrentSong(song);
+  }, []);
+
+  // Stable ref to filteredSongs and activePlaylistId so handleDeleteSong
+  // doesn't recreate on every list/playlist change (would defeat row memo).
+  const filteredSongsRef = useRef<Song[]>([]);
+  const activePlaylistIdRef = useRef(activePlaylistId);
+  const playlistsRef = useRef(playlists);
+
+  useEffect(() => {
+    filteredSongsRef.current = filteredSongs;
+  }, [filteredSongs]);
+  useEffect(() => {
+    activePlaylistIdRef.current = activePlaylistId;
+  }, [activePlaylistId]);
+  useEffect(() => {
+    playlistsRef.current = playlists;
+  }, [playlists]);
+
+  const handleDeleteSong = useCallback(
+    (id: string) => {
+      const song = filteredSongsRef.current.find((s) => s.id === id);
+      if (!song) return;
+      const aid = activePlaylistIdRef.current;
+      const playlistName =
+        playlistsRef.current.find((p) => p.id === aid)?.name ?? 'this playlist';
+      requestConfirm(
+        `Delete "${song.title}"?`,
+        `Removes from "${playlistName}". ${aid === 'library' ? '' : 'Song remains in Library.'}`,
+        () => {
+          setPlaylists((prev) =>
+            prev.map((p) => ({ ...p, songs: p.songs.filter((s) => s.id !== id) })),
+          );
+          setCurrentSong((prev) => (prev?.id === id ? null : prev));
+        },
+      );
+    },
+    [requestConfirm],
+  );
+
   const exportPlaylist = useCallback(
     (playlistId: string) => {
       const playlist = playlists.find((p) => p.id === playlistId);
@@ -895,24 +936,9 @@ export default function App() {
                 songs={filteredSongs}
                 currentSong={currentSong}
                 isPlaying={isPlaying}
-                onPlay={(song) => setCurrentSong(song)}
+                onPlay={handlePlaySong}
                 onPause={togglePlayPause}
-                onDelete={(id) => {
-                  const song = filteredSongs.find((s) => s.id === id);
-                  if (!song) return;
-                  const playlistName =
-                    playlists.find((p) => p.id === activePlaylistId)?.name ?? 'this playlist';
-                  requestConfirm(
-                    `Delete "${song.title}"?`,
-                    `Removes from "${playlistName}". ${activePlaylistId === 'library' ? '' : 'Song remains in Library.'}`,
-                    () => {
-                      setPlaylists((prev) =>
-                        prev.map((p) => ({ ...p, songs: p.songs.filter((s) => s.id !== id) })),
-                      );
-                      if (currentSong?.id === id) setCurrentSong(null);
-                    },
-                  );
-                }}
+                onDelete={handleDeleteSong}
                 onBatchDelete={handleBatchDelete}
                 onReorder={handleReorder}
                 isFilterActive={searchQuery.trim().length > 0}
