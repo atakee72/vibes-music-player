@@ -455,19 +455,45 @@ all five so the player stays smooth from ~50 to thousands of songs.
 
 ---
 
-## Phase 6 — Distribution (planned, next up)
+## Phase 6 — Distribution (shipped)
 
-Status: 📋 planned.
+Status: ✅ merged.
 
-Last phase before the player feels "done":
+Last phase before the player feels "done." Two additions, both keeping the
+"nothing leaves your device" promise:
 
-- **PWA install prompt + manifest** — make Vibes installable to dock /
-  home screen. Offline support follows for free (the app is already
-  static, just needs the service worker).
-- **Shareable URL of playback state** — encode track metadata (title,
-  artist, etc., NOT file content) in a URL fragment so users can share
-  "what I'm listening to" without uploading anything. Recipient sees the
-  metadata; can't play it back without their own file.
+- **PWA install + manifest** — Vibes is installable to the dock / home
+  screen via `vite-plugin-pwa` (Workbox SW precaches the shell for offline
+  launch; a previously-loaded library still plays from disk / IDB). App
+  icons are generated from a 512×512 brand SVG by
+  `@vite-pwa/assets-generator` and committed. A header **Install** button
+  uses `beforeinstallprompt` on Chromium; iOS Safari (which never fires it)
+  gets an "Add to Home Screen" hint instead (`useInstallPrompt`).
+- **Shareable now-playing URL** — a **Share** button encodes the current
+  track's metadata (title/artist/album/duration, **never** the file) into a
+  `#s=<base64url>` hash fragment (`src/lib/share.ts`, unicode-safe). Opening
+  such a link pops a `SharedTrackModal` describing the track, then strips the
+  hash. Uses `navigator.share` when present, else clipboard + toast.
+
+**Key files added**:
+- `src/hooks/useInstallPrompt.ts` — `beforeinstallprompt` + iOS detection
+- `src/lib/share.ts` + test — metadata encode/decode core (the tested unit)
+- `src/components/SharedTrackModal.tsx` + test — arrival card
+- `pwa-assets.config.ts`, `public/pwa-icon.svg` + generated icon PNGs
+
+**Notable decisions**:
+- **`base: './'` → `base: '/'`** — vite-plugin-pwa needs an absolute base or
+  the service worker's scope is broken. Safe because all deploys are
+  root-domain. The one non-additive change in the phase.
+- **Icons generated then committed** — keeps `sharp` (a native dep, added to
+  `pnpm.onlyBuiltDependencies`) off the normal install/build path. A
+  `!public/*.png` exception in `.gitignore` lets the icons past the blanket
+  `*.png` screenshot ignore.
+- **Metadata-only share, no library matching** — recipient sees a card, not
+  a play button; honest to the local-first model. Cover art and whole-
+  playlist sharing left out of scope (URL-size + complexity).
+- **`pwaAssets: { config: true }`** auto-injects the manifest icons + HTML
+  head links, so they're never hand-maintained.
 
 ---
 
@@ -498,5 +524,6 @@ Last phase before the player feels "done":
 | 5 | `5c6b972` — `docs: Phase 5 features in CLAUDE.md and README` (final of 4 commits) |
 | 5.5 | `1fafece` — `feat: refresh library from disk and export playlist as M3U` (final of 6 commits) |
 | 5.7 | `a5ac441` — `feat: surface quota exceeded errors with a graceful notification` (final of 5 commits) |
+| 6 | `a81684b` — `feat: share button and shared-track arrival card` (headline feature; docs commit follows) |
 
-Total: 142 tests, all green; `pnpm build` clean; production live.
+Total: 163 tests, all green; `pnpm build` clean; production live.

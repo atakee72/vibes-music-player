@@ -78,6 +78,13 @@ pnpm test:run  # Vitest single pass
 - **Scales to large libraries** — the song list is virtualized; only
   the visible rows mount. Library size is ultimately bounded by your
   browser's storage quota (typically hundreds of MB to several GB).
+- **Installable (PWA)** — add Vibes to your dock / home screen and launch
+  it like a native app; the shell is precached so it opens offline (a
+  previously-loaded library still plays from local disk / IndexedDB)
+- **Share what you're listening to** — a one-tap link carries the current
+  track's metadata (title, artist, album) — never the audio file. The
+  recipient sees a card describing the track; they play it from their own
+  copy or not at all
 
 ## Project layout
 

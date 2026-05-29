@@ -342,6 +342,55 @@
 - `getStorageEstimate()` wraps `navigator.storage.estimate()` for future
   use (warning at 90%). Not currently wired into any UI.
 
+## PWA / installability
+
+- Built with **`vite-plugin-pwa`** (pinned to the `0.21.x` line — 1.x needs
+  Vite 6; this project is on Vite 5). Config lives in `vite.config.ts`:
+  `registerType: 'autoUpdate'` (the SW auto-registers; **no** manual
+  `registerSW` call in `main.tsx`), a hand-written `manifest`, and Workbox
+  precaching of the built shell. `devOptions.enabled: false` keeps the SW out
+  of `pnpm dev` — exercise it via `pnpm build && pnpm preview`.
+- **`base` must be `'/'`** (absolute), not `'./'`. A relative base produces a
+  non-functional service worker (SW scope resolves from an absolute path). All
+  deploys are root-domain, so this is safe. Don't switch it back to `'./'`.
+- **Icons are generated, then committed.** `@vite-pwa/assets-generator` (run
+  via `pnpm generate-pwa-assets`, config in `pwa-assets.config.ts`) rasterizes
+  `public/pwa-icon.svg` (a 512×512 filled gradient square + white note — the
+  24×24 `music-icon.svg` is just the favicon) into the `pwa-*`, `maskable-*`,
+  and `apple-touch-icon` PNGs. `VitePWA({ pwaAssets: { config: true } })`
+  auto-injects the manifest `icons` array and the HTML head links — **don't**
+  hand-maintain them. The generator needs `sharp`, which is why
+  `pnpm.onlyBuiltDependencies` includes `"sharp"`; the committed PNGs mean a
+  plain `pnpm install` / `pnpm build` never needs it.
+- `.gitignore` has a blanket `*.png` (Playwright screenshots) with a
+  `!public/*.png` exception so the icons are tracked. Keep that exception.
+- **Install UI**: `useInstallPrompt` (`src/hooks/useInstallPrompt.ts`) captures
+  `beforeinstallprompt` (Chromium) and exposes `canInstall` / `promptInstall`.
+  iOS Safari never fires that event, so `isIOS` gates a "Add to Home Screen"
+  hint instead (best-effort UA sniff; only gates a hint). The header Install
+  button shows when `canInstall || isIOS`.
+
+## Share links
+
+- **Metadata-only, never the file.** `src/lib/share.ts` encodes the current
+  track's `{title, artist, album, duration}` into a URL **hash fragment**
+  (`#s=<base64url>`). The recipient sees "what I'm listening to"; they can't
+  play it without their own copy. This is the invariant — never put blob/file
+  bytes (or even cover art) in the link.
+- **Unicode-safe base64url**: encode JSON → UTF-8 bytes (`TextEncoder`) →
+  base64 → URL-safe. Plain `btoa` is Latin1-only and would corrupt non-ASCII
+  titles. `decodeSharePayload` returns `null` for anything malformed (never
+  throws — a recipient can paste arbitrary junk). Fully unit-tested.
+- **Arrival flow in App.tsx**: a ref-guarded mount effect (`shareHandledRef`,
+  StrictMode-safe) reads `window.location.hash`, and if it decodes, opens
+  `SharedTrackModal` and clears the hash via `history.replaceState` so a
+  reload doesn't re-pop the modal.
+- **`SharedTrackModal`** follows the `ConfirmModal` pattern and owns its own
+  Escape via a **capture-phase** listener so it doesn't collide with App's
+  Escape chain.
+- The Share button (header, shown when `currentSong`) uses `navigator.share`
+  when available, else copies the link to the clipboard with a toast.
+
 ## Dev loop
 
 - `pnpm dev` (Vite HMR) is enough for almost everything. **No need to
