@@ -57,10 +57,10 @@ export function PromptModal({
       aria-labelledby="prompt-title"
     >
       <div
-        className="bg-slate-800/95 backdrop-blur-xl rounded-2xl p-6 w-full max-w-md border border-white/10 space-y-4"
+        className="bg-surface/95 backdrop-blur-xl rounded-2xl p-6 w-full max-w-md border border-white/10 space-y-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 id="prompt-title" className="text-lg font-semibold text-white">
+        <h3 id="prompt-title" className="text-lg font-semibold font-display text-white">
           {title}
         </h3>
         <input
@@ -72,7 +72,7 @@ export function PromptModal({
           onKeyDown={(e) => {
             if (e.key === 'Enter') submit();
           }}
-          className="w-full bg-white/5 text-white placeholder-white/40 rounded-lg border border-white/10 focus:border-purple-400 focus:outline-none px-3 py-2 transition-colors"
+          className="w-full bg-white/5 text-white placeholder-white/40 rounded-lg border border-white/10 focus:border-amber focus:outline-none px-3 py-2 transition-colors"
         />
         <div className="flex justify-end space-x-2 pt-2">
           <button
@@ -84,7 +84,7 @@ export function PromptModal({
           <button
             onClick={submit}
             disabled={!value.trim()}
-            className="px-4 py-2 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
+            className="px-4 py-2 rounded-lg bg-gradient-to-r from-amber to-coral hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed text-deep text-sm font-medium transition-colors"
           >
             {confirmLabel}
           </button>

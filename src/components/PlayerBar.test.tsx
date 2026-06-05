@@ -139,11 +139,11 @@ describe('PlayerBar', () => {
     expect(onEqPresetChange).toHaveBeenCalledWith('Bass Boost');
   });
 
-  it('EQ button has the purple-400 tint when a non-Off preset is active', () => {
+  it('EQ button has the amber tint when a non-Off preset is active', () => {
     const song = makeSong();
     renderPlayerBar({ song, eqPreset: 'Bass Boost' });
     const eqButton = screen.getByRole('button', { name: 'Equalizer' });
-    expect(eqButton).toHaveClass('text-purple-400');
+    expect(eqButton).toHaveClass('text-amber');
   });
 
   it('visualizer caps at 15 bars regardless of input length', () => {
@@ -151,7 +151,7 @@ describe('PlayerBar', () => {
     // 30 values -> should only render 15 bars
     const longData = Array.from({ length: 30 }, (_, i) => i * 8);
     const { container } = renderPlayerBar({ song, visualizerData: longData });
-    const bars = container.querySelectorAll('.bg-gradient-to-t.from-purple-500');
+    const bars = container.querySelectorAll('.bg-gradient-to-t.from-coral');
     expect(bars).toHaveLength(15);
   });
 

@@ -857,7 +857,7 @@ export default function App() {
 
   return (
     <div
-      className="h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white flex flex-col overflow-hidden"
+      className="h-screen text-white flex flex-col overflow-hidden"
       onDrop={onDrop}
       onDragOver={onDragOver}
       onDragEnter={onDragOver}
@@ -867,6 +867,8 @@ export default function App() {
         setIsDragging(false);
       }}
     >
+      {/* Persistent AFTERGLOW aurora (z-[-1]); the per-track tint layers above it. */}
+      <div className="aurora-bg" />
       <div
         className="fixed inset-0 pointer-events-none transition-colors duration-[1500ms]"
         style={{
@@ -883,21 +885,21 @@ export default function App() {
       >
 
       {isDragging && (
-        <div className="fixed inset-0 bg-purple-500/20 backdrop-blur-sm z-50 flex items-center justify-center border-4 border-dashed border-purple-400">
+        <div className="fixed inset-0 bg-amber/20 backdrop-blur-sm z-50 flex items-center justify-center border-4 border-dashed border-amber">
           <div className="text-center">
-            <Upload className="h-16 w-16 mx-auto mb-4 text-purple-400" />
-            <p className="text-2xl font-bold text-purple-300">Drop your music files here!</p>
-            <p className="text-purple-200 mt-2">Supports MP3, WAV, FLAC, and more</p>
+            <Upload className="h-16 w-16 mx-auto mb-4 text-amber" />
+            <p className="text-2xl font-bold font-display text-cream">Drop your music files here!</p>
+            <p className="text-cream/70 mt-2">Supports MP3, WAV, FLAC, and more</p>
           </div>
         </div>
       )}
 
       {libraryStatus === 'needs-prompt' && (
-        <div className="bg-purple-500/20 border-b border-purple-400/30 px-4 py-2 flex items-center justify-between text-sm">
-          <span className="text-purple-100">Welcome back. Click to restore your library.</span>
+        <div className="bg-amber/20 border-b border-amber/30 px-4 py-2 flex items-center justify-between text-sm">
+          <span className="text-cream">Welcome back. Click to restore your library.</span>
           <button
             onClick={restoreLibrary}
-            className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 px-3 py-1 rounded-md text-xs font-medium shadow"
+            className="bg-gradient-to-r from-amber to-coral hover:brightness-110 text-deep px-3 py-1 rounded-md text-xs font-medium shadow"
           >
             Restore library
           </button>
@@ -952,10 +954,10 @@ export default function App() {
             <header className="p-4 lg:p-6 border-b border-white/10">
               {!sidebarOpen && (
                 <div className="flex items-center justify-center space-x-3 mb-4">
-                  <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-lg">
-                    <Music className="h-7 w-7 text-white" />
+                  <div className="w-12 h-12 bg-gradient-to-r from-amber to-coral rounded-xl flex items-center justify-center shadow-lg">
+                    <Music className="h-7 w-7 text-deep" />
                   </div>
-                  <h1 className="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+                  <h1 className="text-2xl lg:text-3xl font-bold font-display bg-gradient-to-r from-amber to-coral bg-clip-text text-transparent">
                     Vibes
                   </h1>
                 </div>
@@ -971,7 +973,7 @@ export default function App() {
                   </button>
                 )}
                 {sidebarOpen && (
-                  <h2 className="text-xl lg:text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+                  <h2 className="text-xl lg:text-2xl font-bold font-display bg-gradient-to-r from-amber to-coral bg-clip-text text-transparent">
                     {activePlaylist?.name}
                     {searchQuery.trim() && activePlaylist && (
                       <span className="ml-2 text-sm font-normal text-white/50 bg-clip-border bg-none [-webkit-text-fill-color:initial]">
@@ -985,7 +987,7 @@ export default function App() {
                     onClick={() => setSelectionMode((v) => !v)}
                     className={`px-3 py-2 rounded-lg transition-all duration-200 text-sm font-medium ${
                       selectionMode
-                        ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                        ? 'bg-amber/20 text-amber border border-amber/30'
                         : 'bg-white/5 text-white/60 hover:bg-white/10'
                     }`}
                     title="Toggle selection mode"
@@ -997,7 +999,7 @@ export default function App() {
                     onClick={() => setShowLyrics((v) => !v)}
                     className={`px-3 py-2 rounded-lg transition-all duration-200 text-sm font-medium ${
                       showLyrics
-                        ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                        ? 'bg-amber/20 text-amber border border-amber/30'
                         : 'bg-white/5 text-white/60 hover:bg-white/10'
                     }`}
                     title="Toggle lyrics"
@@ -1054,7 +1056,7 @@ export default function App() {
                   )}
                   <button
                     onClick={() => setShowUpload(true)}
-                    className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 px-4 py-2 rounded-lg transition-all duration-200 text-sm font-medium shadow-lg"
+                    className="bg-gradient-to-r from-amber to-coral hover:brightness-110 text-deep px-4 py-2 rounded-lg transition-all duration-200 text-sm font-medium shadow-lg"
                   >
                     Add Music
                   </button>
@@ -1069,7 +1071,7 @@ export default function App() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search this playlist… (press / to focus)"
-                className="w-full bg-white/5 text-sm text-white placeholder-white/40 rounded-lg border border-white/10 focus:border-purple-400 focus:outline-none px-3 py-2 transition-colors"
+                className="w-full bg-white/5 text-sm text-white placeholder-white/40 rounded-lg border border-white/10 focus:border-amber focus:outline-none px-3 py-2 transition-colors"
               />
             </div>
 
@@ -1150,10 +1152,10 @@ export default function App() {
           onClick={() => setShowUpload(false)}
         >
           <div
-            className="bg-slate-800/90 backdrop-blur-xl rounded-2xl p-6 w-full max-w-md border border-white/10 space-y-4"
+            className="bg-surface/90 backdrop-blur-xl rounded-2xl p-6 w-full max-w-md border border-white/10 space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <label className="border-2 border-dashed border-white/20 hover:border-purple-400 rounded-xl p-8 text-center transition-all cursor-pointer block">
+            <label className="border-2 border-dashed border-white/20 hover:border-amber rounded-xl p-8 text-center transition-all cursor-pointer block">
               <input
                 type="file"
                 multiple
@@ -1179,7 +1181,7 @@ export default function App() {
                     }
                   }
                 }}
-                className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 px-4 py-2 rounded-lg text-sm font-medium shadow"
+                className="w-full bg-gradient-to-r from-amber to-coral hover:brightness-110 text-deep px-4 py-2 rounded-lg text-sm font-medium shadow"
               >
                 Choose Folder
               </button>

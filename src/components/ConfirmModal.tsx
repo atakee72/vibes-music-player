@@ -42,10 +42,10 @@ export function ConfirmModal({
       aria-labelledby="confirm-title"
     >
       <div
-        className="bg-slate-800/95 backdrop-blur-xl rounded-2xl p-6 w-full max-w-md border border-white/10 space-y-4"
+        className="bg-surface/95 backdrop-blur-xl rounded-2xl p-6 w-full max-w-md border border-white/10 space-y-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 id="confirm-title" className="text-lg font-semibold text-white">
+        <h3 id="confirm-title" className="text-lg font-semibold font-display text-white">
           {title}
         </h3>
         <p className="text-sm text-white/70">{message}</p>
@@ -60,8 +60,8 @@ export function ConfirmModal({
             onClick={onConfirm}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               destructive
-                ? 'bg-red-500 hover:bg-red-600 text-white'
-                : 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white'
+                ? 'bg-danger hover:brightness-110 text-white'
+                : 'bg-gradient-to-r from-amber to-coral hover:brightness-110 text-deep'
             }`}
           >
             {confirmLabel}

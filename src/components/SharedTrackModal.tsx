@@ -46,20 +46,20 @@ export function SharedTrackModal({ track, onClose }: SharedTrackModalProps) {
       aria-labelledby="shared-track-title"
     >
       <div
-        className="bg-slate-800/95 backdrop-blur-xl rounded-2xl p-6 w-full max-w-md border border-white/10 space-y-4"
+        className="bg-surface/95 backdrop-blur-xl rounded-2xl p-6 w-full max-w-md border border-white/10 space-y-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <p className="text-xs uppercase tracking-wide text-purple-300/80 font-medium">
+        <p className="text-xs uppercase tracking-wide text-lilac/80 font-medium">
           Shared with you
         </p>
         <div className="flex items-center space-x-4">
-          <div className="h-14 w-14 shrink-0 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-            <Music className="h-7 w-7 text-white" />
+          <div className="h-14 w-14 shrink-0 rounded-xl bg-gradient-to-br from-amber to-coral flex items-center justify-center">
+            <Music className="h-7 w-7 text-deep" />
           </div>
           <div className="min-w-0">
             <h3
               id="shared-track-title"
-              className="text-lg font-semibold text-white truncate"
+              className="text-lg font-semibold font-display text-white truncate"
             >
               {track.title || 'Unknown title'}
             </h3>

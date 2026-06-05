@@ -150,9 +150,9 @@ const SortableRow = memo(function SortableRow({
       onPointerLeave={handlePointerUpOrCancel}
       className={
         'group flex items-center space-x-3 p-3 lg:p-4 rounded-xl hover:bg-white/5 transition-all duration-200 cursor-default select-none ' +
-        (selected ? 'ring-2 ring-purple-400/50 ' : '') +
+        (selected ? 'ring-2 ring-amber/50 ' : '') +
         (active
-          ? 'bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/20'
+          ? 'bg-gradient-to-r from-amber/10 to-coral/10 border border-amber/20'
           : '')
       }
     >
@@ -170,14 +170,14 @@ const SortableRow = memo(function SortableRow({
         <div
           className={`flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
             selected
-              ? 'bg-purple-500 border-purple-500'
+              ? 'bg-amber border-amber'
               : 'border-white/30 bg-transparent'
           }`}
           aria-label={selected ? 'Selected' : 'Not selected'}
           role="checkbox"
           aria-checked={selected}
         >
-          {selected && <Check className="h-3 w-3 text-white" />}
+          {selected && <Check className="h-3 w-3 text-deep" />}
         </div>
       )}
 
@@ -189,7 +189,7 @@ const SortableRow = memo(function SortableRow({
             className="w-12 h-12 rounded-lg object-cover shadow-lg"
           />
         ) : (
-          <div className="w-12 h-12 bg-gradient-to-br from-slate-700 to-slate-800 rounded-lg flex items-center justify-center border border-white/10">
+          <div className="w-12 h-12 bg-gradient-to-br from-surface to-surface-2 rounded-lg flex items-center justify-center border border-white/10">
             <Music className="h-6 w-6 text-white/40" />
           </div>
         )}
@@ -214,8 +214,8 @@ const SortableRow = memo(function SortableRow({
           <div className="min-w-0 flex-1">
             <p
               className={
-                'text-sm lg:text-base font-medium truncate ' +
-                (active ? 'text-purple-300' : 'text-white')
+                'text-sm lg:text-base font-medium font-display truncate ' +
+                (active ? 'text-amber' : 'text-white')
               }
             >
               {song.title}
@@ -228,7 +228,7 @@ const SortableRow = memo(function SortableRow({
               {song.duration ? (
                 <div className="flex items-center space-x-1 text-xs text-white/40">
                   <Clock className="h-3 w-3" />
-                  <span>{formatTime(song.duration)}</span>
+                  <span className="font-mono">{formatTime(song.duration)}</span>
                 </div>
               ) : null}
               {song.file && (
@@ -240,7 +240,7 @@ const SortableRow = memo(function SortableRow({
           </div>
           <div className="hidden lg:flex items-center space-x-4">
             {song.duration ? (
-              <span className="text-sm text-white/60">{formatTime(song.duration)}</span>
+              <span className="text-sm text-white/60 font-mono">{formatTime(song.duration)}</span>
             ) : null}
             <div className="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
               <button
@@ -248,10 +248,10 @@ const SortableRow = memo(function SortableRow({
                   e.stopPropagation();
                   onDelete(song.id);
                 }}
-                className="p-2 hover:bg-red-500/20 rounded-lg transition-colors"
+                className="p-2 hover:bg-danger/20 rounded-lg transition-colors"
                 aria-label="Delete song"
               >
-                <Trash2 className="h-4 w-4 text-red-400" />
+                <Trash2 className="h-4 w-4 text-danger" />
               </button>
               <button
                 className="p-2 hover:bg-white/10 rounded-lg transition-colors"
@@ -270,10 +270,10 @@ const SortableRow = memo(function SortableRow({
             e.stopPropagation();
             onDelete(song.id);
           }}
-          className="p-2 hover:bg-red-500/20 rounded-lg transition-colors"
+          className="p-2 hover:bg-danger/20 rounded-lg transition-colors"
           aria-label="Delete song"
         >
-          <Trash2 className="h-4 w-4 text-red-400" />
+          <Trash2 className="h-4 w-4 text-danger" />
         </button>
       </div>
     </div>
@@ -405,8 +405,8 @@ export function SongList({
     return (
       <div className="flex-1 flex items-center justify-center p-8">
         <div className="text-center text-white/60">
-          <div className="w-20 h-20 bg-gradient-to-r from-purple-500/20 to-pink-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Music className="h-10 w-10 text-purple-400" />
+          <div className="w-20 h-20 bg-gradient-to-r from-amber/20 to-coral/20 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Music className="h-10 w-10 text-amber" />
           </div>
           <p className="text-lg mb-2 font-medium">{emptyHint.primary}</p>
           <p className="text-sm text-white/40">{emptyHint.secondary}</p>
@@ -421,7 +421,7 @@ export function SongList({
   return (
     <div ref={scrollRef} className="flex-1 overflow-y-auto outline-none">
       {selectionMode && (
-        <div className="sticky top-0 z-10 flex items-center justify-between bg-slate-800/95 backdrop-blur-xl border-b border-white/10 px-4 py-2">
+        <div className="sticky top-0 z-10 flex items-center justify-between bg-surface/95 backdrop-blur-xl border-b border-white/10 px-4 py-2">
           <span className="text-sm text-white/80">
             {selectedIds.size} selected
           </span>
@@ -436,7 +436,7 @@ export function SongList({
             <button
               onClick={handleBatchDelete}
               disabled={selectedIds.size === 0}
-              className="flex items-center space-x-1 px-3 py-1 bg-red-500/20 hover:bg-red-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg text-red-400 text-sm transition-colors"
+              className="flex items-center space-x-1 px-3 py-1 bg-danger/20 hover:bg-danger/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg text-danger text-sm transition-colors"
               aria-label="Delete selected"
             >
               <Trash2 className="h-3.5 w-3.5" />

@@ -83,10 +83,10 @@ describe('SongList', () => {
     expect(onPause).toHaveBeenCalledTimes(1);
   });
 
-  it('the active song title uses the purple highlight class', () => {
+  it('the active song title uses the amber highlight class', () => {
     const song = makeSong({ title: 'Highlighted' });
     renderSongList({ songs: [song], currentSong: song });
-    expect(screen.getByText('Highlighted')).toHaveClass('text-purple-300');
+    expect(screen.getByText('Highlighted')).toHaveClass('text-amber');
   });
 
   it('shows drag handles when not in selection mode and no filter', () => {

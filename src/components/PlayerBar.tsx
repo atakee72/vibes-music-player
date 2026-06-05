@@ -89,21 +89,21 @@ export function PlayerBar({
   }, [eqOpen]);
   if (!song) {
     return (
-      <div className="h-20 lg:h-24 bg-slate-800/95 backdrop-blur-xl border-t border-white/10 flex items-center justify-center">
+      <div className="h-20 lg:h-24 bg-surface/95 backdrop-blur-xl border-t border-white/10 flex items-center justify-center">
         <p className="text-white/50 text-sm">No song playing</p>
       </div>
     );
   }
 
   const RepeatIcon = repeatMode === 'one' ? Repeat1 : Repeat;
-  const repeatColor = repeatMode !== 'none' ? 'text-purple-400' : 'text-white/60';
+  const repeatColor = repeatMode !== 'none' ? 'text-amber' : 'text-white/60';
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
-    <div className="h-20 lg:h-24 bg-slate-800/95 backdrop-blur-xl border-t border-white/10 flex flex-col">
+    <div className="h-20 lg:h-24 bg-surface/95 backdrop-blur-xl border-t border-white/10 flex flex-col">
       <div className="px-4 pt-2">
         <div className="flex items-center space-x-3 text-xs text-white/60">
-          <span className="w-10 text-right">{formatTime(currentTime)}</span>
+          <span className="w-10 text-right font-mono">{formatTime(currentTime)}</span>
           <div
             className="flex-1 h-1 bg-white/20 rounded-full cursor-pointer group"
             onClick={(e) => {
@@ -113,13 +113,13 @@ export function PlayerBar({
             }}
           >
             <div
-              className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full relative transition-all duration-150"
+              className="h-full bg-gradient-to-r from-amber to-coral rounded-full relative transition-all duration-150"
               style={{ width: `${progress}%` }}
             >
               <div className="absolute right-0 top-1/2 transform translate-x-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg" />
             </div>
           </div>
-          <span className="w-10">{formatTime(duration)}</span>
+          <span className="w-10 font-mono">{formatTime(duration)}</span>
         </div>
       </div>
 
@@ -132,12 +132,12 @@ export function PlayerBar({
               className="w-12 h-12 lg:w-14 lg:h-14 rounded-lg object-cover shadow-lg"
             />
           ) : (
-            <div className="w-12 h-12 lg:w-14 lg:h-14 bg-gradient-to-br from-slate-700 to-slate-800 rounded-lg flex items-center justify-center border border-white/10">
+            <div className="w-12 h-12 lg:w-14 lg:h-14 bg-gradient-to-br from-surface to-surface-2 rounded-lg flex items-center justify-center border border-white/10">
               <Music className="h-6 w-6 lg:h-7 lg:w-7 text-white/40" />
             </div>
           )}
           <div className="min-w-0 flex-1">
-            <p className="text-sm lg:text-base font-medium text-white truncate">{song.title}</p>
+            <p className="text-sm lg:text-base font-medium font-display text-white truncate">{song.title}</p>
             <p className="text-xs lg:text-sm text-white/60 truncate">{song.artist}</p>
           </div>
         </div>
@@ -160,13 +160,13 @@ export function PlayerBar({
           </button>
           <button
             onClick={onPlayPause}
-            className="p-3 lg:p-4 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 rounded-full transition-all duration-200 shadow-lg"
+            className="p-3 lg:p-4 bg-gradient-to-r from-amber to-coral hover:brightness-110 rounded-full transition-all duration-200 shadow-lg"
             aria-label={isPlaying ? 'Pause' : 'Play'}
           >
             {isPlaying ? (
-              <Pause className="h-5 w-5 lg:h-6 lg:w-6 text-white" fill="currentColor" />
+              <Pause className="h-5 w-5 lg:h-6 lg:w-6 text-deep" fill="currentColor" />
             ) : (
-              <Play className="h-5 w-5 lg:h-6 lg:w-6 text-white" fill="currentColor" />
+              <Play className="h-5 w-5 lg:h-6 lg:w-6 text-deep" fill="currentColor" />
             )}
           </button>
           <button
@@ -190,7 +190,7 @@ export function PlayerBar({
             {visualizerData.slice(0, 15).map((value, i) => (
               <div
                 key={i}
-                className="bg-gradient-to-t from-purple-500 to-pink-500 rounded-sm transition-all duration-75"
+                className="bg-gradient-to-t from-coral to-gold rounded-sm transition-all duration-75"
                 style={{
                   width: '2px',
                   height: `${Math.max(2, (value / 255) * (window.innerWidth < 1024 ? 24 : 32))}px`,
@@ -203,7 +203,7 @@ export function PlayerBar({
             <button
               onClick={onTogglePip}
               className={`p-2 hover:bg-white/10 rounded-full transition-colors ${
-                isPipOpen ? 'text-purple-400' : 'text-white/60'
+                isPipOpen ? 'text-amber' : 'text-white/60'
               }`}
               title="Picture-in-Picture"
               aria-label="Picture-in-Picture"
@@ -215,7 +215,7 @@ export function PlayerBar({
             <button
               onClick={() => setEqOpen((v) => !v)}
               className={`p-2 hover:bg-white/10 rounded-full transition-colors ${
-                eqPreset !== 'Off' ? 'text-purple-400' : 'text-white/60'
+                eqPreset !== 'Off' ? 'text-amber' : 'text-white/60'
               }`}
               title={`Equalizer: ${eqPreset}`}
               aria-label="Equalizer"
@@ -223,7 +223,7 @@ export function PlayerBar({
               <Sliders className="h-4 w-4 lg:h-5 lg:w-5" />
             </button>
             {eqOpen && (
-              <div className="absolute bottom-full right-0 mb-2 bg-slate-800/95 backdrop-blur-xl border border-white/10 rounded-lg shadow-xl py-1 min-w-[140px] z-50">
+              <div className="absolute bottom-full right-0 mb-2 bg-surface/95 backdrop-blur-xl border border-white/10 rounded-lg shadow-xl py-1 min-w-[140px] z-50">
                 {EQ_PRESET_NAMES.map((name) => (
                   <button
                     key={name}
@@ -233,7 +233,7 @@ export function PlayerBar({
                     }}
                     className={`w-full text-left px-3 py-1.5 text-sm transition-colors ${
                       name === eqPreset
-                        ? 'bg-gradient-to-r from-purple-500/30 to-pink-500/30 text-purple-200'
+                        ? 'bg-gradient-to-r from-amber/30 to-coral/30 text-cream'
                         : 'text-white/80 hover:bg-white/5'
                     }`}
                   >
@@ -258,7 +258,7 @@ export function PlayerBar({
               max={100}
               value={Math.round(volume * 100)}
               onChange={(e) => onVolumeChange(Number(e.target.value) / 100)}
-              className="w-16 lg:w-20 accent-purple-500"
+              className="w-16 lg:w-20 accent-amber"
               aria-label="Volume"
               title={`Volume: ${Math.round(volume * 100)}%`}
             />

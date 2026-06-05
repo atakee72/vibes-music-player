@@ -30,7 +30,7 @@ export function LyricsPanel({ lyrics, currentTime, onClose }: LyricsPanelProps) 
         className="fixed inset-0 bg-black/50 z-40 lg:hidden"
         onClick={onClose}
       />
-      <div className="fixed inset-0 z-40 lg:relative lg:z-auto lg:w-80 flex flex-col bg-slate-800/95 backdrop-blur-xl border-l border-white/10">
+      <div className="fixed inset-0 z-40 lg:relative lg:z-auto lg:w-80 flex flex-col bg-surface/95 backdrop-blur-xl border-l border-white/10">
         <div className="flex items-center justify-between p-4 border-b border-white/10">
           <span className="text-sm font-medium text-white/80">Lyrics</span>
           <button
@@ -58,7 +58,7 @@ export function LyricsPanel({ lyrics, currentTime, onClose }: LyricsPanelProps) 
                   }}
                   className={`transition-all duration-300 ${
                     i === activeIdx
-                      ? 'text-purple-300 text-lg font-medium'
+                      ? 'text-amber text-lg font-medium font-display'
                       : 'text-white/40 text-sm'
                   }`}
                 >

@@ -21,7 +21,7 @@ export function MiniPlayer({
   const PlayPauseIcon = isPlaying ? Pause : Play;
 
   return (
-    <div className="w-full h-full bg-slate-900 flex flex-col items-center justify-center p-4 select-none relative overflow-hidden">
+    <div className="w-full h-full bg-deep flex flex-col items-center justify-center p-4 select-none relative overflow-hidden">
       {tintColor && (
         <div
           className="absolute inset-0 pointer-events-none"
@@ -37,13 +37,13 @@ export function MiniPlayer({
             className="w-20 h-20 rounded-lg object-cover shadow-lg"
           />
         ) : (
-          <div className="w-20 h-20 bg-gradient-to-br from-slate-700 to-slate-800 rounded-lg flex items-center justify-center border border-white/10">
+          <div className="w-20 h-20 bg-gradient-to-br from-surface to-surface-2 rounded-lg flex items-center justify-center border border-white/10">
             <Music className="h-8 w-8 text-white/40" />
           </div>
         )}
 
         <div className="text-center w-full max-w-[340px]">
-          <p className="text-sm font-medium text-white truncate">{song.title}</p>
+          <p className="text-sm font-medium font-display text-white truncate">{song.title}</p>
           <p className="text-xs text-white/60 truncate">{song.artist}</p>
         </div>
 
@@ -57,7 +57,7 @@ export function MiniPlayer({
           </button>
           <button
             onClick={onPlayPause}
-            className="p-2 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full text-white shadow-lg hover:from-purple-600 hover:to-pink-600 transition-all"
+            className="p-2 bg-gradient-to-r from-amber to-coral rounded-full text-deep shadow-lg hover:brightness-110 transition-all"
             aria-label={isPlaying ? 'Pause' : 'Play'}
           >
             <PlayPauseIcon className="h-5 w-5" />

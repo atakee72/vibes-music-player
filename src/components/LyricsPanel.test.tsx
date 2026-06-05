@@ -41,7 +41,7 @@ describe('LyricsPanel', () => {
       { time: 10, text: 'Future' },
     ];
     renderPanel({ lyrics, currentTime: 7 });
-    expect(screen.getByText('Active')).toHaveClass('text-purple-300');
+    expect(screen.getByText('Active')).toHaveClass('text-amber');
     expect(screen.getByText('Inactive')).toHaveClass('text-white/40');
   });
 

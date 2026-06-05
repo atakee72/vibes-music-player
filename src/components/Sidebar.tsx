@@ -33,9 +33,9 @@ function PlaylistRow({ playlist, active, onSelect, onDelete, onClose }: Playlist
       }}
       className={
         'group flex items-center justify-between px-3 py-3 rounded-lg cursor-pointer transition-all duration-200 mb-1 select-none ' +
-        (isOver ? 'ring-2 ring-purple-400 ' : '') +
+        (isOver ? 'ring-2 ring-amber ' : '') +
         (active
-          ? 'bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-purple-300 border border-purple-500/30'
+          ? 'bg-white/15 text-lilac border border-white/10'
           : 'text-white/70 hover:bg-white/5 hover:text-white')
       }
     >
@@ -49,10 +49,10 @@ function PlaylistRow({ playlist, active, onSelect, onDelete, onClose }: Playlist
             e.stopPropagation();
             onDelete(playlist.id);
           }}
-          className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-500/20 rounded transition-all"
+          className="opacity-0 group-hover:opacity-100 p-1 hover:bg-danger/20 rounded transition-all"
           aria-label={`Delete ${playlist.name}`}
         >
-          <Trash2 className="h-3 w-3 text-red-400" />
+          <Trash2 className="h-3 w-3 text-danger" />
         </button>
       )}
     </div>
@@ -70,17 +70,17 @@ export function Sidebar({
 }: SidebarProps) {
   return (
     <div
-      className={`${isOpen ? 'flex' : 'hidden'} fixed lg:relative inset-y-0 left-0 z-50 w-64 lg:w-64 bg-slate-800/95 backdrop-blur-xl border-r border-white/10 flex-col transform transition-transform duration-300 ease-in-out ${
+      className={`${isOpen ? 'flex' : 'hidden'} fixed lg:relative inset-y-0 left-0 z-50 w-64 lg:w-64 bg-surface/95 backdrop-blur-xl border-r border-white/10 flex-col transform transition-transform duration-300 ease-in-out ${
         isOpen ? 'translate-x-0' : '-translate-x-full'
       }`}
     >
       <div className="p-4 border-b border-white/10">
         <div className="flex items-center justify-between mb-12">
           <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
-              <Music className="h-5 w-5 text-white" />
+            <div className="w-8 h-8 bg-gradient-to-r from-amber to-coral rounded-lg flex items-center justify-center">
+              <Music className="h-5 w-5 text-deep" />
             </div>
-            <h1 className="text-lg font-semibold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+            <h1 className="text-lg font-semibold font-display bg-gradient-to-r from-amber to-coral bg-clip-text text-transparent">
               Vibes
             </h1>
           </div>
@@ -94,9 +94,9 @@ export function Sidebar({
         </div>
         <button
           onClick={onCreate}
-          className="w-full flex items-center space-x-2 px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-purple-400/40 rounded-lg transition-all duration-200 text-sm font-medium text-white/80"
+          className="w-full flex items-center space-x-2 px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-amber/40 rounded-lg transition-all duration-200 text-sm font-medium text-white/80"
         >
-          <Plus className="h-4 w-4 text-purple-400" />
+          <Plus className="h-4 w-4 text-amber" />
           <span>New Playlist</span>
         </button>
       </div>
