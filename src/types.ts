@@ -11,6 +11,7 @@ export interface Song {
   album: string;
   duration: number;
   genre?: string;
+  bpm?: number;
   year?: number;
   bitrate?: number;
   coverArt?: string;

@@ -27,6 +27,7 @@ import { useAudioEngine } from './hooks/useAudioEngine';
 import { Sidebar } from './components/Sidebar';
 import { SongList } from './components/SongList';
 import { PlayerBar } from './components/PlayerBar';
+import { NowPlayingHero } from './components/NowPlayingHero';
 import * as storage from './lib/storage';
 import { ingestDirectoryHandle } from './lib/ingest';
 import { filterSongs } from './lib/filter';
@@ -1075,6 +1076,17 @@ export default function App() {
                 className="w-full bg-white/5 text-sm text-white placeholder-white/40 rounded-lg border border-white/10 focus:border-amber focus:outline-none px-3 py-2 transition-colors"
               />
             </div>
+
+            {currentSong && (
+              <NowPlayingHero
+                song={currentSong}
+                isPlaying={isPlaying}
+                currentTime={currentTime}
+                duration={duration}
+                onSeek={seek}
+                onGenreClick={setSearchQuery}
+              />
+            )}
 
             <div className="flex flex-1 min-h-0">
               <SongList
