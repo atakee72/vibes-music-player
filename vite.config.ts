@@ -15,9 +15,9 @@ export default defineConfig({
         name: 'Vibes',
         short_name: 'Vibes',
         description:
-          'A browser music player with an Apple-Music-style UI, real-time audio visualization, and metadata extraction from local files.',
-        theme_color: '#8b5cf6',
-        background_color: '#0f172a',
+          'A browser music player with a warm analog-dusk UI, real-time audio visualization, and metadata extraction from local files.',
+        theme_color: '#150A24',
+        background_color: '#150A24',
         display: 'standalone',
         start_url: '/',
         scope: '/',
