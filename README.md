@@ -45,7 +45,13 @@ pnpm test:run  # Vitest single pass
   `lg`
 - **Keyboard shortcuts**: `Space` play/pause, `←`/`→` prev/next, `/` focus
   search, `Esc` close modal / clear search / blur
-- **Type-to-filter** the current playlist by title, artist, or album
+- **Type-to-filter** the current playlist by title, artist, album, or genre
+- **Now-playing hero + VibeOrb** — the playing track gets a glowing album-art
+  orb that, with the background, tints to the song's dominant colour
+- **Shuffle** playback (gapless-safe) and **view-only sort** (recent / title /
+  artist / duration)
+- **Genre / BPM chips** on the now-playing hero (when the tags exist); click a
+  genre to filter
 - **OS media integration** via the Media Session API — lock-screen
   artwork, Bluetooth headphone keys, macOS Now Playing widget, Windows
   SMTC, Linux MPRIS

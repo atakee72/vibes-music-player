@@ -172,8 +172,45 @@
 - The tint is a `fixed inset-0 pointer-events-none` overlay in `App.tsx` with
   `transition-colors duration-[1500ms]` and `opacity: 0.15`. A CSS `mask-image`
   fades it from full at the bottom (PlayerBar area) to invisible at 70% height.
-- The base gradient (`from-slate-900 via-purple-900 to-slate-900`) stays on the
-  root div — the overlay adds to it when a song with cover art is playing.
+- The backdrop is the `.aurora-bg` layer (`index.css`) behind a transparent
+  root; this overlay adds to it when a song with cover art is playing.
+- **`--vibe` colour routing (AFTERGLOW Phase B)**: `tintColor` is also published
+  as a CSS variable on the App root (`style={{ '--vibe': tintColor ?? '#FF9E5E' }}`)
+  so the VibeOrb glow + the now-playing hero's progress fill tint to the track
+  via `color-mix(in srgb, var(--vibe) …)`. The **bottom `PlayerBar` stays static
+  amber** on purpose — only the hero/orb follow the per-track colour, so the
+  chrome doesn't flicker each song. The PiP `MiniPlayer` sets its own `--vibe`
+  locally (separate document, so the root var doesn't reach it).
+
+## Now-playing hero + VibeOrb (AFTERGLOW Phase B)
+
+- `VibeOrb` (`src/components/VibeOrb.tsx`) is the signature artwork: a glowing
+  disc (cover art, or a generative gradient when art is missing) inside a conic
+  mood-ring. Looping motion is `motion-safe:animate-{spin-slow,breathe}` gated on
+  `isPlaying` — still when paused or under `prefers-reduced-motion`. Reused in
+  the hero and the PiP `MiniPlayer`. Its `<img>` has a non-empty `alt` so it
+  stays in the a11y tree (MiniPlayer tests rely on `getByRole('img')`).
+- `NowPlayingHero` (`src/components/NowPlayingHero.tsx`) is **display-only** and
+  **desktop-only** (`hidden lg:flex`, `shrink-0`), rendered above the song list
+  when `currentSong`. Orb + `NOW PLAYING` eyebrow + serif title + `artist · album`
+  + genre/BPM chips + a scrubbable tinted progress bar. **No transport buttons** —
+  the persistent bottom `PlayerBar` owns transport (the hero scrolls off). Two
+  progress bars (hero + bar) is intentional; only transport must not be doubled.
+  Mobile keeps the list + bottom bar; the full-screen mobile now-playing view
+  (frame D) is a deferred follow-up.
+- **Chips** show `song.genre` / `${bpm} BPM` only when present (`bpm` read from
+  `meta.common.bpm` in `useMetadataExtractor`, persists free via the `Omit`+spread
+  in `storage.ts`); the chip row is omitted when both are absent. A genre chip
+  click calls `setSearchQuery(genre)` — `filterSongs` matches genre too.
+- **Shuffle** lives in `App.tsx` (`shuffle` state) + a `PlayerBar` toggle.
+  `nextInPlaylist(current, songs, repeatMode, shuffle)` picks a random *other*
+  song (simple, with replacement). **`nextSong` is memoized** and `playNext`
+  consumes that exact value — required so the gapless preload and the advance
+  agree under shuffle (recomputing would re-roll the random pick and desync).
+- **Sort** is **view-only**: `sortSongs` (`src/lib/sort.ts`) orders the displayed
+  list (`visibleSongs`) via a header `<select>`; playback still walks
+  `activePlaylist.songs`. Drag-reorder is disabled while a sort is active (the
+  `isFilterActive` prop ORs in `sortBy !== 'manual'`).
 
 ## Document Picture-in-Picture
 

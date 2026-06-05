@@ -499,7 +499,7 @@ Last phase before the player feels "done." Two additions, both keeping the
 
 ## AFTERGLOW redesign — Phase A: Skin (shipped)
 
-Status: ✅ branch `afterglow-a-skin` (Phases B/C planned).
+Status: ✅ merged to `main` (Phase C planned).
 
 A warm "analog-dusk" reskin replacing the cold slate + purple/pink Apple-Music
 look with a plum-night → amber/coral aurora, the Fraunces serif, and frosted
@@ -529,8 +529,41 @@ frames). **Phase A is presentational only — zero behaviour change.**
 - The four tests asserting old `purple-*` classes were updated as style
   snapshots; all behaviour tests stay green (163, unchanged).
 
-Phases B (VibeOrb + `--vibe` colour routing + now-playing hero + Shuffle/Sort)
-and C (motion) are planned separately.
+Phase C (motion) is planned separately.
+
+---
+
+## AFTERGLOW redesign — Phase B: Orb + colour routing (shipped)
+
+Status: ✅ branch `afterglow-b-orb`.
+
+Where the identity lands: the signature **VibeOrb** + a desktop **now-playing
+hero**, plus the two cheap real features the user approved. Still no audio-graph
+changes — it reuses the existing dominant-colour extraction.
+
+- **`--vibe` colour routing** — `tintColor` published as a CSS variable on the
+  App root; the orb glow + hero progress fill `color-mix` against it. The bottom
+  `PlayerBar` stays static amber on purpose (no per-song flicker).
+- **`VibeOrb`** — album art (or generative fallback) as a glowing disc in a conic
+  mood-ring; `motion-safe` breathe/spin gated on `isPlaying`. Reused in the PiP
+  `MiniPlayer`.
+- **`NowPlayingHero`** — desktop-only (`lg+`), **display-only** banner above the
+  list (transport stays in the bottom bar, which the hero scrolls past). Orb +
+  serif title + genre/BPM chips + scrubbable tinted progress.
+- **Shuffle** — `nextInPlaylist(…, shuffle)` random pick; `nextSong` memoized so
+  the gapless preload and `playNext` agree (the one correctness-sensitive bit).
+- **Sort** (view-only) + **genre/BPM chips**; genre chips click-to-filter via an
+  extended `filterSongs`; `bpm` read from `meta.common.bpm` (persists free).
+
+**Notable decisions**:
+- Hero is **display-only** — no duplicated transport, no Heart (Favourites +
+  Queue bundle into a later phase). Mobile full-screen now-playing view (frame D)
+  deferred; no dead "expand" affordance shipped.
+- New tests for VibeOrb / NowPlayingHero / sort + queue/filter additions — **187
+  green** (was 163).
+
+Phase C (motion polish — art cross-dissolve, lyrics scale, play-press glow, the
+remaining reduced-motion work) is planned separately.
 
 ---
 
@@ -563,5 +596,6 @@ and C (motion) are planned separately.
 | 5.7 | `a5ac441` — `feat: surface quota exceeded errors with a graceful notification` (final of 5 commits) |
 | 6 | `a81684b` — `feat: share button and shared-track arrival card` (headline feature; docs commit follows) |
 | AFTERGLOW A | `213b5e4` — `feat: recolor UI to amber/plum; serif titles, mono timecodes` (skin reskin; 3 feat + docs commits) |
+| AFTERGLOW B | `feat: now-playing hero (desktop, display-only) with vibe-tinted orb` (orb + hero + shuffle/sort/chips; 4 feat + docs commits) |
 
-Total: 163 tests, all green; `pnpm build` clean; production live.
+Total: 187 tests, all green; `pnpm build` clean; production live.
