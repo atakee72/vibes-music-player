@@ -1,14 +1,15 @@
 # Vibes
 
-A browser music player with an Apple-Music-style UI, real-time audio
-visualization, and metadata extraction from local audio files. Drag and drop
-MP3 / WAV / FLAC files and play them right in the browser — nothing leaves
-your machine.
+A browser music player with a warm **analog-dusk** UI (the "AFTERGLOW" theme),
+real-time audio visualization, and metadata extraction from local audio files.
+Drag and drop MP3 / WAV / FLAC files and play them right in the browser —
+nothing leaves your machine.
 
 ## Stack
 
 - Vite + React 18 + TypeScript
-- Tailwind CSS (utility-only — no custom theme)
+- Tailwind CSS with the AFTERGLOW token theme (`tailwind.config.js`); fonts
+  self-hosted via `@fontsource-variable/*` (Fraunces / Inter / Geist Mono)
 - [`lucide-react`](https://lucide.dev) icons
 - [`music-metadata`](https://github.com/Borewit/music-metadata) for ID3 /
   Vorbis / FLAC tag parsing and cover-art extraction

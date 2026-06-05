@@ -497,6 +497,43 @@ Last phase before the player feels "done." Two additions, both keeping the
 
 ---
 
+## AFTERGLOW redesign — Phase A: Skin (shipped)
+
+Status: ✅ branch `afterglow-a-skin` (Phases B/C planned).
+
+A warm "analog-dusk" reskin replacing the cold slate + purple/pink Apple-Music
+look with a plum-night → amber/coral aurora, the Fraunces serif, and frosted
+surfaces. Design handoff lives in `pencil-design/` (`AFTERGLOW.md` spec + `.pen`
+frames). **Phase A is presentational only — zero behaviour change.**
+
+- **Token theme** in `tailwind.config.js` (was an empty `extend`): the colour
+  set, Fraunces/Inter/Geist-Mono families, radii, and `breathe`/`spin-slow`
+  keyframes (the last unused until Phase C).
+- **Self-hosted fonts** via `@fontsource-variable/*` (imported in `main.tsx`),
+  so they precache in the SW and survive offline — no Google `<link>`.
+- **Aurora background** (`.aurora-bg` in `index.css`, fixed `z-[-1]`) behind a
+  now-transparent App root; the per-track tint overlay still layers on top.
+- **Semantic recolor** of `App.tsx` + 8 components: primary `from-amber
+  to-coral` with `text-deep` glyphs (white-on-amber fails AA), visualizer
+  `from-coral to-gold`, active states `text-amber`, surfaces → `surface`,
+  destructive → a distinct `danger` red (not coral — kept separate from the
+  primary accent), serif titles, mono timecodes.
+- **PWA rebrand**: icons/favicon regenerated amber→coral, manifest
+  `theme_color` → `#150A24`, stale "Apple-Style" HTML branding → Vibes.
+
+**Notable decisions**:
+- This is a **one-time reskin, not a theming system** — consistent with the
+  "pick a good default, stick with it" rule below.
+- `text-white` deliberately **not** swept to `cream` (white-on-plum is safe;
+  the `body` default is already cream) — keeps Phase A tight.
+- The four tests asserting old `purple-*` classes were updated as style
+  snapshots; all behaviour tests stay green (163, unchanged).
+
+Phases B (VibeOrb + `--vibe` colour routing + now-playing hero + Shuffle/Sort)
+and C (motion) are planned separately.
+
+---
+
 ## Out of scope (forever)
 
 - **Cloud sync / accounts** — would break the "nothing leaves your device"
@@ -525,5 +562,6 @@ Last phase before the player feels "done." Two additions, both keeping the
 | 5.5 | `1fafece` — `feat: refresh library from disk and export playlist as M3U` (final of 6 commits) |
 | 5.7 | `a5ac441` — `feat: surface quota exceeded errors with a graceful notification` (final of 5 commits) |
 | 6 | `a81684b` — `feat: share button and shared-track arrival card` (headline feature; docs commit follows) |
+| AFTERGLOW A | `213b5e4` — `feat: recolor UI to amber/plum; serif titles, mono timecodes` (skin reskin; 3 feat + docs commits) |
 
 Total: 163 tests, all green; `pnpm build` clean; production live.

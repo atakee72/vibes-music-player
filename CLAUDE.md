@@ -24,13 +24,32 @@
   `onPause` because its row overlay needs to distinguish "play this song"
   from "pause the current song".
 
-## Styling
+## Styling — AFTERGLOW theme
 
-- Tailwind utilities only — no custom theme, no `tailwind.config.js`
-  extensions beyond defaults.
-- Brand gradient is `from-purple-500 to-pink-500` (and `from-purple-400 to
-  pink-400` for text). Used consistently; swap those two values everywhere
-  if you ever rebrand.
+- **Design tokens live in `tailwind.config.js`** (`theme.extend`), not as raw
+  hex in components. The "AFTERGLOW" reskin (Phase A) replaced the old cold
+  slate + purple/pink Apple-Music look with a warm analog-dusk palette. Source
+  of truth for the design is `pencil-design/AFTERGLOW.md` (+ the `.pen` frames).
+- **Colour tokens**: `deep #150A24` (base bg / dark glyphs on accents),
+  `surface`/`surface-2` (frosted raised surfaces), `amber #FF9E5E` +
+  `coral #FF6B6B` (primary gradient), `gold` (visualizer top), `lilac` (tags /
+  secondary accent), `cream` (titles), `muted`/`faint` (dim text),
+  `danger #E5484D` (destructive — deliberately distinct from coral so "delete"
+  never shares a hue with "play").
+- **The primary accent gradient is `from-amber to-coral`**; hover is
+  `hover:brightness-110` (the tokens are single-value, no `-600` shade). **Glyphs
+  on accent fills are `text-deep`, never white** — white-on-amber fails AA.
+  Visualizer bars are the one exception: `from-coral to-gold`.
+- **Fonts** are self-hosted via `@fontsource-variable/*` (imported in
+  `main.tsx`, so they precache for offline). `font-display` = Fraunces (titles,
+  headings, wordmark), `font-sans` = Inter (body, the default), `font-mono` =
+  Geist Mono (timecodes / counts / durations).
+- **Background**: `body` is `#150A24`; the persistent `.aurora-bg` layer
+  (`index.css`, fixed `z-[-1]`) sits behind a **transparent** App root, and the
+  per-track dynamic tint overlay (`App.tsx`) layers on top. Don't give the root
+  an opaque bg — it would hide the aurora.
+- `text-white` is still used widely; AFTERGLOW Phase A intentionally did **not**
+  sweep it to `cream` (white-on-plum is safe; the `body` default is cream).
 - Layout breakpoint is `lg` (1024px). Below that, sidebar is overlay
   (`fixed` + transform), controls reflow vertically. Above, everything is
   inline.
