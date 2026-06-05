@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import {
   DndContext,
@@ -858,6 +858,7 @@ export default function App() {
   return (
     <div
       className="h-screen text-white flex flex-col overflow-hidden"
+      style={{ ['--vibe']: tintColor ?? '#FF9E5E' } as CSSProperties}
       onDrop={onDrop}
       onDragOver={onDragOver}
       onDragEnter={onDragOver}
