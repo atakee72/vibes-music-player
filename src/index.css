@@ -10,7 +10,21 @@ body,
 }
 
 body {
-  background: #0f172a;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
-    sans-serif;
+  background: #150a24;
+  font-family: 'Inter Variable', system-ui, sans-serif;
+  color: #fdf4e8;
+}
+
+/* AFTERGLOW persistent aurora — sits behind app content (z-[-1]), above the
+   body base. The per-track dynamic tint overlay in App.tsx layers on top. */
+.aurora-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(130% 100% at 50% 105%, #ff9e5eb3 0%, #c8553d 35%, #2a1140 75%, transparent 100%),
+    radial-gradient(90% 80% at 12% 0%, #8b5cf673 0%, #5b2e86 40%, transparent 100%),
+    radial-gradient(70% 70% at 100% 12%, #c9a8ff38 0%, transparent 100%),
+    #160a26;
 }
