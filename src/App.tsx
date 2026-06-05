@@ -12,6 +12,7 @@ import {
 import { arrayMove } from '@dnd-kit/sortable';
 import {
   ArrowDownToLine,
+  ArrowUpDown,
   Download,
   Music,
   PanelLeftOpen,
@@ -31,6 +32,7 @@ import { NowPlayingHero } from './components/NowPlayingHero';
 import * as storage from './lib/storage';
 import { ingestDirectoryHandle } from './lib/ingest';
 import { filterSongs } from './lib/filter';
+import { sortSongs, SORT_LABELS, type SortKey } from './lib/sort';
 import { nextInPlaylist } from './lib/queue';
 import type { EqPreset } from './lib/eq';
 import { useDominantColor } from './hooks/useDominantColor';
@@ -66,6 +68,7 @@ export default function App() {
   const [showUpload, setShowUpload] = useState(false);
   const [repeatMode, setRepeatMode] = useState<RepeatMode>('none');
   const [shuffle, setShuffle] = useState(false);
+  const [sortBy, setSortBy] = useState<SortKey>('manual');
   const [sidebarOpen, setSidebarOpen] = useState(
     typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches,
   );
@@ -110,6 +113,8 @@ export default function App() {
 
   const activePlaylist = playlists.find((p) => p.id === activePlaylistId);
   const filteredSongs = filterSongs(activePlaylist?.songs ?? [], searchQuery);
+  // View-only ordering for the list; playback still walks the playlist order.
+  const visibleSongs = sortSongs(filteredSongs, sortBy);
   // Memoized so the engine's gapless preload and `playNext` agree on the *same*
   // next song — critical under shuffle, where recomputing would re-roll the
   // random pick and desync the preloaded element from what actually plays.
@@ -993,6 +998,22 @@ export default function App() {
                   </h2>
                 )}
                 <div className="flex items-center space-x-2">
+                  <div className="relative flex items-center">
+                    <ArrowUpDown className="pointer-events-none absolute left-2 h-4 w-4 text-white/60" />
+                    <select
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value as SortKey)}
+                      className="appearance-none rounded-lg border border-white/10 bg-white/5 py-2 pl-8 pr-3 text-sm font-medium text-white/80 transition-all hover:bg-white/10 focus:border-amber focus:outline-none cursor-pointer"
+                      title="Sort songs"
+                      aria-label="Sort songs"
+                    >
+                      {(Object.keys(SORT_LABELS) as SortKey[]).map((k) => (
+                        <option key={k} value={k} className="bg-surface text-white">
+                          {SORT_LABELS[k]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                   <button
                     onClick={() => setSelectionMode((v) => !v)}
                     className={`px-3 py-2 rounded-lg transition-all duration-200 text-sm font-medium ${
@@ -1098,7 +1119,7 @@ export default function App() {
 
             <div className="flex flex-1 min-h-0">
               <SongList
-                songs={filteredSongs}
+                songs={visibleSongs}
                 currentSong={currentSong}
                 isPlaying={isPlaying}
                 onPlay={handlePlaySong}
@@ -1106,7 +1127,7 @@ export default function App() {
                 onDelete={handleDeleteSong}
                 onBatchDelete={handleBatchDelete}
                 onReorder={handleReorder}
-                isFilterActive={searchQuery.trim().length > 0}
+                isFilterActive={searchQuery.trim().length > 0 || sortBy !== 'manual'}
                 selectionMode={selectionMode}
                 onSelectionModeChange={setSelectionMode}
                 emptyHint={

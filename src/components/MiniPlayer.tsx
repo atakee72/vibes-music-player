@@ -1,5 +1,7 @@
-import { Music, Pause, Play, SkipBack, SkipForward } from 'lucide-react';
+import type { CSSProperties } from 'react';
+import { Pause, Play, SkipBack, SkipForward } from 'lucide-react';
 import type { Song } from '../types';
+import { VibeOrb } from './VibeOrb';
 
 interface MiniPlayerProps {
   song: Song;
@@ -21,7 +23,10 @@ export function MiniPlayer({
   const PlayPauseIcon = isPlaying ? Pause : Play;
 
   return (
-    <div className="w-full h-full bg-deep flex flex-col items-center justify-center p-4 select-none relative overflow-hidden">
+    <div
+      className="w-full h-full bg-deep flex flex-col items-center justify-center p-4 select-none relative overflow-hidden"
+      style={{ ['--vibe']: tintColor ?? '#FF9E5E' } as CSSProperties}
+    >
       {tintColor && (
         <div
           className="absolute inset-0 pointer-events-none"
@@ -29,18 +34,8 @@ export function MiniPlayer({
         />
       )}
 
-      <div className="relative flex flex-col items-center gap-2">
-        {song.coverArt ? (
-          <img
-            src={song.coverArt}
-            alt={song.album}
-            className="w-20 h-20 rounded-lg object-cover shadow-lg"
-          />
-        ) : (
-          <div className="w-20 h-20 bg-gradient-to-br from-surface to-surface-2 rounded-lg flex items-center justify-center border border-white/10">
-            <Music className="h-8 w-8 text-white/40" />
-          </div>
-        )}
+      <div className="relative flex flex-col items-center gap-4">
+        <VibeOrb coverArt={song.coverArt} isPlaying={isPlaying} className="w-40 h-40" />
 
         <div className="text-center w-full max-w-[340px]">
           <p className="text-sm font-medium font-display text-white truncate">{song.title}</p>

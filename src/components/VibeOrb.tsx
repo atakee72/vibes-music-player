@@ -39,7 +39,7 @@ export function VibeOrb({ coverArt, isPlaying, className }: VibeOrbProps) {
         }`}
       >
         {coverArt ? (
-          <img src={coverArt} alt="" className="w-full h-full object-cover" />
+          <img src={coverArt} alt="Album art" className="w-full h-full object-cover" />
         ) : (
           <div
             className="w-full h-full"

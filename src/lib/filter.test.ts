@@ -35,4 +35,14 @@ describe('filterSongs', () => {
   it('returns empty when nothing matches', () => {
     expect(filterSongs(all, 'zzz-no-such-thing')).toEqual([]);
   });
+
+  it('matches genre (so genre chips can filter)', () => {
+    const d = makeSong({ title: 'Strobe', artist: 'deadmau5', genre: 'Progressive House' });
+    expect(filterSongs([...all, d], 'progressive house')).toEqual([d]);
+  });
+
+  it('songs without a genre are simply skipped by a genre query', () => {
+    // a/b/c have no genre — a genre-only term matches nothing among them.
+    expect(filterSongs(all, 'house')).toEqual([]);
+  });
 });

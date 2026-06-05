@@ -38,6 +38,7 @@ export function useMetadataExtractor() {
         album: meta.common.album || 'Unknown Album',
         duration: meta.format.duration || 0,
         genre: meta.common.genre?.[0],
+        bpm: meta.common.bpm,
         year: meta.common.year,
         bitrate: meta.format.bitrate,
         coverArt,
