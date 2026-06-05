@@ -65,6 +65,7 @@ export default function App() {
   const [isDragging, setIsDragging] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [repeatMode, setRepeatMode] = useState<RepeatMode>('none');
+  const [shuffle, setShuffle] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(
     typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches,
   );
@@ -109,7 +110,13 @@ export default function App() {
 
   const activePlaylist = playlists.find((p) => p.id === activePlaylistId);
   const filteredSongs = filterSongs(activePlaylist?.songs ?? [], searchQuery);
-  const nextSong = nextInPlaylist(currentSong, activePlaylist?.songs ?? [], repeatMode);
+  // Memoized so the engine's gapless preload and `playNext` agree on the *same*
+  // next song — critical under shuffle, where recomputing would re-roll the
+  // random pick and desync the preloaded element from what actually plays.
+  const nextSong = useMemo(
+    () => nextInPlaylist(currentSong, activePlaylist?.songs ?? [], repeatMode, shuffle),
+    [currentSong, activePlaylist?.songs, repeatMode, shuffle],
+  );
   const tintColor = useDominantColor(currentSong?.coverArt);
   const { canInstall, promptInstall, isIOS } = useInstallPrompt();
 
@@ -488,8 +495,9 @@ export default function App() {
       if (!isPlaying) togglePlayPause();
       return;
     }
-    const next = nextInPlaylist(currentSong, activePlaylist.songs, repeatMode);
-    if (next) setCurrentSong(next);
+    // Consume the memoized `nextSong` so the song that plays is exactly the one
+    // the engine preloaded for gapless (matters under shuffle — see useMemo).
+    if (nextSong) setCurrentSong(nextSong);
   };
 
   const playPrev = () => {
@@ -1129,10 +1137,12 @@ export default function App() {
         duration={duration}
         visualizerData={visualizerData}
         repeatMode={repeatMode}
+        shuffle={shuffle}
         eqPreset={eqPreset}
         onPlayPause={togglePlayPause}
         onPrev={playPrev}
         onNext={playNext}
+        onToggleShuffle={() => setShuffle((s) => !s)}
         onSeek={seek}
         onCycleRepeat={cycleRepeat}
         onEqPresetChange={setEqPreset}

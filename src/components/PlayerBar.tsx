@@ -6,6 +6,7 @@ import {
   Play,
   Repeat,
   Repeat1,
+  Shuffle,
   SkipBack,
   SkipForward,
   Sliders,
@@ -24,12 +25,14 @@ interface PlayerBarProps {
   duration: number;
   visualizerData: number[];
   repeatMode: RepeatMode;
+  shuffle: boolean;
   eqPreset: EqPreset;
   onPlayPause: () => void;
   onPrev: () => void;
   onNext: () => void;
   onSeek: (t: number) => void;
   onCycleRepeat: () => void;
+  onToggleShuffle: () => void;
   onEqPresetChange: (preset: EqPreset) => void;
   onTogglePip?: () => void;
   supportsPip?: boolean;
@@ -50,12 +53,14 @@ export function PlayerBar({
   duration,
   visualizerData,
   repeatMode,
+  shuffle,
   eqPreset,
   onPlayPause,
   onPrev,
   onNext,
   onSeek,
   onCycleRepeat,
+  onToggleShuffle,
   onEqPresetChange,
   onTogglePip,
   supportsPip,
@@ -97,6 +102,7 @@ export function PlayerBar({
 
   const RepeatIcon = repeatMode === 'one' ? Repeat1 : Repeat;
   const repeatColor = repeatMode !== 'none' ? 'text-amber' : 'text-white/60';
+  const shuffleColor = shuffle ? 'text-amber' : 'text-white/60';
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
@@ -144,6 +150,15 @@ export function PlayerBar({
 
         <div className="flex items-center space-x-2 lg:space-x-4">
           <button
+            onClick={onToggleShuffle}
+            className={`hidden lg:block p-2 hover:bg-white/10 rounded-full transition-all duration-200 ${shuffleColor}`}
+            title={`Shuffle: ${shuffle ? 'on' : 'off'}`}
+            aria-label={`Shuffle: ${shuffle ? 'on' : 'off'}`}
+            aria-pressed={shuffle}
+          >
+            <Shuffle className="h-4 w-4" />
+          </button>
+          <button
             onClick={onCycleRepeat}
             className={`hidden lg:block p-2 hover:bg-white/10 rounded-full transition-all duration-200 ${repeatColor}`}
             title={`Repeat: ${repeatMode}`}
@@ -182,6 +197,14 @@ export function PlayerBar({
             aria-label={`Repeat: ${repeatMode}`}
           >
             <RepeatIcon className="h-4 w-4" />
+          </button>
+          <button
+            onClick={onToggleShuffle}
+            className={`lg:hidden p-2 hover:bg-white/10 rounded-full transition-all duration-200 ${shuffleColor}`}
+            aria-label={`Shuffle: ${shuffle ? 'on' : 'off'}`}
+            aria-pressed={shuffle}
+          >
+            <Shuffle className="h-4 w-4" />
           </button>
         </div>
 

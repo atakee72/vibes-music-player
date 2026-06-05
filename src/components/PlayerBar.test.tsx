@@ -8,6 +8,7 @@ function renderPlayerBar(overrides: Partial<Parameters<typeof PlayerBar>[0]> = {
   const onNext = vi.fn();
   const onSeek = vi.fn();
   const onCycleRepeat = vi.fn();
+  const onToggleShuffle = vi.fn();
   const onEqPresetChange = vi.fn();
   const onVolumeChange = vi.fn();
   const utils = render(
@@ -18,6 +19,7 @@ function renderPlayerBar(overrides: Partial<Parameters<typeof PlayerBar>[0]> = {
       duration={0}
       visualizerData={[]}
       repeatMode="none"
+      shuffle={false}
       eqPreset="Off"
       volume={1}
       onPlayPause={onPlayPause}
@@ -25,12 +27,13 @@ function renderPlayerBar(overrides: Partial<Parameters<typeof PlayerBar>[0]> = {
       onNext={onNext}
       onSeek={onSeek}
       onCycleRepeat={onCycleRepeat}
+      onToggleShuffle={onToggleShuffle}
       onEqPresetChange={onEqPresetChange}
       onVolumeChange={onVolumeChange}
       {...overrides}
     />,
   );
-  return { ...utils, onPlayPause, onPrev, onNext, onSeek, onCycleRepeat, onEqPresetChange, onVolumeChange };
+  return { ...utils, onPlayPause, onPrev, onNext, onSeek, onCycleRepeat, onToggleShuffle, onEqPresetChange, onVolumeChange };
 }
 
 describe('PlayerBar', () => {
@@ -64,6 +67,7 @@ describe('PlayerBar', () => {
         duration={100}
         visualizerData={[]}
         repeatMode="none"
+        shuffle={false}
         eqPreset="Off"
         volume={1}
         onPlayPause={onPlayPause}
@@ -71,6 +75,7 @@ describe('PlayerBar', () => {
         onNext={vi.fn()}
         onSeek={vi.fn()}
         onCycleRepeat={vi.fn()}
+        onToggleShuffle={vi.fn()}
         onEqPresetChange={vi.fn()}
         onVolumeChange={vi.fn()}
       />,
@@ -92,6 +97,7 @@ describe('PlayerBar', () => {
         duration={100}
         visualizerData={[]}
         repeatMode="one"
+        shuffle={false}
         eqPreset="Off"
         volume={1}
         onPlayPause={vi.fn()}
@@ -99,6 +105,7 @@ describe('PlayerBar', () => {
         onNext={vi.fn()}
         onSeek={vi.fn()}
         onCycleRepeat={onCycleRepeat}
+        onToggleShuffle={vi.fn()}
         onEqPresetChange={vi.fn()}
         onVolumeChange={vi.fn()}
       />,
@@ -170,6 +177,18 @@ describe('PlayerBar', () => {
     renderPlayerBar({ song: makeSong(), supportsPip: true, onTogglePip });
     fireEvent.click(screen.getByRole('button', { name: 'Picture-in-Picture' }));
     expect(onTogglePip).toHaveBeenCalledOnce();
+  });
+
+  it('fires onToggleShuffle when the shuffle button is clicked', () => {
+    const { onToggleShuffle } = renderPlayerBar({ song: makeSong() });
+    // Two responsive copies (desktop + mobile) render in happy-dom; click one.
+    fireEvent.click(screen.getAllByRole('button', { name: /Shuffle/ })[0]);
+    expect(onToggleShuffle).toHaveBeenCalledOnce();
+  });
+
+  it('shuffle button shows the amber active tint when shuffle is on', () => {
+    renderPlayerBar({ song: makeSong(), shuffle: true });
+    expect(screen.getAllByRole('button', { name: /Shuffle/ })[0]).toHaveClass('text-amber');
   });
 
   it('volume slider fires onVolumeChange when moved', () => {
