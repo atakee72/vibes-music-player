@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { parseBlob } from 'music-metadata';
-import type { LyricLine, Song } from '../types';
+import type { Song } from '../types';
+import { extractLyrics } from '../lib/lyrics';
 
 export function useMetadataExtractor() {
   const [isLoading, setIsLoading] = useState(false);
@@ -18,17 +19,7 @@ export function useMetadataExtractor() {
         coverArt = URL.createObjectURL(coverBlob);
       }
 
-      let lyrics: LyricLine[] | undefined;
-      if (meta.common.lyrics?.length) {
-        const tag = meta.common.lyrics[0];
-        if (tag.syncText?.length) {
-          lyrics = tag.syncText
-            .filter((s) => s.timestamp != null)
-            .map((s) => ({ time: s.timestamp! / 1000, text: s.text }));
-        } else if (tag.text?.trim()) {
-          lyrics = [{ time: 0, text: tag.text.trim() }];
-        }
-      }
+      const lyrics = extractLyrics(meta);
 
       return {
         id: crypto.randomUUID(),
