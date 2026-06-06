@@ -14,6 +14,8 @@ import {
   ArrowDownToLine,
   ArrowUpDown,
   Download,
+  ListChecks,
+  Mic2,
   Music,
   PanelLeftOpen,
   RefreshCw,
@@ -30,6 +32,7 @@ import { SongList } from './components/SongList';
 import { PlayerBar } from './components/PlayerBar';
 import { NowPlayingHero } from './components/NowPlayingHero';
 import { MobileNowPlaying } from './components/MobileNowPlaying';
+import { HeaderMenu, type HeaderAction } from './components/HeaderMenu';
 import * as storage from './lib/storage';
 import { ingestDirectoryHandle } from './lib/ingest';
 import { filterSongs } from './lib/filter';
@@ -880,6 +883,53 @@ export default function App() {
     { isBlocked: showUpload },
   );
 
+  // Secondary header actions — shown inline on desktop, in the `⋯` menu on mobile.
+  const headerActions: HeaderAction[] = [
+    {
+      key: 'select',
+      label: 'Select',
+      icon: ListChecks,
+      onClick: () => setSelectionMode((v) => !v),
+      active: selectionMode,
+    },
+    {
+      key: 'lyrics',
+      label: 'Lyrics',
+      icon: Mic2,
+      onClick: () => setShowLyrics((v) => !v),
+      active: showLyrics,
+    },
+    ...(currentSong
+      ? [{ key: 'share', label: 'Share', icon: Share2, onClick: handleShare }]
+      : []),
+    ...(activePlaylistId === 'library' && libraryRoots.length > 0
+      ? [{ key: 'refresh', label: 'Refresh library', icon: RefreshCw, onClick: refreshLibrary }]
+      : []),
+    ...(activePlaylist && activePlaylist.songs.length > 0
+      ? [
+          {
+            key: 'export',
+            label: 'Export playlist',
+            icon: Download,
+            onClick: () => exportPlaylist(activePlaylistId),
+          },
+        ]
+      : []),
+    ...(canInstall || isIOS
+      ? [
+          {
+            key: 'install',
+            label: 'Install Vibes',
+            icon: ArrowDownToLine,
+            onClick: canInstall
+              ? promptInstall
+              : () =>
+                  setNotification('To install: tap the Share button, then "Add to Home Screen".'),
+          },
+        ]
+      : []),
+  ];
+
   return (
     <div
       className="h-screen text-white flex flex-col overflow-hidden"
@@ -1026,6 +1076,7 @@ export default function App() {
                       ))}
                     </select>
                   </div>
+                  <div className="hidden lg:flex items-center gap-2">
                   <button
                     onClick={() => setSelectionMode((v) => !v)}
                     className={`px-3 py-2 rounded-lg transition-all duration-200 text-sm font-medium ${
@@ -1097,6 +1148,8 @@ export default function App() {
                       <ArrowDownToLine className="h-4 w-4" />
                     </button>
                   )}
+                  </div>
+                  <HeaderMenu actions={headerActions} />
                   <button
                     onClick={() => setShowUpload(true)}
                     className="bg-gradient-to-r from-amber to-coral hover:brightness-110 text-deep px-4 py-2 rounded-lg transition-all duration-200 text-sm font-medium shadow-lg"
