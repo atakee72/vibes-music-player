@@ -918,7 +918,12 @@ export default function App() {
         seek(Math.max(0, currentTime - 10));
       },
       Slash: () => searchInputRef.current?.focus(),
-      KeyL: () => setShowLyrics((v) => !v),
+      KeyL: () => {
+        setShowLyrics((v) => !v);
+        // Mirror the in-view Lyrics button: the panel is z-40, the full-screen
+        // now-playing view is z-[60], so close the view or the panel opens hidden.
+        if (mobilePlayerOpen) setMobilePlayerOpen(false);
+      },
       Escape: () => {
         if (mobilePlayerOpen) {
           setMobilePlayerOpen(false);
