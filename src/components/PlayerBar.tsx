@@ -121,9 +121,9 @@ export function PlayerBar({
           onClick={expand}
           aria-label="Open now playing"
           title="Open now playing"
-          className="absolute left-1/2 -translate-x-1/2 -top-4 z-10 flex items-center justify-center h-8 w-12 rounded-t-xl bg-surface/95 backdrop-blur-xl border border-b-0 border-white/10 text-white/70 hover:text-deep hover:bg-amber motion-safe:transition-colors motion-safe:hover:-translate-y-0.5 shadow-lg"
+          className="absolute left-1/2 -translate-x-1/2 bottom-full z-10 flex items-center justify-center h-5 w-9 lg:h-8 lg:w-12 rounded-t-xl bg-surface/95 backdrop-blur-xl border border-b-0 border-white/10 text-white/70 hover:text-deep hover:bg-amber motion-safe:transition-colors shadow-lg"
         >
-          <ChevronUp className="h-5 w-5" />
+          <ChevronUp className="h-3.5 w-3.5 lg:h-5 lg:w-5" />
         </button>
       )}
       <div className="px-4 pt-2">
