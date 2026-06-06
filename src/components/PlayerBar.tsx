@@ -176,7 +176,7 @@ export function PlayerBar({
           </button>
           <button
             onClick={onPlayPause}
-            className="p-3 lg:p-4 bg-gradient-to-r from-amber to-coral hover:brightness-110 rounded-full transition-all duration-200 shadow-lg"
+            className="p-3 lg:p-4 bg-gradient-to-r from-amber to-coral hover:brightness-110 motion-safe:active:scale-95 active:shadow-[0_0_24px_#FF9E5E99] rounded-full transition-all duration-200 shadow-lg"
             aria-label={isPlaying ? 'Pause' : 'Play'}
           >
             {isPlaying ? (

@@ -42,6 +42,8 @@ describe('LyricsPanel', () => {
     ];
     renderPanel({ lyrics, currentTime: 7 });
     expect(screen.getByText('Active')).toHaveClass('text-amber');
+    // Active line scales up as it scrolls into focus (motion-safe gated).
+    expect(screen.getByText('Active')).toHaveClass('motion-safe:scale-105');
     expect(screen.getByText('Inactive')).toHaveClass('text-white/40');
   });
 

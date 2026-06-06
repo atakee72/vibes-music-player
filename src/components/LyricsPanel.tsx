@@ -58,7 +58,7 @@ export function LyricsPanel({ lyrics, currentTime, onClose }: LyricsPanelProps) 
                   }}
                   className={`transition-all duration-300 ${
                     i === activeIdx
-                      ? 'text-amber text-lg font-medium font-display'
+                      ? 'text-amber text-lg font-medium font-display motion-safe:scale-105 origin-left'
                       : 'text-white/40 text-sm'
                   }`}
                 >

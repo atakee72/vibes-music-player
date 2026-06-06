@@ -52,7 +52,7 @@ export function MiniPlayer({
           </button>
           <button
             onClick={onPlayPause}
-            className="p-2 bg-gradient-to-r from-amber to-coral rounded-full text-deep shadow-lg hover:brightness-110 transition-all"
+            className="p-2 bg-gradient-to-r from-amber to-coral rounded-full text-deep shadow-lg hover:brightness-110 motion-safe:active:scale-95 active:shadow-[0_0_24px_#FF9E5E99] transition-all"
             aria-label={isPlaying ? 'Pause' : 'Play'}
           >
             <PlayPauseIcon className="h-5 w-5" />

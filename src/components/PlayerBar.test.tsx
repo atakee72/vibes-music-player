@@ -54,6 +54,13 @@ describe('PlayerBar', () => {
     expect(screen.queryByText('No song playing')).not.toBeInTheDocument();
   });
 
+  it('play button has press feedback (motion-safe scale on :active)', () => {
+    renderPlayerBar({ song: makeSong() });
+    expect(screen.getByRole('button', { name: 'Play' })).toHaveClass(
+      'motion-safe:active:scale-95',
+    );
+  });
+
   it('shows Play when not playing and Pause when playing', () => {
     const song = makeSong();
     const { rerender, onPlayPause } = renderPlayerBar({ song });
