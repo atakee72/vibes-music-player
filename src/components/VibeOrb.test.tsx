@@ -9,6 +9,8 @@ describe('VibeOrb', () => {
     const img = container.querySelector('img');
     expect(img).not.toBeNull();
     expect(img).toHaveAttribute('src', 'blob:cover');
+    // Cross-dissolves in on track change (motion-safe so reduced-motion skips it).
+    expect(img).toHaveClass('motion-safe:animate-fade-in');
   });
 
   it('renders the generative gradient fallback when there is no cover art', () => {

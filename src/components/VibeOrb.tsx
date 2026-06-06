@@ -32,21 +32,27 @@ export function VibeOrb({ coverArt, isPlaying, className }: VibeOrbProps) {
         }`}
         style={{ background: 'conic-gradient(#FFC857,#FF6B6B,#C9A8FF,#FFC857)' }}
       />
-      {/* disc — cover art, or generative fallback */}
+      {/* disc — generative gradient backdrop with the cover art layered on top.
+          Keeping the gradient always present means the art cross-dissolves over
+          a warm surface (no transparent flash through the ring) on track change. */}
       <div
         className={`absolute inset-[6px] rounded-full overflow-hidden ${
           isPlaying ? 'motion-safe:animate-breathe' : ''
         }`}
       >
-        {coverArt ? (
-          <img src={coverArt} alt="Album art" className="w-full h-full object-cover" />
-        ) : (
-          <div
-            className="w-full h-full"
-            style={{
-              background:
-                'radial-gradient(circle at 35% 30%, #FFE9C7, #FFC857 32%, #FF8C5A 66%, #C9A8FF)',
-            }}
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              'radial-gradient(circle at 35% 30%, #FFE9C7, #FFC857 32%, #FF8C5A 66%, #C9A8FF)',
+          }}
+        />
+        {coverArt && (
+          <img
+            key={coverArt}
+            src={coverArt}
+            alt="Album art"
+            className="absolute inset-0 w-full h-full object-cover motion-safe:animate-fade-in"
           />
         )}
       </div>

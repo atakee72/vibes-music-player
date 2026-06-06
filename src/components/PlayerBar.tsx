@@ -133,9 +133,10 @@ export function PlayerBar({
         <div className="flex items-center space-x-3 flex-1 min-w-0">
           {song.coverArt ? (
             <img
+              key={song.coverArt}
               src={song.coverArt}
               alt={song.album}
-              className="w-12 h-12 lg:w-14 lg:h-14 rounded-lg object-cover shadow-lg"
+              className="w-12 h-12 lg:w-14 lg:h-14 rounded-lg object-cover shadow-lg motion-safe:animate-fade-in"
             />
           ) : (
             <div className="w-12 h-12 lg:w-14 lg:h-14 bg-gradient-to-br from-surface to-surface-2 rounded-lg flex items-center justify-center border border-white/10">

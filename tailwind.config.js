@@ -29,10 +29,12 @@ export default {
           '50%': { transform: 'scale(1.04)' },
         },
         spinSlow: { to: { transform: 'rotate(360deg)' } },
+        fadeIn: { from: { opacity: '0' }, to: { opacity: '1' } },
       },
       animation: {
         breathe: 'breathe 4s ease-in-out infinite',
         'spin-slow': 'spinSlow 24s linear infinite',
+        'fade-in': 'fadeIn 400ms ease-out',
       },
     },
   },
