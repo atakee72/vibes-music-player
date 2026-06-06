@@ -606,6 +606,11 @@ buttons + player-bar controls clipped off-screen; no now-playing surface). Fixes
 Desktop unchanged. **196 tests** (was 188). No new product features — purely
 layout + a presentational view reusing existing engine state.
 
+**Polish round 2** (branch `responsive-polish`, **202 tests**): animated sidebar
+slide (dropped the `display:none` snap), compact desktop hero (frees the song
+list), a mobile header `⋯` overflow menu (`HeaderMenu`), and `ScrollingText`
+marquee for long titles + a clearer (mic) lyrics icon.
+
 ---
 
 ## Out of scope (forever)
@@ -640,5 +645,6 @@ layout + a presentational view reusing existing engine state.
 | AFTERGLOW B | `feat: now-playing hero (desktop, display-only) with vibe-tinted orb` (orb + hero + shuffle/sort/chips; 4 feat + docs commits) |
 | AFTERGLOW C | `feat: cross-dissolve cover art on track change` (motion polish; 2 feat + docs commits) |
 | Mobile | `feat: mobile now-playing view + slim mobile player bar` (header wrap + mini bar + frame-D view + visualizer ring; 3 + docs commits) |
+| Polish 2 | `fix: animate sidebar open/close` + compact hero + header `⋯` menu + scrolling titles (4 + docs commits) |
 
-Total: 196 tests, all green; `pnpm build` clean; production live.
+Total: 202 tests, all green; `pnpm build` clean; production live.

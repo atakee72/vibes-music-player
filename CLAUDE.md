@@ -252,6 +252,18 @@
   `visualizerData` bins; `data[i] ?? 0` so it always draws (data is `[]` until
   audio flows). Same per-frame React pattern as the desktop bars, only mounted
   while the view is open.
+- **Header overflow menu**: the header keeps Sort + Add Music always visible; the
+  secondary actions (Select/Lyrics/Share/Refresh/Export/Install) render inline on
+  desktop (`hidden lg:flex`) but collapse into a `⋯` `HeaderMenu`
+  (`src/components/HeaderMenu.tsx`, `lg:hidden`) on mobile. The actions are
+  defined once in `App.tsx` as a `HeaderAction[]` array consumed by the menu.
+- **`ScrollingText`** (`src/components/ScrollingText.tsx`) marquees long titles
+  only when they overflow — used for the title in `MobileNowPlaying`,
+  `PlayerBar` (mini-bar) and `NowPlayingHero`. **Gotcha**: measure the *block*
+  inner div's `scrollWidth`, not an inline `<span>` (inline elements — and
+  `truncate` — report `scrollWidth === clientWidth`, hiding real overflow).
+- The desktop `NowPlayingHero` is intentionally **compact** (`h-[180px]`, ~136px
+  orb) so the song list keeps usable height beneath it.
 
 ## Document Picture-in-Picture
 
@@ -363,9 +375,14 @@
 - The Sidebar is collapsible on both mobile AND desktop. State lives in
   App.tsx as `sidebarOpen: boolean`, initialized via `matchMedia(
   '(min-width: 1024px)').matches` (open on desktop, closed on mobile).
-- When collapsed, the Sidebar's outer container uses `hidden` instead
-  of just `translate-x-full` so it doesn't occupy layout space on
-  desktop. Content area expands to fill the width.
+- **The collapse is animated** (not a `display:none` snap — `hidden` can't
+  transition). The outer container keeps no `hidden`; instead it **animates
+  width** on desktop (`lg:w-64`↔`lg:w-0` + `lg:transition-[width]`
+  `overflow-hidden`, with `lg:translate-x-0` cancelling the mobile transform) and
+  **translates** on mobile (`fixed` + `-translate-x-full`, no layout impact). An
+  inner `w-64 shrink-0` wrapper keeps the content from squishing as the outer
+  collapses to 0. The mobile backdrop fades (opacity) in step. Closed sidebar
+  still takes 0 desktop width; the App content `flex-1` reflows.
 - Close icon: `PanelLeftClose` (`<-|`) inside Sidebar header. Open
   icon: `PanelLeftOpen` (`|->`) in the App header, rendered only when
   `!sidebarOpen`. When collapsed, the Vibes logo is mirrored into the
