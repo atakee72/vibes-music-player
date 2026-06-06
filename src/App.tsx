@@ -29,6 +29,7 @@ import { Sidebar } from './components/Sidebar';
 import { SongList } from './components/SongList';
 import { PlayerBar } from './components/PlayerBar';
 import { NowPlayingHero } from './components/NowPlayingHero';
+import { MobileNowPlaying } from './components/MobileNowPlaying';
 import * as storage from './lib/storage';
 import { ingestDirectoryHandle } from './lib/ingest';
 import { filterSongs } from './lib/filter';
@@ -69,6 +70,7 @@ export default function App() {
   const [repeatMode, setRepeatMode] = useState<RepeatMode>('none');
   const [shuffle, setShuffle] = useState(false);
   const [sortBy, setSortBy] = useState<SortKey>('manual');
+  const [mobilePlayerOpen, setMobilePlayerOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(
     typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches,
   );
@@ -789,6 +791,11 @@ export default function App() {
     }
   }, [pipWindow, currentSong]);
 
+  // Close the mobile now-playing view if the track goes away (mirrors PiP).
+  useEffect(() => {
+    if (mobilePlayerOpen && !currentSong) setMobilePlayerOpen(false);
+  }, [mobilePlayerOpen, currentSong]);
+
   const onDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -849,6 +856,10 @@ export default function App() {
       Slash: () => searchInputRef.current?.focus(),
       KeyL: () => setShowLyrics((v) => !v),
       Escape: () => {
+        if (mobilePlayerOpen) {
+          setMobilePlayerOpen(false);
+          return;
+        }
         if (selectionMode) {
           setSelectionMode(false);
           return;
@@ -1172,9 +1183,35 @@ export default function App() {
         onTogglePip={togglePip}
         supportsPip={'documentPictureInPicture' in window}
         isPipOpen={pipWindow !== null}
+        onExpand={() => setMobilePlayerOpen(true)}
       />
 
       </DndContext>
+
+      <MobileNowPlaying
+        open={mobilePlayerOpen}
+        onClose={() => setMobilePlayerOpen(false)}
+        song={currentSong}
+        playlistName={activePlaylist?.name}
+        isPlaying={isPlaying}
+        currentTime={currentTime}
+        duration={duration}
+        visualizerData={visualizerData}
+        repeatMode={repeatMode}
+        shuffle={shuffle}
+        eqPreset={eqPreset}
+        volume={volume}
+        onPlayPause={togglePlayPause}
+        onPrev={playPrev}
+        onNext={playNext}
+        onSeek={seek}
+        onCycleRepeat={cycleRepeat}
+        onToggleShuffle={() => setShuffle((s) => !s)}
+        onEqPresetChange={setEqPreset}
+        onVolumeChange={setVolume}
+        onToggleLyrics={() => setShowLyrics((v) => !v)}
+        onShare={handleShare}
+      />
 
       {pipWindow &&
         currentSong &&

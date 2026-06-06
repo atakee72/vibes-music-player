@@ -39,6 +39,8 @@ interface PlayerBarProps {
   isPipOpen?: boolean;
   volume: number;
   onVolumeChange: (v: number) => void;
+  /** Mobile only: open the full-screen now-playing view (tap the cover/title). */
+  onExpand?: () => void;
 }
 
 const formatTime = (s: number) => {
@@ -67,6 +69,7 @@ export function PlayerBar({
   isPipOpen,
   volume,
   onVolumeChange,
+  onExpand,
 }: PlayerBarProps) {
   const [eqOpen, setEqOpen] = useState(false);
   const eqWrapRef = useRef<HTMLDivElement>(null);
@@ -103,6 +106,10 @@ export function PlayerBar({
   const RepeatIcon = repeatMode === 'one' ? Repeat1 : Repeat;
   const repeatColor = repeatMode !== 'none' ? 'text-amber' : 'text-white/60';
   const shuffleColor = shuffle ? 'text-amber' : 'text-white/60';
+  // Tapping the cover/title opens the full-screen view — mobile only.
+  const expand = () => {
+    if (!window.matchMedia('(min-width: 1024px)').matches) onExpand?.();
+  };
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
@@ -130,7 +137,19 @@ export function PlayerBar({
       </div>
 
       <div className="flex items-center px-3 lg:px-4 flex-1">
-        <div className="flex items-center space-x-3 flex-1 min-w-0">
+        <div
+          role="button"
+          tabIndex={0}
+          aria-label="Open now playing"
+          onClick={expand}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              expand();
+            }
+          }}
+          className="flex items-center space-x-3 flex-1 min-w-0 text-left lg:cursor-default lg:pointer-events-auto cursor-pointer"
+        >
           {song.coverArt ? (
             <img
               key={song.coverArt}
@@ -209,7 +228,7 @@ export function PlayerBar({
           </button>
         </div>
 
-        <div className="flex items-center space-x-2 lg:space-x-4 flex-1 justify-end">
+        <div className="hidden lg:flex items-center space-x-2 lg:space-x-4 flex-1 justify-end">
           <div className="flex items-end space-x-1 h-6 lg:h-8">
             {visualizerData.slice(0, 15).map((value, i) => (
               <div
