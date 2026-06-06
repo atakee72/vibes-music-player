@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import type { Song } from '../types';
 import { VibeOrb } from './VibeOrb';
+import { ScrollingText } from './ScrollingText';
 
 interface NowPlayingHeroProps {
   song: Song;
@@ -48,9 +49,10 @@ export function NowPlayingHero({
           </span>
         </div>
 
-        <h2 className="mt-1 truncate font-display text-2xl lg:text-3xl font-semibold text-cream">
-          {song.title}
-        </h2>
+        <ScrollingText
+          text={song.title}
+          className="mt-1 font-display text-2xl lg:text-3xl font-semibold text-cream"
+        />
         <p className="mt-0.5 truncate text-sm text-muted">
           {song.artist}
           {song.album && song.album !== 'Unknown Album' && ` · ${song.album}`}

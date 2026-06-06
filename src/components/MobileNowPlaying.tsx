@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
 import {
-  Captions,
   ChevronDown,
+  Mic2,
   Pause,
   Play,
   Repeat,
@@ -17,6 +17,7 @@ import type { RepeatMode, Song } from '../types';
 import { EQ_PRESET_NAMES, type EqPreset } from '../lib/eq';
 import { VibeOrb } from './VibeOrb';
 import { OrbVisualizerRing } from './OrbVisualizerRing';
+import { ScrollingText } from './ScrollingText';
 
 interface MobileNowPlayingProps {
   open: boolean;
@@ -107,7 +108,10 @@ export function MobileNowPlaying({
           <VibeOrb coverArt={song.coverArt} isPlaying={isPlaying} className="h-56 w-56" />
         </div>
         <div className="w-full text-center">
-          <h2 className="truncate font-display text-2xl font-semibold text-cream">{song.title}</h2>
+          <ScrollingText
+            text={song.title}
+            className="font-display text-2xl font-semibold text-cream"
+          />
           <p className="truncate text-muted">
             {song.artist}
             {song.album && song.album !== 'Unknown Album' && ` · ${song.album}`}
@@ -182,7 +186,7 @@ export function MobileNowPlaying({
             className="p-2 rounded-full bg-white/5 text-white/70 hover:bg-white/10 transition-colors"
             aria-label="Toggle lyrics"
           >
-            <Captions className="h-5 w-5" />
+            <Mic2 className="h-5 w-5" />
           </button>
 
           <div className="relative flex items-center">

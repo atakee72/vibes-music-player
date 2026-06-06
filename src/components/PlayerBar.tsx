@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import type { RepeatMode, Song } from '../types';
 import { EQ_PRESET_NAMES, type EqPreset } from '../lib/eq';
+import { ScrollingText } from './ScrollingText';
 
 interface PlayerBarProps {
   song: Song | null;
@@ -163,7 +164,10 @@ export function PlayerBar({
             </div>
           )}
           <div className="min-w-0 flex-1">
-            <p className="text-sm lg:text-base font-medium font-display text-white truncate">{song.title}</p>
+            <ScrollingText
+              text={song.title}
+              className="text-sm lg:text-base font-medium font-display text-white"
+            />
             <p className="text-xs lg:text-sm text-white/60 truncate">{song.artist}</p>
           </div>
         </div>

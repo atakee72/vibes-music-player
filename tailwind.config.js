@@ -30,11 +30,13 @@ export default {
         },
         spinSlow: { to: { transform: 'rotate(360deg)' } },
         fadeIn: { from: { opacity: '0' }, to: { opacity: '1' } },
+        marquee: { from: { transform: 'translateX(0)' }, to: { transform: 'translateX(-50%)' } },
       },
       animation: {
         breathe: 'breathe 4s ease-in-out infinite',
         'spin-slow': 'spinSlow 24s linear infinite',
         'fade-in': 'fadeIn 400ms ease-out',
+        marquee: 'marquee 12s linear infinite',
       },
     },
   },
