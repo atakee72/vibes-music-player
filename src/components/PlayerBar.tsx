@@ -113,7 +113,19 @@ export function PlayerBar({
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
-    <div className="h-20 lg:h-24 bg-surface/95 backdrop-blur-xl border-t border-white/10 flex flex-col">
+    <div className="relative h-20 lg:h-24 bg-surface/95 backdrop-blur-xl border-t border-white/10 flex flex-col">
+      {/* Floating pull-up handle: opens the full-screen now-playing view.
+          Visible on both mobile and desktop; amber on hover. */}
+      {onExpand && (
+        <button
+          onClick={expand}
+          aria-label="Open now playing"
+          title="Open now playing"
+          className="absolute left-1/2 -translate-x-1/2 -top-4 z-10 flex items-center justify-center h-8 w-12 rounded-t-xl bg-surface/95 backdrop-blur-xl border border-b-0 border-white/10 text-white/70 hover:text-deep hover:bg-amber motion-safe:transition-colors motion-safe:hover:-translate-y-0.5 shadow-lg"
+        >
+          <ChevronUp className="h-5 w-5" />
+        </button>
+      )}
       <div className="px-4 pt-2">
         <div className="flex items-center space-x-3 text-xs text-white/60">
           <span className="w-10 text-right font-mono">{formatTime(currentTime)}</span>
@@ -148,28 +160,20 @@ export function PlayerBar({
               expand();
             }
           }}
-          className="group flex items-center space-x-3 flex-1 min-w-0 text-left cursor-pointer"
+          className="flex items-center space-x-3 flex-1 min-w-0 text-left cursor-pointer"
         >
-          <div className="relative w-12 h-12 lg:w-14 lg:h-14 shrink-0">
-            {song.coverArt ? (
-              <img
-                key={song.coverArt}
-                src={song.coverArt}
-                alt={song.album}
-                className="w-full h-full rounded-lg object-cover shadow-lg motion-safe:animate-fade-in"
-              />
-            ) : (
-              <div className="w-full h-full bg-gradient-to-br from-surface to-surface-2 rounded-lg flex items-center justify-center border border-white/10">
-                <Music className="h-6 w-6 lg:h-7 lg:w-7 text-white/40" />
-              </div>
-            )}
-            {/* Affordance (both mobile + desktop): the cover/title opens the
-                full-screen now-playing view. A small persistent corner badge,
-                amber on hover. */}
-            <span className="absolute bottom-0.5 right-0.5 rounded-full bg-deep/80 p-0.5 text-white shadow ring-1 ring-white/10 group-hover:bg-amber group-hover:text-deep motion-safe:transition-colors">
-              <ChevronUp className="h-3 w-3" />
-            </span>
-          </div>
+          {song.coverArt ? (
+            <img
+              key={song.coverArt}
+              src={song.coverArt}
+              alt={song.album}
+              className="w-12 h-12 lg:w-14 lg:h-14 rounded-lg object-cover shadow-lg motion-safe:animate-fade-in"
+            />
+          ) : (
+            <div className="w-12 h-12 lg:w-14 lg:h-14 bg-gradient-to-br from-surface to-surface-2 rounded-lg flex items-center justify-center border border-white/10">
+              <Music className="h-6 w-6 lg:h-7 lg:w-7 text-white/40" />
+            </div>
+          )}
           <div className="min-w-0 flex-1">
             <ScrollingText
               text={song.title}
