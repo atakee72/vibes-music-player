@@ -588,6 +588,26 @@ AFTERGLOW. **188 tests green** (was 187).
 
 ---
 
+## Mobile responsiveness (shipped)
+
+Status: ✅ branch `mobile-responsive`.
+
+The AFTERGLOW redesign was desktop-first and **broke on phone widths** (header
+buttons + player-bar controls clipped off-screen; no now-playing surface). Fixes:
+
+- **Header** actions `flex-wrap` instead of clipping "Add Music".
+- **Mobile player bar** → a slim mini bar: the right cluster (visualizer/PiP/EQ/
+  volume) is `hidden lg:flex`; cover+title becomes a tap target.
+- **`MobileNowPlaying`** — full-screen (`lg:hidden`) frame-D view opened from the
+  mini bar: the orb wrapped by a new **`OrbVisualizerRing`** (48 radial bars),
+  title, scrubbable progress, full transport, and the relocated lyrics/EQ/volume/
+  share controls. Closes via chevron / Escape / track-end.
+
+Desktop unchanged. **196 tests** (was 188). No new product features — purely
+layout + a presentational view reusing existing engine state.
+
+---
+
 ## Out of scope (forever)
 
 - **Cloud sync / accounts** — would break the "nothing leaves your device"
@@ -619,5 +639,6 @@ AFTERGLOW. **188 tests green** (was 187).
 | AFTERGLOW A | `213b5e4` — `feat: recolor UI to amber/plum; serif titles, mono timecodes` (skin reskin; 3 feat + docs commits) |
 | AFTERGLOW B | `feat: now-playing hero (desktop, display-only) with vibe-tinted orb` (orb + hero + shuffle/sort/chips; 4 feat + docs commits) |
 | AFTERGLOW C | `feat: cross-dissolve cover art on track change` (motion polish; 2 feat + docs commits) |
+| Mobile | `feat: mobile now-playing view + slim mobile player bar` (header wrap + mini bar + frame-D view + visualizer ring; 3 + docs commits) |
 
-Total: 188 tests, all green; `pnpm build` clean; production live.
+Total: 196 tests, all green; `pnpm build` clean; production live.

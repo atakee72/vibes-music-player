@@ -42,7 +42,8 @@ pnpm test:run  # Vitest single pass
 - Live frequency visualizer driven by the `<audio>` element via Web Audio
   API
 - Responsive layout — sidebar collapses on mobile, controls reflow under
-  `lg`
+  `lg`, and a full-screen mobile **now-playing view** (tap the mini player bar)
+  with the orb + a circular visualizer
 - **Keyboard shortcuts**: `Space` play/pause, `←`/`→` prev/next, `/` focus
   search, `Esc` close modal / clear search / blur
 - **Type-to-filter** the current playlist by title, artist, album, or genre

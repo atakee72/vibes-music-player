@@ -229,6 +229,30 @@
   round out §6 of `pencil-design/AFTERGLOW.md`. Verify by toggling the OS
   reduce-motion setting — animations stop, colour/visualizer/tint still update.
 
+## Mobile layout (the `lg` split)
+
+- The whole UI is desktop-first and reflows at `lg` (1024px). AFTERGLOW added
+  two desktop-only surfaces — the `NowPlayingHero` and the `PlayerBar`'s right
+  cluster — so mobile needs its own now-playing surface.
+- **Header actions** use `flex flex-wrap … gap-2` (not `space-x`) so the button
+  row wraps instead of clipping "Add Music" on narrow screens.
+- **Mobile player bar** is a slim "mini bar": the `PlayerBar` right cluster
+  (visualizer + PiP + EQ + volume) is `hidden lg:flex`, leaving cover+title
+  (left) + transport (right). The **cover+title is a `role="button"`** (not a
+  `<button>` — it wraps `<p>`s) that opens the mobile now-playing view; its
+  handler is gated with `matchMedia('(min-width: 1024px)')` so desktop taps no-op.
+- **`MobileNowPlaying`** (`src/components/MobileNowPlaying.tsx`) is the
+  full-screen (`fixed inset-0 z-[60] lg:hidden`) frame-D view — the orb wrapped
+  by `OrbVisualizerRing`, title, scrubbable progress, full transport, and the
+  controls trimmed from the bar (lyrics, EQ, volume, share). State
+  `mobilePlayerOpen` lives in `App.tsx`; closes via the chevron, the Escape chain
+  (first branch), or auto-close when `currentSong` goes null.
+- **`OrbVisualizerRing`** (`src/components/OrbVisualizerRing.tsx`) draws 48 bars
+  radially (each `rotate(i/N·360°)` + pushed to `BASE_RADIUS`), driven by
+  `visualizerData` bins; `data[i] ?? 0` so it always draws (data is `[]` until
+  audio flows). Same per-frame React pattern as the desktop bars, only mounted
+  while the view is open.
+
 ## Document Picture-in-Picture
 
 - `MiniPlayer` (`src/components/MiniPlayer.tsx`) is a presentational component
