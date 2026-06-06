@@ -562,8 +562,29 @@ changes — it reuses the existing dominant-colour extraction.
 - New tests for VibeOrb / NowPlayingHero / sort + queue/filter additions — **187
   green** (was 163).
 
-Phase C (motion polish — art cross-dissolve, lyrics scale, play-press glow, the
-remaining reduced-motion work) is planned separately.
+---
+
+## AFTERGLOW redesign — Phase C: Motion polish (shipped)
+
+Status: ✅ branch `afterglow-c-motion`. **Closes the AFTERGLOW arc.**
+
+The remaining §6 motions plus a `prefers-reduced-motion` posture. Purely
+presentational — no behaviour/audio/layout change.
+
+- **Cover-art cross-dissolve** (§6 #5) — `fadeIn` keyframe + `key`-remounted
+  `motion-safe:animate-fade-in` on the orb (over an always-present gradient
+  backdrop) and the player-bar thumbnail.
+- **Lyrics active-line scale** (§6 #7) — `motion-safe:scale-105 origin-left` on
+  the active line as it scrolls into focus.
+- **Play/pause press feedback** (§6 #8) — `motion-safe:active:scale-95` + an
+  amber `active:shadow` glow on the PlayerBar + MiniPlayer play buttons.
+- **Reduced motion** — every looping/transform motion is `motion-safe:` gated
+  (compiles to `prefers-reduced-motion: no-preference`); colour/tint transitions
+  stay. No global transition killer.
+
+Orb breathe + mood-ring spin (§6 #1/#2) already shipped in Phase B; visualizer
+(#3) + tint crossfade (#4) + hover/surface transitions (#6/#9/#10) predate
+AFTERGLOW. **188 tests green** (was 187).
 
 ---
 
@@ -597,5 +618,6 @@ remaining reduced-motion work) is planned separately.
 | 6 | `a81684b` — `feat: share button and shared-track arrival card` (headline feature; docs commit follows) |
 | AFTERGLOW A | `213b5e4` — `feat: recolor UI to amber/plum; serif titles, mono timecodes` (skin reskin; 3 feat + docs commits) |
 | AFTERGLOW B | `feat: now-playing hero (desktop, display-only) with vibe-tinted orb` (orb + hero + shuffle/sort/chips; 4 feat + docs commits) |
+| AFTERGLOW C | `feat: cross-dissolve cover art on track change` (motion polish; 2 feat + docs commits) |
 
-Total: 187 tests, all green; `pnpm build` clean; production live.
+Total: 188 tests, all green; `pnpm build` clean; production live.

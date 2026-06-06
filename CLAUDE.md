@@ -212,6 +212,23 @@
   `activePlaylist.songs`. Drag-reorder is disabled while a sort is active (the
   `isFilterActive` prop ORs in `sortBy !== 'manual'`).
 
+## Motion (AFTERGLOW Phase C)
+
+- **All looping/transform motion is `motion-safe:` gated** so it vanishes under
+  `prefers-reduced-motion: reduce` (Tailwind compiles `motion-safe:` to a
+  `@media (prefers-reduced-motion: no-preference)` wrapper). Colour transitions
+  (the 1500ms tint crossfade, etc.) are left alone — non-vestibular. There is
+  **no** global `transition-duration:0` killer; gate per-utility instead.
+- **Cover-art cross-dissolve**: the `fadeIn` keyframe (`tailwind.config.js`) +
+  `motion-safe:animate-fade-in` on the cover `<img>`, which carries
+  `key={coverArt}` so it remounts (and re-fades) on track change. In `VibeOrb`
+  the generative gradient is an always-present backdrop **under** the img, so the
+  dissolve happens over a warm surface, not a transparent flash through the ring.
+- Orb breathe/spin (Phase B), lyrics active-line `motion-safe:scale-105`, and the
+  play buttons' `motion-safe:active:scale-95` + amber `active:shadow` press glow
+  round out §6 of `pencil-design/AFTERGLOW.md`. Verify by toggling the OS
+  reduce-motion setting — animations stop, colour/visualizer/tint still update.
+
 ## Document Picture-in-Picture
 
 - `MiniPlayer` (`src/components/MiniPlayer.tsx`) is a presentational component

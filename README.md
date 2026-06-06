@@ -52,6 +52,8 @@ pnpm test:run  # Vitest single pass
   artist / duration)
 - **Genre / BPM chips** on the now-playing hero (when the tags exist); click a
   genre to filter
+- **Fluid motion** — cover-art cross-dissolves, a breathing/spinning orb, and
+  tactile press feedback, all of which respect `prefers-reduced-motion`
 - **OS media integration** via the Media Session API — lock-screen
   artwork, Bluetooth headphone keys, macOS Now Playing widget, Windows
   SMTC, Linux MPRIS
