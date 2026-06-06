@@ -2,10 +2,13 @@ import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'rea
 import { X } from 'lucide-react';
 import type { LyricLine } from '../types';
 import { activeLyricIndex } from '../lib/lrc';
+import { usePresence } from '../hooks/usePresence';
 
 interface LyricsPanelProps {
   lyrics: LyricLine[] | undefined;
   currentTime: number;
+  /** Drives the slide-in/out. Defaults to `true` (always-open) when omitted. */
+  open?: boolean;
   onClose: () => void;
   onSeek?: (time: number) => void;
   onFetch?: () => void;
@@ -16,12 +19,14 @@ interface LyricsPanelProps {
 export function LyricsPanel({
   lyrics,
   currentTime,
+  open = true,
   onClose,
   onSeek,
   onFetch,
   fetching,
   fetchError,
 }: LyricsPanelProps) {
+  const { mounted, visible } = usePresence(open);
   const activeIdx = lyrics ? activeLyricIndex(lyrics, currentTime) : -1;
   const prevIdxRef = useRef(-1);
   const lineRefs = useRef<Map<number, HTMLParagraphElement>>(new Map());
@@ -36,13 +41,21 @@ export function LyricsPanel({
     prevIdxRef.current = activeIdx;
   }, [activeIdx]);
 
+  if (!mounted) return null;
+
   return (
     <>
       <div
-        className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+        className={`fixed inset-0 bg-black/50 z-40 lg:hidden motion-safe:transition-opacity motion-safe:duration-300 ${
+          visible ? 'opacity-100' : 'opacity-0'
+        }`}
         onClick={onClose}
       />
-      <div className="fixed inset-0 z-40 lg:relative lg:z-auto lg:w-80 flex flex-col bg-surface/95 backdrop-blur-xl border-l border-white/10">
+      <div
+        className={`fixed inset-0 z-40 lg:relative lg:z-auto lg:w-80 flex flex-col bg-surface/95 backdrop-blur-xl border-l border-white/10 motion-safe:transition-transform motion-safe:duration-300 ${
+          visible ? 'translate-x-0' : 'translate-x-full'
+        }`}
+      >
         <div className="flex items-center justify-between p-4 border-b border-white/10">
           <span className="text-sm font-medium text-white/80">Lyrics</span>
           <button

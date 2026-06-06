@@ -18,6 +18,7 @@ import { EQ_PRESET_NAMES, type EqPreset } from '../lib/eq';
 import { VibeOrb } from './VibeOrb';
 import { OrbVisualizerRing } from './OrbVisualizerRing';
 import { ScrollingText } from './ScrollingText';
+import { usePresence } from '../hooks/usePresence';
 
 interface MobileNowPlayingProps {
   open: boolean;
@@ -81,13 +82,18 @@ export function MobileNowPlaying({
   onToggleLyrics,
   onShare,
 }: MobileNowPlayingProps) {
-  if (!open || !song) return null;
+  const { mounted, visible } = usePresence(open && !!song);
+  if (!mounted || !song) return null;
 
   const RepeatIcon = repeatMode === 'one' ? Repeat1 : Repeat;
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col bg-deep/95 backdrop-blur-2xl p-6">
+    <div
+      className={`fixed inset-0 z-[60] flex flex-col bg-deep/95 backdrop-blur-2xl p-6 motion-safe:transition-all motion-safe:duration-300 ${
+        visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
+      }`}
+    >
       <div className="flex items-center justify-between">
         <button
           onClick={onClose}

@@ -236,6 +236,20 @@
   play buttons' `motion-safe:active:scale-95` + amber `active:shadow` press glow
   round out §6 of `pencil-design/AFTERGLOW.md`. Verify by toggling the OS
   reduce-motion setting — animations stop, colour/visualizer/tint still update.
+- **Enter/exit transitions on overlays**: `usePresence(open, duration=300)`
+  (`src/hooks/usePresence.ts`) gives conditionally-rendered surfaces a real
+  *exit* animation (a bare `{cond && <X/>}` unmounts abruptly). It returns
+  `{ mounted, visible }`: keep the node while `mounted`, drive the from/to class
+  with `visible` (double-rAF so the browser paints the "from" state first).
+  **Honors `prefers-reduced-motion`** — instant swap, no 300ms empty hold.
+  - `MobileNowPlaying` fades + slides (`opacity`/`translate-y-4`); it no longer
+    early-returns on `!open` — it calls the hook, then `if (!mounted) return null`.
+  - `LyricsPanel` slides in from the right (`translate-x-full`→`0`) + backdrop
+    fade. It takes an **`open?` prop (default `true`)** so the many existing
+    panel tests — which render it with no `open` — still mount it; App now
+    **always renders** `<LyricsPanel open={showLyrics} …>` (not `{showLyrics &&}`)
+    so the exit can play. This is also why hitting `L` from the full-screen view
+    now cross-fades (view slides out as the panel slides in) instead of snapping.
 
 ## Mobile layout (the `lg` split)
 

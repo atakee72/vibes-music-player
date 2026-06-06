@@ -1270,17 +1270,16 @@ export default function App() {
                     : undefined
                 }
               />
-              {showLyrics && (
-                <LyricsPanel
-                  lyrics={currentSong?.lyrics}
-                  currentTime={currentTime}
-                  onClose={() => setShowLyrics(false)}
-                  onSeek={seek}
-                  onFetch={currentSong ? handleFetchLyrics : undefined}
-                  fetching={fetchingLyrics}
-                  fetchError={fetchLyricsError}
-                />
-              )}
+              <LyricsPanel
+                open={showLyrics}
+                lyrics={currentSong?.lyrics}
+                currentTime={currentTime}
+                onClose={() => setShowLyrics(false)}
+                onSeek={seek}
+                onFetch={currentSong ? handleFetchLyrics : undefined}
+                fetching={fetchingLyrics}
+                fetchError={fetchLyricsError}
+              />
             </div>
           </div>
         </div>
