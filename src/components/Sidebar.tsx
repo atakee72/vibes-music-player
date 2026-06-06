@@ -87,7 +87,7 @@ export function Sidebar({
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+            className="p-2 rounded-lg bg-white/5 text-white/70 hover:bg-white/10 transition-all"
             aria-label="Close sidebar"
           >
             <PanelLeftClose className="h-5 w-5" />

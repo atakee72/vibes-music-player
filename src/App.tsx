@@ -1028,9 +1028,9 @@ export default function App() {
           />
 
           <div className="flex-1 flex flex-col min-w-0">
-            <header className="p-4 lg:p-6 border-b border-white/10">
+            <header className="p-4 lg:px-6 lg:py-3 border-b border-white/10">
               {!sidebarOpen && (
-                <div className="flex items-center justify-center space-x-3 mb-4">
+                <div className="flex items-center justify-center space-x-3 mb-3">
                   <div className="w-12 h-12 bg-gradient-to-r from-amber to-coral rounded-xl flex items-center justify-center shadow-lg">
                     <Music className="h-7 w-7 text-deep" />
                   </div>
@@ -1039,11 +1039,11 @@ export default function App() {
                   </h1>
                 </div>
               )}
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between mb-3">
                 {!sidebarOpen && (
                   <button
                     onClick={() => setSidebarOpen(true)}
-                    className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                    className="p-2 rounded-lg bg-white/5 text-white/70 hover:bg-white/10 transition-all"
                     aria-label="Open sidebar"
                   >
                     <PanelLeftOpen className="h-5 w-5" />
@@ -1160,7 +1160,7 @@ export default function App() {
               </div>
             </header>
 
-            <div className="px-4 lg:px-6 pt-3">
+            <div className="px-4 lg:px-6 pt-2">
               <input
                 ref={searchInputRef}
                 type="text"
@@ -1263,7 +1263,11 @@ export default function App() {
         onToggleShuffle={() => setShuffle((s) => !s)}
         onEqPresetChange={setEqPreset}
         onVolumeChange={setVolume}
-        onToggleLyrics={() => setShowLyrics((v) => !v)}
+        onToggleLyrics={() => {
+          setShowLyrics((v) => !v);
+          // Close the full-screen view so the lyrics panel (lower z-index) shows.
+          setMobilePlayerOpen(false);
+        }}
         onShare={handleShare}
       />
 

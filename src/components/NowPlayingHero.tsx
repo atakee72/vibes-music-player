@@ -38,7 +38,7 @@ export function NowPlayingHero({
   const hasChips = Boolean(song.genre || song.bpm);
 
   return (
-    <div className="hidden lg:flex shrink-0 mx-4 lg:mx-6 mt-3 h-[180px] items-center gap-6 rounded-card border border-white/10 bg-white/[0.06] backdrop-blur-xl p-4">
+    <div className="hidden lg:flex shrink-0 mx-4 lg:mx-6 mt-3 mb-3 h-[180px] items-center gap-6 rounded-card border border-white/10 bg-white/[0.06] backdrop-blur-xl p-4">
       <VibeOrb coverArt={song.coverArt} isPlaying={isPlaying} className="h-[136px] w-[136px]" />
 
       <div className="flex min-w-0 flex-1 flex-col">
