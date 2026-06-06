@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  ChevronUp,
   Music,
   Pause,
   PictureInPicture2,
@@ -147,20 +148,28 @@ export function PlayerBar({
               expand();
             }
           }}
-          className="flex items-center space-x-3 flex-1 min-w-0 text-left cursor-pointer"
+          className="group flex items-center space-x-3 flex-1 min-w-0 text-left cursor-pointer"
         >
-          {song.coverArt ? (
-            <img
-              key={song.coverArt}
-              src={song.coverArt}
-              alt={song.album}
-              className="w-12 h-12 lg:w-14 lg:h-14 rounded-lg object-cover shadow-lg motion-safe:animate-fade-in"
-            />
-          ) : (
-            <div className="w-12 h-12 lg:w-14 lg:h-14 bg-gradient-to-br from-surface to-surface-2 rounded-lg flex items-center justify-center border border-white/10">
-              <Music className="h-6 w-6 lg:h-7 lg:w-7 text-white/40" />
-            </div>
-          )}
+          <div className="relative w-12 h-12 lg:w-14 lg:h-14 shrink-0">
+            {song.coverArt ? (
+              <img
+                key={song.coverArt}
+                src={song.coverArt}
+                alt={song.album}
+                className="w-full h-full rounded-lg object-cover shadow-lg motion-safe:animate-fade-in"
+              />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-surface to-surface-2 rounded-lg flex items-center justify-center border border-white/10">
+                <Music className="h-6 w-6 lg:h-7 lg:w-7 text-white/40" />
+              </div>
+            )}
+            {/* Affordance (both mobile + desktop): the cover/title opens the
+                full-screen now-playing view. A small persistent corner badge,
+                amber on hover. */}
+            <span className="absolute bottom-0.5 right-0.5 rounded-full bg-deep/80 p-0.5 text-white shadow ring-1 ring-white/10 group-hover:bg-amber group-hover:text-deep motion-safe:transition-colors">
+              <ChevronUp className="h-3 w-3" />
+            </span>
+          </div>
           <div className="min-w-0 flex-1">
             <ScrollingText
               text={song.title}
