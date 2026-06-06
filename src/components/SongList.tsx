@@ -215,7 +215,7 @@ const SortableRow = memo(function SortableRow({
             <p
               className={
                 'text-sm lg:text-base font-medium font-display truncate ' +
-                (active ? 'text-amber' : 'text-white')
+                (active ? 'text-amber' : 'text-cream')
               }
             >
               {song.title}
@@ -262,19 +262,6 @@ const SortableRow = memo(function SortableRow({
             </div>
           </div>
         </div>
-      </div>
-
-      <div className="flex lg:hidden items-center space-x-2">
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete(song.id);
-          }}
-          className="p-2 hover:bg-danger/20 rounded-lg transition-colors"
-          aria-label="Delete song"
-        >
-          <Trash2 className="h-4 w-4 text-danger" />
-        </button>
       </div>
     </div>
   );
