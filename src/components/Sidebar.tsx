@@ -70,10 +70,11 @@ export function Sidebar({
 }: SidebarProps) {
   return (
     <div
-      className={`${isOpen ? 'flex' : 'hidden'} fixed lg:relative inset-y-0 left-0 z-50 w-64 lg:w-64 bg-surface/95 backdrop-blur-xl border-r border-white/10 flex-col transform transition-transform duration-300 ease-in-out ${
-        isOpen ? 'translate-x-0' : '-translate-x-full'
+      className={`fixed lg:relative inset-y-0 left-0 z-50 w-64 overflow-hidden flex flex-col transform transition-transform lg:transition-[width] duration-300 ease-in-out lg:translate-x-0 ${
+        isOpen ? 'translate-x-0 lg:w-64' : '-translate-x-full lg:w-0'
       }`}
     >
+      <div className="w-64 shrink-0 flex flex-col h-full bg-surface/95 backdrop-blur-xl border-r border-white/10">
       <div className="p-4 border-b border-white/10">
         <div className="flex items-center justify-between mb-12">
           <div className="flex items-center space-x-2">
@@ -112,6 +113,7 @@ export function Sidebar({
             onClose={onClose}
           />
         ))}
+      </div>
       </div>
     </div>
   );

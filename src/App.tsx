@@ -936,12 +936,13 @@ export default function App() {
         <div className="flex-1 flex items-center justify-center text-white/50">Loading…</div>
       ) : (
         <div className="flex flex-1 min-h-0">
-          {sidebarOpen && (
-            <div
-              className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-              onClick={() => setSidebarOpen(false)}
-            />
-          )}
+          <div
+            className={`fixed inset-0 bg-black/50 z-40 lg:hidden transition-opacity duration-300 ${
+              sidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+            }`}
+            onClick={() => setSidebarOpen(false)}
+            aria-hidden="true"
+          />
           <Sidebar
             playlists={playlists}
             activePlaylistId={activePlaylistId}
