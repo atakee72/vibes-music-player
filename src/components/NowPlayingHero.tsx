@@ -37,8 +37,8 @@ export function NowPlayingHero({
   const hasChips = Boolean(song.genre || song.bpm);
 
   return (
-    <div className="hidden lg:flex shrink-0 mx-4 lg:mx-6 mt-3 h-[300px] items-center gap-8 rounded-card border border-white/10 bg-white/[0.06] backdrop-blur-xl p-6">
-      <VibeOrb coverArt={song.coverArt} isPlaying={isPlaying} className="h-[232px] w-[232px]" />
+    <div className="hidden lg:flex shrink-0 mx-4 lg:mx-6 mt-3 h-[180px] items-center gap-6 rounded-card border border-white/10 bg-white/[0.06] backdrop-blur-xl p-4">
+      <VibeOrb coverArt={song.coverArt} isPlaying={isPlaying} className="h-[136px] w-[136px]" />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex items-center gap-2">
@@ -48,16 +48,16 @@ export function NowPlayingHero({
           </span>
         </div>
 
-        <h2 className="mt-2 truncate font-display text-4xl font-semibold text-cream">
+        <h2 className="mt-1 truncate font-display text-2xl lg:text-3xl font-semibold text-cream">
           {song.title}
         </h2>
-        <p className="mt-1 truncate text-base text-muted">
+        <p className="mt-0.5 truncate text-sm text-muted">
           {song.artist}
           {song.album && song.album !== 'Unknown Album' && ` · ${song.album}`}
         </p>
 
         {hasChips && (
-          <div className="mt-4 flex flex-wrap items-center gap-2">
+          <div className="mt-2 flex flex-wrap items-center gap-2">
             {song.genre && (
               <button
                 onClick={() => onGenreClick(song.genre!)}
@@ -75,7 +75,7 @@ export function NowPlayingHero({
           </div>
         )}
 
-        <div className="mt-auto flex items-center gap-3 pt-6">
+        <div className="mt-auto flex items-center gap-3 pt-3">
           <span className="w-12 text-right font-mono text-xs text-muted">
             {formatTime(currentTime)}
           </span>
