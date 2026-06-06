@@ -77,4 +77,24 @@ describe('LyricsPanel', () => {
     renderPanel();
     expect(screen.queryByRole('button', { name: 'Find lyrics' })).not.toBeInTheDocument();
   });
+
+  it('seeks to a line\'s timestamp when a synced line is clicked', () => {
+    const onSeek = vi.fn();
+    const lyrics: LyricLine[] = [
+      { time: 0, text: 'First' },
+      { time: 12.5, text: 'Second' },
+    ];
+    renderPanel({ lyrics, onSeek });
+    fireEvent.click(screen.getByText('Second'));
+    expect(onSeek).toHaveBeenCalledWith(12.5);
+  });
+
+  it('does not make lines clickable without onSeek', () => {
+    const lyrics: LyricLine[] = [
+      { time: 0, text: 'First' },
+      { time: 5, text: 'Second' },
+    ];
+    renderPanel({ lyrics });
+    expect(screen.getByText('Second')).not.toHaveAttribute('role', 'button');
+  });
 });

@@ -102,8 +102,16 @@
 - Pass `{ isBlocked: showUpload }` (or similar) to suppress everything
   except Escape while a modal is open. The hook handles that with one
   branch — don't sprinkle guards into individual handlers.
-- Currently wired in App.tsx: Space=play/pause, ←/→=prev/next,
-  `/`=focus search, Escape=close modal → clear search → blur input.
+- Currently wired in App.tsx: Space=play/pause, ←/→=seek ∓10s,
+  **Shift+←/→**=prev/next track, `L`=toggle lyrics, `/`=focus search,
+  Escape=close modal → clear search → blur input. The ←/→ handlers branch on
+  `event.shiftKey` (the hook passes the event through) and `preventDefault()`
+  the arrow's default scroll on the seek path; they read live `currentTime`/
+  `duration` via the hook's fresh-closure ref, so no stale-seek bug.
+- **Lyric click-to-seek**: `LyricsPanel` synced lines take an optional
+  `onSeek?(time)` — when set, each line is `role="button"` (+ Enter/Space
+  keydown) that seeks to its timestamp. App passes `onSeek={seek}`. Unsynced
+  (single-block) lyrics aren't clickable (no per-line timestamps).
 
 ## Media Session
 

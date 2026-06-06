@@ -905,8 +905,18 @@ export default function App() {
   useKeyboardShortcuts(
     {
       Space: togglePlayPause,
-      ArrowRight: playNext,
-      ArrowLeft: playPrev,
+      ArrowRight: (e) => {
+        if (e.shiftKey) return playNext();
+        if (!currentSong) return;
+        e.preventDefault();
+        seek(Math.min(duration || currentTime + 10, currentTime + 10));
+      },
+      ArrowLeft: (e) => {
+        if (e.shiftKey) return playPrev();
+        if (!currentSong) return;
+        e.preventDefault();
+        seek(Math.max(0, currentTime - 10));
+      },
       Slash: () => searchInputRef.current?.focus(),
       KeyL: () => setShowLyrics((v) => !v),
       Escape: () => {
@@ -1260,6 +1270,7 @@ export default function App() {
                   lyrics={currentSong?.lyrics}
                   currentTime={currentTime}
                   onClose={() => setShowLyrics(false)}
+                  onSeek={seek}
                   onFetch={currentSong ? handleFetchLyrics : undefined}
                   fetching={fetchingLyrics}
                   fetchError={fetchLyricsError}

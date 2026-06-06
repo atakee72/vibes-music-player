@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { X } from 'lucide-react';
 import type { LyricLine } from '../types';
 import { activeLyricIndex } from '../lib/lrc';
@@ -7,6 +7,7 @@ interface LyricsPanelProps {
   lyrics: LyricLine[] | undefined;
   currentTime: number;
   onClose: () => void;
+  onSeek?: (time: number) => void;
   onFetch?: () => void;
   fetching?: boolean;
   fetchError?: string | null;
@@ -16,6 +17,7 @@ export function LyricsPanel({
   lyrics,
   currentTime,
   onClose,
+  onSeek,
   onFetch,
   fetching,
   fetchError,
@@ -82,7 +84,23 @@ export function LyricsPanel({
                     if (el) lineRefs.current.set(i, el);
                     else lineRefs.current.delete(i);
                   }}
+                  {...(onSeek
+                    ? {
+                        role: 'button',
+                        tabIndex: 0,
+                        onClick: () => onSeek(line.time),
+                        onKeyDown: (e: ReactKeyboardEvent) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            onSeek(line.time);
+                          }
+                        },
+                        title: 'Jump to this line',
+                      }
+                    : {})}
                   className={`transition-all duration-300 ${
+                    onSeek ? 'cursor-pointer hover:text-white/80' : ''
+                  } ${
                     i === activeIdx
                       ? 'text-amber text-lg font-medium font-display motion-safe:scale-105 origin-left'
                       : 'text-white/40 text-sm'
