@@ -306,13 +306,28 @@
 
 - `LyricLine = { time: number; text: string }` lives in `src/types.ts`,
   added as optional `lyrics?` field on `Song`.
-- Three sources: embedded SYLT (synced, from `music-metadata`'s
-  `common.lyrics[].syncText`), embedded USLT (unsynced, `.text`), and
-  dropped `.lrc` files parsed by `src/lib/lrc.ts`.
-- `LyricsPanel` (`src/components/LyricsPanel.tsx`) is a slide-in panel
-  right of SongList. Auto-scrolls to the active line via
-  `scrollIntoView`, only when `activeLyricIndex` changes.
-- Toggle: `L` key or "Lyrics" button in header.
+- Sources: embedded tags, dropped `.lrc` files (`src/lib/lrc.ts`), and
+  **online (LRCLIB)** on demand.
+- **Embedded extraction** lives in `src/lib/lyrics.ts` `extractLyrics(meta)`
+  (pure, reused by the ingest hook *and* the on-demand re-check). It reads
+  `meta.common.lyrics` (SYLT/USLT) **and** falls back to scanning `meta.native`
+  for any lyric-shaped frame (`TXXX:LYRICS`, `UNSYNCEDLYRICS`, `©lyr`, …) that
+  `music-metadata` doesn't map to `common.lyrics` — that gap was why many
+  embedded-lyrics files showed nothing.
+- **Online**: `src/lib/lyrics-online.ts` `fetchLyricsOnline({title,artist,album,
+  duration})` → LRCLIB `/api/get` (exact, duration ±2s) then `/api/search`
+  (fuzzy); maps `syncedLyrics`→`parseLRC`, else `plainLyrics` block; `null` on
+  no-match/instrumental/error (never throws). Free, no key, **CORS-open** (direct
+  browser fetch); **metadata-only** request (no audio). No SW/runtime-cache rule.
+- **"Find lyrics" button** (`LyricsPanel` empty state) → `App.handleFetchLyrics`:
+  re-parse the file with `extractLyrics` first (recovers embedded lyrics the old
+  ingest missed — **the fix for an existing library**, since reload/Refresh don't
+  re-extract), then LRCLIB. Result is merged onto the song and **persisted** (it
+  survives reload + renders offline). Manual only (auto-fetch is a future toggle).
+- `LyricsPanel` (`src/components/LyricsPanel.tsx`) is a slide-in panel right of
+  SongList; auto-scrolls to the active line via `scrollIntoView`. Toggle: `L` key
+  or "Lyrics". (Toggling it from the now-playing view closes that view — it's
+  `z-[60]`, above the panel's `z-40`.)
 
 ## Cover art persistence
 

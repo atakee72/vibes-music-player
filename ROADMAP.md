@@ -619,6 +619,26 @@ closes it so the panel shows).
 
 ---
 
+## Online lyrics + embedded-lyrics fix (shipped)
+
+Status: ✅ branch `lyrics-online`.
+
+- **Embedded fix**: extraction moved to `src/lib/lyrics.ts` `extractLyrics`, which
+  now also scans `meta.native` for lyric frames `music-metadata` doesn't map to
+  `common.lyrics` (`TXXX:LYRICS`, `UNSYNCEDLYRICS`, `©lyr`) — the reason many
+  embedded-lyrics files showed nothing.
+- **Online (LRCLIB)**: `src/lib/lyrics-online.ts` `fetchLyricsOnline` — free, no
+  key, CORS-open, metadata-only, synced LRC via the existing `parseLRC`.
+- **"Find lyrics"** button (lyrics-panel empty state) re-parses the file first
+  (recovers embedded lyrics for the *existing* library, which reload/Refresh
+  don't re-extract), then LRCLIB; result merged + persisted (offline after).
+  Manual-only this round.
+
+**217 tests** (was 202). Verified the in-browser LRCLIB fetch returns real synced
+lyrics (CORS works at runtime) + graceful no-match.
+
+---
+
 ## Out of scope (forever)
 
 - **Cloud sync / accounts** — would break the "nothing leaves your device"

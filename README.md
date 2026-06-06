@@ -79,8 +79,9 @@ pnpm test:run  # Vitest single pass
   playlist) — no accidental wipes
 - **M3U / PLS import** — drop a playlist file to create a new playlist
   matched against your library
-- **Synced lyrics** — LRC file drop, embedded SYLT/USLT tags, or plain
-  text; auto-scrolling lyrics panel toggled with `L`
+- **Synced lyrics** — from embedded tags, dropped `.lrc` files, or fetched
+  on demand from **LRCLIB** ("Find lyrics" — free, metadata-only, no key);
+  auto-scrolling panel toggled with `L`, fetched lyrics persist + work offline
 - **Double-click a row to play**; click the play overlay also plays
 - **Collapsible sidebar** — hide the playlist sidebar on desktop for a
   wider song list view (icon: `PanelLeftClose` to close, `PanelLeftOpen`
