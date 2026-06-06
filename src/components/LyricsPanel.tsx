@@ -7,9 +7,19 @@ interface LyricsPanelProps {
   lyrics: LyricLine[] | undefined;
   currentTime: number;
   onClose: () => void;
+  onFetch?: () => void;
+  fetching?: boolean;
+  fetchError?: string | null;
 }
 
-export function LyricsPanel({ lyrics, currentTime, onClose }: LyricsPanelProps) {
+export function LyricsPanel({
+  lyrics,
+  currentTime,
+  onClose,
+  onFetch,
+  fetching,
+  fetchError,
+}: LyricsPanelProps) {
   const activeIdx = lyrics ? activeLyricIndex(lyrics, currentTime) : -1;
   const prevIdxRef = useRef(-1);
   const lineRefs = useRef<Map<number, HTMLParagraphElement>>(new Map());
@@ -44,9 +54,25 @@ export function LyricsPanel({ lyrics, currentTime, onClose }: LyricsPanelProps) 
 
         <div className="flex-1 overflow-y-auto p-4">
           {!lyrics || lyrics.length === 0 ? (
-            <p className="text-sm text-white/40 text-center mt-8">
-              No lyrics available for this track.
-            </p>
+            <div className="text-center mt-8 space-y-3">
+              <p className="text-sm text-white/40">No lyrics available for this track.</p>
+              {onFetch && (
+                <>
+                  <button
+                    onClick={onFetch}
+                    disabled={fetching}
+                    className="px-4 py-2 rounded-full bg-gradient-to-r from-amber to-coral text-deep text-sm font-medium hover:brightness-110 disabled:opacity-60 transition-all"
+                  >
+                    {fetching ? 'Searching…' : 'Find lyrics'}
+                  </button>
+                  {fetchError && <p className="text-xs text-danger">{fetchError}</p>}
+                  <p className="text-[11px] text-white/30 px-4 leading-relaxed">
+                    Checks the file, then LRCLIB (only the track name, artist &amp; duration
+                    are sent).
+                  </p>
+                </>
+              )}
+            </div>
           ) : isSynced ? (
             <div className="space-y-3">
               {lyrics.map((line, i) => (

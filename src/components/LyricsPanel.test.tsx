@@ -58,4 +58,23 @@ describe('LyricsPanel', () => {
     fireEvent.click(screen.getByLabelText('Close lyrics'));
     expect(onClose).toHaveBeenCalledOnce();
   });
+
+  it('shows a "Find lyrics" button in the empty state when onFetch is given', () => {
+    const onFetch = vi.fn();
+    renderPanel({ onFetch });
+    fireEvent.click(screen.getByRole('button', { name: 'Find lyrics' }));
+    expect(onFetch).toHaveBeenCalledOnce();
+  });
+
+  it('shows the searching state and any fetch error', () => {
+    renderPanel({ onFetch: vi.fn(), fetching: true });
+    expect(screen.getByRole('button', { name: 'Searching…' })).toBeDisabled();
+    renderPanel({ onFetch: vi.fn(), fetchError: 'No lyrics found.' });
+    expect(screen.getByText('No lyrics found.')).toBeInTheDocument();
+  });
+
+  it('has no Find-lyrics button without onFetch (default)', () => {
+    renderPanel();
+    expect(screen.queryByRole('button', { name: 'Find lyrics' })).not.toBeInTheDocument();
+  });
 });

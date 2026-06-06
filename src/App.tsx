@@ -22,7 +22,7 @@ import {
   Share2,
   Upload,
 } from 'lucide-react';
-import type { LibraryRoot, Playlist, RepeatMode, Song } from './types';
+import type { LibraryRoot, LyricLine, Playlist, RepeatMode, Song } from './types';
 import { useMetadataExtractor } from './hooks/useMetadataExtractor';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useMediaSession } from './hooks/useMediaSession';
@@ -35,8 +35,11 @@ import { MobileNowPlaying } from './components/MobileNowPlaying';
 import { HeaderMenu, type HeaderAction } from './components/HeaderMenu';
 import * as storage from './lib/storage';
 import { ingestDirectoryHandle } from './lib/ingest';
+import { parseBlob } from 'music-metadata';
 import { filterSongs } from './lib/filter';
 import { sortSongs, SORT_LABELS, type SortKey } from './lib/sort';
+import { extractLyrics } from './lib/lyrics';
+import { fetchLyricsOnline } from './lib/lyrics-online';
 import { nextInPlaylist } from './lib/queue';
 import type { EqPreset } from './lib/eq';
 import { useDominantColor } from './hooks/useDominantColor';
@@ -74,6 +77,8 @@ export default function App() {
   const [shuffle, setShuffle] = useState(false);
   const [sortBy, setSortBy] = useState<SortKey>('manual');
   const [mobilePlayerOpen, setMobilePlayerOpen] = useState(false);
+  const [fetchingLyrics, setFetchingLyrics] = useState(false);
+  const [fetchLyricsError, setFetchLyricsError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(
     typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches,
   );
@@ -425,6 +430,47 @@ export default function App() {
       setNotification('Could not copy the share link.');
     }
   }, [currentSong]);
+
+  // "Find lyrics": re-parse the file (recovers embedded lyrics the old ingest
+  // missed), then fall back to LRCLIB. Merges + persists onto the song.
+  const handleFetchLyrics = useCallback(async () => {
+    const song = currentSong;
+    if (!song || fetchingLyrics) return;
+    setFetchingLyrics(true);
+    setFetchLyricsError(null);
+    try {
+      let lyrics: LyricLine[] | null | undefined;
+      if (song.file) {
+        try {
+          lyrics = extractLyrics(await parseBlob(song.file));
+        } catch {
+          // re-parse failed — fall through to the online lookup
+        }
+      }
+      if (!lyrics || lyrics.length === 0) {
+        lyrics = await fetchLyricsOnline({
+          title: song.title,
+          artist: song.artist,
+          album: song.album,
+          duration: song.duration,
+        });
+      }
+      if (lyrics && lyrics.length > 0) {
+        const found = lyrics;
+        setPlaylists((prev) =>
+          prev.map((p) => ({
+            ...p,
+            songs: p.songs.map((s) => (s.id === song.id ? { ...s, lyrics: found } : s)),
+          })),
+        );
+        setCurrentSong((cur) => (cur && cur.id === song.id ? { ...cur, lyrics: found } : cur));
+      } else {
+        setFetchLyricsError('No lyrics found.');
+      }
+    } finally {
+      setFetchingLyrics(false);
+    }
+  }, [currentSong, fetchingLyrics]);
 
   const handleFiles = useCallback(
     async (files: FileList | File[]) => {
@@ -798,6 +844,11 @@ export default function App() {
   useEffect(() => {
     if (mobilePlayerOpen && !currentSong) setMobilePlayerOpen(false);
   }, [mobilePlayerOpen, currentSong]);
+
+  // Clear any stale "no lyrics found" message when the track changes.
+  useEffect(() => {
+    setFetchLyricsError(null);
+  }, [currentSong?.id]);
 
   const onDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -1209,6 +1260,9 @@ export default function App() {
                   lyrics={currentSong?.lyrics}
                   currentTime={currentTime}
                   onClose={() => setShowLyrics(false)}
+                  onFetch={currentSong ? handleFetchLyrics : undefined}
+                  fetching={fetchingLyrics}
+                  fetchError={fetchLyricsError}
                 />
               )}
             </div>
