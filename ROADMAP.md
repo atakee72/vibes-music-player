@@ -611,6 +611,12 @@ slide (dropped the `display:none` snap), compact desktop hero (frees the song
 list), a mobile header `⋯` overflow menu (`HeaderMenu`), and `ScrollingText`
 marquee for long titles + a clearer (mic) lyrics icon.
 
+**Polish round 3** (same branch): glass-styled sidebar toggle buttons, tighter
+header + hero/list spacing, lighter (cream) song-row titles, mobile per-song
+delete moved to selection mode, the now-playing view now opens on **desktop too**
+(click the player bar), and a lyrics z-index fix (toggling lyrics from the view
+closes it so the panel shows).
+
 ---
 
 ## Out of scope (forever)

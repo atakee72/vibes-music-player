@@ -242,11 +242,16 @@
   `<button>` — it wraps `<p>`s) that opens the mobile now-playing view; its
   handler is gated with `matchMedia('(min-width: 1024px)')` so desktop taps no-op.
 - **`MobileNowPlaying`** (`src/components/MobileNowPlaying.tsx`) is the
-  full-screen (`fixed inset-0 z-[60] lg:hidden`) frame-D view — the orb wrapped
-  by `OrbVisualizerRing`, title, scrubbable progress, full transport, and the
-  controls trimmed from the bar (lyrics, EQ, volume, share). State
+  full-screen (`fixed inset-0 z-[60]`) frame-D view — the orb wrapped by
+  `OrbVisualizerRing`, title, scrubbable progress, full transport, and the
+  controls trimmed from the mobile bar (lyrics, EQ, volume, share). **Despite the
+  name it now renders on every size** (the `lg:hidden` was dropped) — on desktop
+  it opens by clicking the bottom `PlayerBar`'s cover/title (the `onExpand` no
+  longer gated to mobile); on mobile, by tapping the mini-bar. State
   `mobilePlayerOpen` lives in `App.tsx`; closes via the chevron, the Escape chain
-  (first branch), or auto-close when `currentSong` goes null.
+  (first branch), or auto-close when `currentSong` goes null. **Toggling Lyrics
+  from this view also closes it** (the `LyricsPanel` is `z-40`, below this view's
+  `z-[60]`, so it would otherwise be hidden behind it).
 - **`OrbVisualizerRing`** (`src/components/OrbVisualizerRing.tsx`) draws 48 bars
   radially (each `rotate(i/N·360°)` + pushed to `BASE_RADIUS`), driven by
   `visualizerData` bins; `data[i] ?? 0` so it always draws (data is `[]` until
