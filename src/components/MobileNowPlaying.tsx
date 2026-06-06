@@ -87,7 +87,7 @@ export function MobileNowPlaying({
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col bg-deep/95 backdrop-blur-2xl p-6 lg:hidden">
+    <div className="fixed inset-0 z-[60] flex flex-col bg-deep/95 backdrop-blur-2xl p-6">
       <div className="flex items-center justify-between">
         <button
           onClick={onClose}

@@ -107,10 +107,8 @@ export function PlayerBar({
   const RepeatIcon = repeatMode === 'one' ? Repeat1 : Repeat;
   const repeatColor = repeatMode !== 'none' ? 'text-amber' : 'text-white/60';
   const shuffleColor = shuffle ? 'text-amber' : 'text-white/60';
-  // Tapping the cover/title opens the full-screen view — mobile only.
-  const expand = () => {
-    if (!window.matchMedia('(min-width: 1024px)').matches) onExpand?.();
-  };
+  // Tapping the cover/title opens the full-screen now-playing view (any size).
+  const expand = () => onExpand?.();
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
@@ -149,7 +147,7 @@ export function PlayerBar({
               expand();
             }
           }}
-          className="flex items-center space-x-3 flex-1 min-w-0 text-left lg:cursor-default lg:pointer-events-auto cursor-pointer"
+          className="flex items-center space-x-3 flex-1 min-w-0 text-left cursor-pointer"
         >
           {song.coverArt ? (
             <img
