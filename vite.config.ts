@@ -24,6 +24,29 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
+        // The SW was adding ~1.4s to navigations on slower hardware: every
+        // navigation blocked on SW boot before the cached HTML was returned.
+        // Navigation Preload lets the browser fetch the HTML *in parallel* with
+        // SW startup, hiding the boot latency behind the (tiny) network fetch.
+        navigationPreload: true,
+        // Disable vite-plugin-pwa's default cache-only navigation fallback
+        // (`navigateFallback: 'index.html'`). That route is registered first and
+        // would shadow the NetworkFirst route below, serving from precache and
+        // *ignoring* the preload response — defeating navigation preload.
+        navigateFallback: undefined,
+        // Handle navigations NetworkFirst so the preloaded response is actually
+        // used; offline falls back to the `html` cache (seeded on first online
+        // load). index.html stays precached as the ultimate shell fallback.
+        runtimeCaching: [
+          {
+            urlPattern: ({ request }) => request.mode === 'navigate',
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'html',
+              networkTimeoutSeconds: 3,
+            },
+          },
+        ],
       },
       devOptions: { enabled: false },
     }),
