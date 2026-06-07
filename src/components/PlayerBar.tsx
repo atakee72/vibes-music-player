@@ -243,7 +243,7 @@ export function PlayerBar({
           </button>
         </div>
 
-        <div className="hidden lg:flex items-center space-x-2 lg:space-x-4 flex-1 justify-end">
+        <div className="hidden lg:flex items-center space-x-2 lg:space-x-4 lg:ml-6">
           <div className="flex items-end space-x-1 h-6 lg:h-8">
             {visualizerData.slice(0, 15).map((value, i) => (
               <div
