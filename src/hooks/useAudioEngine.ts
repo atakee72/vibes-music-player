@@ -155,13 +155,24 @@ export function useAudioEngine({
       }
     };
     const onAudioEnded = (e: Event) => {
-      if (e.target !== activeAudio()) return;
+      const ended = e.target as HTMLAudioElement;
+      if (ended !== activeAudio()) return;
 
-      // Gapless swap: if next song is preloaded on the inactive element,
-      // flip + play immediately, before notifying the app.
       const nextUrl = nextSongRef.current?.url;
       const inactive = activeRef.current === 'A' ? audioB : audioA;
-      if (nextUrl && inactive.src === nextUrl) {
+      if (nextUrl && ended.src === nextUrl) {
+        // Repeat-one (or repeat-all on a single track): the "next" song is the
+        // same file already on this element. Replay it in place — flipping to
+        // the inactive element would start it from its parked end position, so
+        // the loop stalls after the first pass. Return WITHOUT calling onEnded:
+        // no React state changes (same song), and its repeat-one branch would
+        // re-pause this element via a stale-`isPlaying` toggle.
+        ended.currentTime = 0;
+        ended.play().catch(console.error);
+        return;
+      } else if (nextUrl && inactive.src === nextUrl) {
+        // Gapless swap: a *different* next track is preloaded on the inactive
+        // element — flip + play immediately, before notifying the app.
         activeRef.current = activeRef.current === 'A' ? 'B' : 'A';
         inactive.play().catch(console.error);
       } else {

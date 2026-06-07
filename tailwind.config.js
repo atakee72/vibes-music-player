@@ -5,7 +5,6 @@ export default {
     extend: {
       colors: {
         deep: '#150A24',
-        base: '#1E1036',
         surface: { DEFAULT: '#2A1A47', 2: '#37255C' },
         amber: '#FF9E5E',
         coral: '#FF6B6B',

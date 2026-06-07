@@ -36,6 +36,14 @@
   secondary accent), `cream` (titles), `muted`/`faint` (dim text),
   `danger #E5484D` (destructive — deliberately distinct from coral so "delete"
   never shares a hue with "play").
+- **Never name a colour token after a Tailwind font-size scale word**
+  (`base`, `xs`, `sm`, `lg`, …). A colour named `base` makes Tailwind emit
+  `.text-base { color: … }` **on top of** the built-in `.text-base { font-size }`
+  — so any element using `text-base`/`lg:text-base` silently gets that colour,
+  overriding `text-white`/`text-amber` (the responsive `lg:` variant wins by
+  cascade order). This is exactly the bug that made the player-bar title render
+  dark plum on desktop. The old `base #1E1036` token was removed for this reason;
+  it was unused as a colour. If you need that shade, name it e.g. `base-bg`.
 - **The primary accent gradient is `from-amber to-coral`**; hover is
   `hover:brightness-110` (the tokens are single-value, no `-600` shade). **Glyphs
   on accent fills are `text-deep`, never white** — white-on-amber fails AA.
@@ -77,6 +85,17 @@
   reports `currentTime > duration - 5`. On `ended`, if inactive has the
   expected next song loaded, flip + play instantly, *then* call onEnded so
   App can update React state (avoids audible gap between flip and React commit).
+- **Repeat-one (and repeat-all on a single track)**: `nextInPlaylist` returns
+  the *same* song, so `nextSong.url === active.src`. The `ended` handler detects
+  this (`ended.src === nextUrl`) and **replays the ended element in place**
+  (`currentTime = 0; play()`) and **returns WITHOUT calling onEnded**. Two
+  reasons this is its own branch: (1) flipping to the inactive element would
+  start it from its *parked end position* (it was never reloaded, since its src
+  already equals nextUrl), so the loop stalls after one pass; (2) `playNext`'s
+  repeat-one branch does `if (!isPlaying) togglePlayPause()`, and on natural end
+  `isPlaying` can be stale-true/false such that the toggle *pauses* the element
+  we just restarted. Skipping onEnded for the in-place loop avoids that race.
+  (The manual Next button still calls `playNext` directly — that path is fine.)
 - **ReplayGain**: per-song dB value comes from `Song.replayGainDb`. Captured
   from `meta.common.replaygain_track_gain?.dB` (note: it's an `IRatio` object,
   not a plain number). Applied via the active element's `GainNode`.
