@@ -35,7 +35,6 @@ import { MobileNowPlaying } from './components/MobileNowPlaying';
 import { HeaderMenu, type HeaderAction } from './components/HeaderMenu';
 import * as storage from './lib/storage';
 import { ingestDirectoryHandle } from './lib/ingest';
-import { parseBlob } from 'music-metadata';
 import { filterSongs } from './lib/filter';
 import { sortSongs, SORT_LABELS, type SortKey } from './lib/sort';
 import { extractLyrics } from './lib/lyrics';
@@ -168,7 +167,14 @@ export default function App() {
           }
         }
 
+        const perfT0 = performance.now();
         const loaded = needsPrompt ? [] : await storage.getPlaylists();
+        // [perf] How long restoring the persisted library takes (IDB read +
+        // rebuilding File objects / object URLs). Scales with library size.
+        const songCount = loaded.reduce((n, p) => n + p.songs.length, 0);
+        console.log(
+          `[perf] library load: ${(performance.now() - perfT0).toFixed(0)}ms (${songCount} songs, ${needsPrompt ? 'permission-gated' : 'restored'})`,
+        );
         const storedEq = await storage.getEqPreset();
         const storedVolume = await storage.getVolume();
         setLibraryRoots(roots);
@@ -442,6 +448,9 @@ export default function App() {
       let lyrics: LyricLine[] | null | undefined;
       if (song.file) {
         try {
+          // Dynamic import so `music-metadata` (~99KB + parser chunks) stays out
+          // of the startup bundle — it's only needed for this on-demand re-parse.
+          const { parseBlob } = await import('music-metadata');
           lyrics = extractLyrics(await parseBlob(song.file));
         } catch {
           // re-parse failed — fall through to the online lookup

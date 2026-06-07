@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { parseBlob } from 'music-metadata';
 import type { Song } from '../types';
 import { extractLyrics } from '../lib/lyrics';
 
@@ -9,6 +8,10 @@ export function useMetadataExtractor() {
   const extractMetadata = async (file: File): Promise<Song> => {
     setIsLoading(true);
     try {
+      // Lazy: keep `music-metadata` (~99KB + per-format parser chunks) out of
+      // the startup bundle — it's only needed once the user actually ingests a
+      // file. This was the biggest eager dependency on the load critical path.
+      const { parseBlob } = await import('music-metadata');
       const meta = await parseBlob(file);
 
       let coverArt: string | undefined;

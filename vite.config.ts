@@ -33,7 +33,10 @@ export default defineConfig({
       output: {
         manualChunks: {
           vendor: ['react', 'react-dom'],
-          music: ['music-metadata'],
+          // NOTE: don't force `music-metadata` into a named manualChunk — that
+          // pulls it into the eagerly-modulepreloaded set. All imports of it are
+          // now dynamic (`await import('music-metadata')`), so Rollup auto-splits
+          // it into an on-demand chunk that stays off the startup critical path.
         },
       },
     },
