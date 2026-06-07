@@ -102,13 +102,15 @@ export async function getPlaylists(): Promise<Playlist[]> {
   const stored = await get<StoredPlaylist[]>(PLAYLISTS_KEY);
   if (!stored) return [];
 
+  // Reconstruct every song in a playlist **in parallel**. Each `fromStored`
+  // awaits `fileHandle.getFile()` (Chromium handle path); doing them
+  // sequentially made load O(N) round-trips and dominated startup for large
+  // libraries. `Promise.all` preserves order, so playlist order is unchanged.
   const playlists: Playlist[] = [];
   for (const sp of stored) {
-    const songs: Song[] = [];
-    for (const ss of sp.songs) {
-      const song = await fromStored(ss);
-      if (song) songs.push(song);
-    }
+    const songs = (await Promise.all(sp.songs.map(fromStored))).filter(
+      (s): s is Song => s !== null,
+    );
     playlists.push({ ...sp, songs });
   }
   return playlists;
