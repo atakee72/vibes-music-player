@@ -1128,6 +1128,20 @@ export default function App() {
                 },
               );
             }}
+            onRename={(id) => {
+              if (id === 'library') return;
+              const playlist = playlists.find((p) => p.id === id);
+              if (!playlist) return;
+              setPromptState({
+                title: 'Rename playlist',
+                placeholder: 'Playlist name',
+                defaultValue: playlist.name,
+                confirmLabel: 'Rename',
+                onConfirm: (name) => {
+                  setPlaylists((prev) => prev.map((p) => (p.id === id ? { ...p, name } : p)));
+                },
+              });
+            }}
             isOpen={sidebarOpen}
             onClose={() => setSidebarOpen(false)}
           />

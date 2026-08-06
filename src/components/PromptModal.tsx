@@ -25,7 +25,10 @@ export function PromptModal({
   useEffect(() => {
     if (open) {
       setValue(defaultValue);
-      requestAnimationFrame(() => inputRef.current?.focus());
+      requestAnimationFrame(() => {
+        inputRef.current?.focus();
+        inputRef.current?.select(); // no-op when defaultValue is empty (New Playlist)
+      });
     }
   }, [open, defaultValue]);
 

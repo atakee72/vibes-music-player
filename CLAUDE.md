@@ -423,7 +423,9 @@
 ## Prompt modal (no native prompt!)
 
 - `PromptModal` (`src/components/PromptModal.tsx`) is the React-based
-  text-input modal, used by "New Playlist". Same shape as ConfirmModal:
+  text-input modal, used by "New Playlist" and playlist rename (sidebar
+  pencil button; `defaultValue` prefills the current name, selected on
+  open so typing replaces it). Same shape as ConfirmModal:
   `promptState: { title, placeholder?, defaultValue?, confirmLabel?,
   onConfirm: (value) => void } | null` in App.tsx.
 - **Never use native `window.prompt()`, `alert()`, or `confirm()`** —
