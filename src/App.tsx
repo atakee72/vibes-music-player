@@ -1387,6 +1387,7 @@ export default function App() {
                 duration={duration}
                 onSeek={seek}
                 onGenreClick={setSearchQuery}
+                onToggleFavorite={() => toggleFavorite(currentSong.id)}
               />
             )}
 

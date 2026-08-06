@@ -5,6 +5,7 @@ import { makeSong } from '../test-utils';
 function renderHero(overrides = {}, handlers = {}) {
   const onSeek = vi.fn();
   const onGenreClick = vi.fn();
+  const onToggleFavorite = vi.fn();
   const song = makeSong({ title: 'Midnight', artist: 'Aurora', album: 'Dusk', ...overrides });
   render(
     <NowPlayingHero
@@ -14,10 +15,11 @@ function renderHero(overrides = {}, handlers = {}) {
       duration={180}
       onSeek={onSeek}
       onGenreClick={onGenreClick}
+      onToggleFavorite={onToggleFavorite}
       {...handlers}
     />,
   );
-  return { onSeek, onGenreClick, song };
+  return { onSeek, onGenreClick, onToggleFavorite, song };
 }
 
 describe('NowPlayingHero', () => {
@@ -58,9 +60,27 @@ describe('NowPlayingHero', () => {
     expect(onSeek).toHaveBeenCalled();
   });
 
-  it('has no transport buttons (display-only)', () => {
+  it('has no transport buttons (display-only; the heart is the sole button)', () => {
     renderHero({ genre: undefined });
-    // The only button in a chip-less hero would be a control; there are none.
-    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    // Chip-less hero: the heart is the only button — no Play/Pause/Next/Prev.
+    const buttons = screen.getAllByRole('button');
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]).toHaveAccessibleName('Add to Favorites');
+  });
+
+  it('heart fires onToggleFavorite and reflects the unfavorited state', () => {
+    const { onToggleFavorite } = renderHero();
+    const btn = screen.getByRole('button', { name: 'Add to Favorites' });
+    expect(btn).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(btn);
+    expect(onToggleFavorite).toHaveBeenCalledTimes(1);
+  });
+
+  it('heart shows the favorited state for a favorite song', () => {
+    renderHero({ favorite: true });
+    expect(screen.getByRole('button', { name: 'Remove from Favorites' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
   });
 });

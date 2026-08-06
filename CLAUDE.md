@@ -427,7 +427,9 @@
   returns in App's handlers, reorder disabled via the `isFilterActive` OR.
   Dropping songs onto the Favorites sidebar row marks them favorite instead
   of copying; drag FROM Favorites copies (Ctrl-move degrades to copy).
-- Hearts: desktop song rows (hover-revealed, always visible when favorited)
+- Hearts: desktop song rows (hover-revealed, always visible when favorited),
+  the `NowPlayingHero` right edge (h-6, the largest — the hero's sole button,
+  its display-only/no-transport rule intact)
   + PlayerBar (all sizes — the mobile favoriting surface). `text-coral` +
   `fill-current` when on; `aria-pressed` carries the state. Never `danger`.
 

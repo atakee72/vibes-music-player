@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import { Heart } from 'lucide-react';
 import type { Song } from '../types';
 import { VibeOrb } from './VibeOrb';
 import { ScrollingText } from './ScrollingText';
@@ -10,6 +11,7 @@ interface NowPlayingHeroProps {
   duration: number;
   onSeek: (t: number) => void;
   onGenreClick: (genre: string) => void;
+  onToggleFavorite: () => void;
 }
 
 const formatTime = (s: number) => {
@@ -33,6 +35,7 @@ export function NowPlayingHero({
   duration,
   onSeek,
   onGenreClick,
+  onToggleFavorite,
 }: NowPlayingHeroProps) {
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
   const hasChips = Boolean(song.genre || song.bpm);
@@ -105,6 +108,17 @@ export function NowPlayingHero({
           <span className="w-12 font-mono text-xs text-muted">{formatTime(duration)}</span>
         </div>
       </div>
+
+      <button
+        onClick={onToggleFavorite}
+        className="shrink-0 self-center p-3 hover:bg-white/10 rounded-xl transition-all"
+        aria-label={song.favorite ? 'Remove from Favorites' : 'Add to Favorites'}
+        aria-pressed={!!song.favorite}
+      >
+        <Heart
+          className={'h-6 w-6 ' + (song.favorite ? 'text-coral fill-current' : 'text-white/60')}
+        />
+      </button>
     </div>
   );
 }
