@@ -341,7 +341,10 @@
   how many tracks were matched.
 - File routing in `handleFiles`: playlist files (`.m3u`, `.m3u8`, `.pls`)
   and LRC files (`.lrc`) are separated from audio files and processed
-  after audio ingest completes.
+  after audio ingest completes. **The audio filter must exclude playlist
+  files explicitly** — Chromium reports `.m3u` as `audio/x-mpegurl`, which
+  passes the `audio/` prefix check and would double-process the file as a
+  playlist AND a bogus filename-titled "song".
 
 ## Lyrics
 
@@ -441,6 +444,13 @@
   onConfirm } | null` driven by a `requestConfirm` helper. All
   destructive actions route through it: delete song, batch delete,
   delete playlist.
+- **Song delete is scoped by view** (`handleDeleteSong`/`handleBatchDelete`):
+  from a **user playlist**, it removes the song only from that playlist
+  (Library keeps it, playback isn't stopped — the dialog says so); from
+  **Library or Favorites**, it removes app-wide ("Permanently removes from
+  your library and all playlists."). Keep copy and behavior in sync — the
+  historical bug was copy promising playlist-scoped while code deleted
+  everywhere.
 
 ## Prompt modal (no native prompt!)
 
@@ -521,6 +531,10 @@
   conditional mounting.
 - `lrc` stays in the startup chunk on purpose: eagerly-imported
   `lib/lyrics.ts` needs `parseLRC`. It's ~1 kB — not worth contorting.
+- **Stale-chunk recovery** (`main.tsx`): a tab from a previous build can 404
+  on a lazy chunk after a deploy (old hashes gone from the SW precache) —
+  the `vite:preloadError` listener reloads to the new build instead of
+  leaving a blank surface. Don't remove it while lazy chunks exist.
 
 ## Memoization gotchas
 

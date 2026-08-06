@@ -563,7 +563,12 @@ export default function App() {
       const allFiles = Array.from(files);
       const playlistFiles = allFiles.filter(isPlaylistFile);
       const lrcFiles = allFiles.filter(isLrcFile);
-      const arr = allFiles.filter((f) => f.type.startsWith('audio/'));
+      // Playlist files must be excluded EXPLICITLY: Chromium reports .m3u as
+      // `audio/x-mpegurl`, which passes the audio/ prefix check and would
+      // double-process the file as both a playlist and a bogus "song".
+      const arr = allFiles.filter(
+        (f) => f.type.startsWith('audio/') && !isPlaylistFile(f) && !isLrcFile(f),
+      );
       if (arr.length === 0 && playlistFiles.length === 0 && lrcFiles.length === 0) {
         alert('Please select audio files (MP3, WAV, FLAC, etc.)');
         return;
@@ -662,21 +667,30 @@ export default function App() {
 
   const handleBatchDelete = useCallback(
     (ids: string[]) => {
+      // Same scoped-vs-app-wide split as handleDeleteSong.
+      const scoped = activePlaylistId !== 'library' && activePlaylistId !== 'favorites';
       const playlistName =
         activePlaylistId === 'favorites'
           ? 'Favorites'
           : playlists.find((p) => p.id === activePlaylistId)?.name ?? 'this playlist';
+      const noun = ids.length === 1 ? 'song' : 'songs';
       requestConfirm(
-        `Delete ${ids.length} ${ids.length === 1 ? 'song' : 'songs'}?`,
-        activePlaylistId === 'favorites'
-          ? `${ids.length} ${ids.length === 1 ? 'song' : 'songs'} will be permanently removed from your library and all playlists.`
-          : `${ids.length} ${ids.length === 1 ? 'song' : 'songs'} will be removed from "${playlistName}".`,
+        `Delete ${ids.length} ${noun}?`,
+        scoped
+          ? `${ids.length} ${noun} will be removed from "${playlistName}". Songs remain in Library.`
+          : `${ids.length} ${noun} will be permanently removed from your library and all playlists.`,
         () => {
           const idSet = new Set(ids);
           setPlaylists((prev) =>
-            prev.map((p) => ({ ...p, songs: p.songs.filter((s) => !idSet.has(s.id)) })),
+            scoped
+              ? prev.map((p) =>
+                  p.id === activePlaylistId
+                    ? { ...p, songs: p.songs.filter((s) => !idSet.has(s.id)) }
+                    : p,
+                )
+              : prev.map((p) => ({ ...p, songs: p.songs.filter((s) => !idSet.has(s.id)) })),
           );
-          setCurrentSong((prev) => (prev && idSet.has(prev.id) ? null : prev));
+          if (!scoped) setCurrentSong((prev) => (prev && idSet.has(prev.id) ? null : prev));
         },
       );
     },
@@ -730,20 +744,29 @@ export default function App() {
       const song = filteredSongsRef.current.find((s) => s.id === id);
       if (!song) return;
       const aid = activePlaylistIdRef.current;
+      // Scoped delete: from a user playlist, remove only there (the song stays
+      // in Library — matching what the dialog promises). From Library or the
+      // Favorites view, delete is app-wide and permanent.
+      const scoped = aid !== 'library' && aid !== 'favorites';
       const playlistName =
         aid === 'favorites'
           ? 'Favorites'
           : playlistsRef.current.find((p) => p.id === aid)?.name ?? 'this playlist';
       requestConfirm(
         `Delete "${song.title}"?`,
-        aid === 'favorites'
-          ? 'Permanently removes from your library and all playlists.'
-          : `Removes from "${playlistName}". ${aid === 'library' ? '' : 'Song remains in Library.'}`,
+        scoped
+          ? `Removes from "${playlistName}". Song remains in Library.`
+          : 'Permanently removes from your library and all playlists.',
         () => {
           setPlaylists((prev) =>
-            prev.map((p) => ({ ...p, songs: p.songs.filter((s) => s.id !== id) })),
+            scoped
+              ? prev.map((p) =>
+                  p.id === aid ? { ...p, songs: p.songs.filter((s) => s.id !== id) } : p,
+                )
+              : prev.map((p) => ({ ...p, songs: p.songs.filter((s) => s.id !== id) })),
           );
-          setCurrentSong((prev) => (prev?.id === id ? null : prev));
+          // Scoped removal keeps the song in the library — don't stop playback.
+          if (!scoped) setCurrentSong((prev) => (prev?.id === id ? null : prev));
         },
       );
     },
