@@ -11,6 +11,7 @@ function renderPlayerBar(overrides: Partial<Parameters<typeof PlayerBar>[0]> = {
   const onToggleShuffle = vi.fn();
   const onEqPresetChange = vi.fn();
   const onVolumeChange = vi.fn();
+  const onToggleFavorite = vi.fn();
   const utils = render(
     <PlayerBar
       song={null}
@@ -30,10 +31,11 @@ function renderPlayerBar(overrides: Partial<Parameters<typeof PlayerBar>[0]> = {
       onToggleShuffle={onToggleShuffle}
       onEqPresetChange={onEqPresetChange}
       onVolumeChange={onVolumeChange}
+      onToggleFavorite={onToggleFavorite}
       {...overrides}
     />,
   );
-  return { ...utils, onPlayPause, onPrev, onNext, onSeek, onCycleRepeat, onToggleShuffle, onEqPresetChange, onVolumeChange };
+  return { ...utils, onPlayPause, onPrev, onNext, onSeek, onCycleRepeat, onToggleShuffle, onEqPresetChange, onVolumeChange, onToggleFavorite };
 }
 
 describe('PlayerBar', () => {
@@ -215,5 +217,21 @@ describe('PlayerBar', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Unmute' }));
     // Restores to the default lastVolumeRef (1 on first mount with volume=0)
     expect(onVolumeChange).toHaveBeenCalledWith(1);
+  });
+
+  it('heart button fires onToggleFavorite and shows unfavorited state', () => {
+    const { onToggleFavorite } = renderPlayerBar({ song: makeSong({ title: 'Alpha' }) });
+    const btn = screen.getByRole('button', { name: 'Add to Favorites' });
+    expect(btn).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(btn);
+    expect(onToggleFavorite).toHaveBeenCalledTimes(1);
+  });
+
+  it('heart shows favorited state for a favorite song', () => {
+    renderPlayerBar({ song: makeSong({ favorite: true }) });
+    expect(screen.getByRole('button', { name: 'Remove from Favorites' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
   });
 });

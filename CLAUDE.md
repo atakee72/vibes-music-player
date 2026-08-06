@@ -411,6 +411,26 @@
   selectionMode → close upload → clear search → blur input.
   ConfirmModal owns its own Escape via a capture-phase listener.
 
+## Favorites
+
+- `Song.favorite?: boolean` — persists for free via storage's `SongMeta`
+  Omit+spread (no storage.ts changes). `toggleFavorite(id)` in `App.tsx`
+  (stable `useCallback([])`) flips the flag across all playlists +
+  `currentSong`.
+- **"Favorites" is a virtual playlist** (`id: 'favorites'`), derived via
+  `useMemo` from ALL playlists' hearted songs (deduped by id — ingest adds
+  only to the active playlist, so Library is not a strict superset) and
+  spliced into `sidebarPlaylists` for display only. It must NEVER enter
+  `playlists` state (never persisted, saved, or URL-diffed). `activePlaylist`
+  resolves it via a ternary.
+- Guards mirror `'library'`: no rename/delete buttons (Sidebar), early
+  returns in App's handlers, reorder disabled via the `isFilterActive` OR.
+  Dropping songs onto the Favorites sidebar row marks them favorite instead
+  of copying; drag FROM Favorites copies (Ctrl-move degrades to copy).
+- Hearts: desktop song rows (hover-revealed, always visible when favorited)
+  + PlayerBar (all sizes — the mobile favoriting surface). `text-coral` +
+  `fill-current` when on; `aria-pressed` carries the state. Never `danger`.
+
 ## Confirmation modals
 
 - `ConfirmModal` (`src/components/ConfirmModal.tsx`) is the reusable

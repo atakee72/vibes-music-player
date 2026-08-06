@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ChevronUp,
+  Heart,
   Music,
   Pause,
   PictureInPicture2,
@@ -43,6 +44,7 @@ interface PlayerBarProps {
   onVolumeChange: (v: number) => void;
   /** Mobile only: open the full-screen now-playing view (tap the cover/title). */
   onExpand?: () => void;
+  onToggleFavorite?: () => void;
 }
 
 const formatTime = (s: number) => {
@@ -72,6 +74,7 @@ export function PlayerBar({
   volume,
   onVolumeChange,
   onExpand,
+  onToggleFavorite,
 }: PlayerBarProps) {
   const [eqOpen, setEqOpen] = useState(false);
   const eqWrapRef = useRef<HTMLDivElement>(null);
@@ -182,6 +185,22 @@ export function PlayerBar({
             <p className="text-xs lg:text-sm text-white/60 truncate">{song.artist}</p>
           </div>
         </div>
+
+        {onToggleFavorite && (
+          <button
+            onClick={onToggleFavorite}
+            className="shrink-0 p-2 hover:bg-white/10 rounded-lg transition-all mr-1 lg:mr-2"
+            aria-label={song.favorite ? 'Remove from Favorites' : 'Add to Favorites'}
+            aria-pressed={!!song.favorite}
+          >
+            <Heart
+              className={
+                'h-4 w-4 lg:h-5 lg:w-5 ' +
+                (song.favorite ? 'text-coral fill-current' : 'text-white/60')
+              }
+            />
+          </button>
+        )}
 
         <div className="flex items-center space-x-2 lg:space-x-4">
           <button

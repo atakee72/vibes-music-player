@@ -1448,6 +1448,7 @@ export default function App() {
         supportsPip={'documentPictureInPicture' in window}
         isPipOpen={pipWindow !== null}
         onExpand={() => setMobilePlayerOpen(true)}
+        onToggleFavorite={currentSong ? () => toggleFavorite(currentSong.id) : undefined}
       />
 
       </DndContext>
