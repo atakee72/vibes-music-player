@@ -631,6 +631,18 @@ export default function App() {
     setCurrentSong(song);
   }, []);
 
+  const toggleFavorite = useCallback((id: string) => {
+    setPlaylists((prev) =>
+      prev.map((p) => ({
+        ...p,
+        songs: p.songs.map((s) => (s.id === id ? { ...s, favorite: !s.favorite } : s)),
+      })),
+    );
+    setCurrentSong((prev) =>
+      prev?.id === id ? { ...prev, favorite: !prev.favorite } : prev,
+    );
+  }, []);
+
   // Stable ref to filteredSongs and activePlaylistId so handleDeleteSong
   // doesn't recreate on every list/playlist change (would defeat row memo).
   const filteredSongsRef = useRef<Song[]>([]);
@@ -1309,6 +1321,7 @@ export default function App() {
                 onPlay={handlePlaySong}
                 onPause={togglePlayPause}
                 onDelete={handleDeleteSong}
+                onToggleFavorite={toggleFavorite}
                 onBatchDelete={handleBatchDelete}
                 onReorder={handleReorder}
                 isFilterActive={searchQuery.trim().length > 0 || sortBy !== 'manual'}

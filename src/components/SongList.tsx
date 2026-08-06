@@ -10,6 +10,7 @@ import {
   Check,
   Clock,
   GripVertical,
+  Heart,
   MoreHorizontal,
   Music,
   Pause,
@@ -28,6 +29,7 @@ interface SongListProps {
   onPlay: (song: Song) => void;
   onPause: () => void;
   onDelete: (id: string) => void;
+  onToggleFavorite: (id: string) => void;
   onBatchDelete: (ids: string[]) => void;
   onReorder: (songs: Song[]) => void;
   isFilterActive: boolean;
@@ -56,6 +58,7 @@ interface SortableRowProps {
   onPlay: (song: Song) => void;
   onPause: () => void;
   onDelete: (id: string) => void;
+  onToggleFavorite: (id: string) => void;
   onRowClick: (song: Song, e: React.MouseEvent) => void;
   onLongPress: (song: Song) => void;
 }
@@ -71,6 +74,7 @@ const SortableRow = memo(function SortableRow({
   onPlay,
   onPause,
   onDelete,
+  onToggleFavorite,
   onRowClick,
   onLongPress,
 }: SortableRowProps) {
@@ -242,6 +246,28 @@ const SortableRow = memo(function SortableRow({
             {song.duration ? (
               <span className="text-sm text-white/60 font-mono">{formatTime(song.duration)}</span>
             ) : null}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleFavorite(song.id);
+              }}
+              className={
+                'p-2 hover:bg-white/10 rounded-lg transition-all ' +
+                (song.favorite ? 'opacity-100' : 'opacity-0 group-hover:opacity-100')
+              }
+              aria-label={
+                song.favorite
+                  ? `Remove ${song.title} from Favorites`
+                  : `Add ${song.title} to Favorites`
+              }
+              aria-pressed={!!song.favorite}
+            >
+              <Heart
+                className={
+                  'h-4 w-4 ' + (song.favorite ? 'text-coral fill-current' : 'text-white/60')
+                }
+              />
+            </button>
             <div className="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
               <button
                 onClick={(e) => {
@@ -276,6 +302,7 @@ export function SongList({
   onPlay,
   onPause,
   onDelete,
+  onToggleFavorite,
   onBatchDelete,
   onReorder,
   isFilterActive,
@@ -478,6 +505,7 @@ export function SongList({
                   onPlay={onPlay}
                   onPause={onPause}
                   onDelete={onDelete}
+                  onToggleFavorite={onToggleFavorite}
                   onRowClick={handleRowClick}
                   onLongPress={handleLongPress}
                 />

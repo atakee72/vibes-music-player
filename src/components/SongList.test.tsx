@@ -10,6 +10,7 @@ function renderSongList(overrides: Partial<Parameters<typeof SongList>[0]> = {})
   const onBatchDelete = vi.fn();
   const onReorder = vi.fn();
   const onSelectionModeChange = vi.fn();
+  const onToggleFavorite = vi.fn();
   const utils = render(
     <DndContext>
       <SongList
@@ -23,12 +24,13 @@ function renderSongList(overrides: Partial<Parameters<typeof SongList>[0]> = {})
         onDelete={onDelete}
         onBatchDelete={onBatchDelete}
         onReorder={onReorder}
+        onToggleFavorite={onToggleFavorite}
         isFilterActive={false}
         {...overrides}
       />
     </DndContext>,
   );
-  return { ...utils, onPlay, onPause, onDelete, onBatchDelete, onReorder, onSelectionModeChange };
+  return { ...utils, onPlay, onPause, onDelete, onBatchDelete, onReorder, onSelectionModeChange, onToggleFavorite };
 }
 
 describe('SongList', () => {
@@ -161,5 +163,20 @@ describe('SongList', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete selected' }));
     expect(onBatchDelete).toHaveBeenCalledWith([songs[0].id]);
     expect(onSelectionModeChange).toHaveBeenCalledWith(false);
+  });
+
+  it('heart button fires onToggleFavorite with the song id, not onPlay', () => {
+    const song = makeSong({ title: 'Alpha' });
+    const { onToggleFavorite, onPlay } = renderSongList({ songs: [song] });
+    fireEvent.click(screen.getByRole('button', { name: 'Add Alpha to Favorites' }));
+    expect(onToggleFavorite).toHaveBeenCalledWith(song.id);
+    expect(onPlay).not.toHaveBeenCalled();
+  });
+
+  it('heart reflects favorite state via label and aria-pressed', () => {
+    const fav = makeSong({ title: 'Bravo', favorite: true });
+    renderSongList({ songs: [fav] });
+    const btn = screen.getByRole('button', { name: 'Remove Bravo from Favorites' });
+    expect(btn).toHaveAttribute('aria-pressed', 'true');
   });
 });

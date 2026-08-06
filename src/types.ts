@@ -20,6 +20,7 @@ export interface Song {
   fileHandle?: FileSystemFileHandle;
   replayGainDb?: number;
   lyrics?: LyricLine[];
+  favorite?: boolean;
 }
 
 export interface Playlist {
