@@ -223,8 +223,8 @@
   + genre/BPM chips + a scrubbable tinted progress bar. **No transport buttons** —
   the persistent bottom `PlayerBar` owns transport (the hero scrolls off). Two
   progress bars (hero + bar) is intentional; only transport must not be doubled.
-  Mobile keeps the list + bottom bar; the full-screen mobile now-playing view
-  (frame D) is a deferred follow-up.
+  Mobile keeps the list + bottom bar; the full-screen now-playing view
+  (frame D) shipped as `MobileNowPlaying` — see "Mobile layout".
 - **Chips** show `song.genre` / `${bpm} BPM` only when present (`bpm` read from
   `meta.common.bpm` in `useMetadataExtractor`, persists free via the `Omit`+spread
   in `storage.ts`); the chip row is omitted when both are absent. A genre chip
