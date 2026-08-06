@@ -84,7 +84,6 @@ export function useAudioEngine({
     const audioB = audioRefB.current;
     if (!audioA || !audioB) return;
 
-    const perfT0 = performance.now();
     let ctx: AudioContext;
     try {
       const Ctor =
@@ -132,12 +131,6 @@ export function useAudioEngine({
     chainB.gain.connect(mixer);
     mixer.connect(analyser);
     analyser.connect(ctx.destination);
-
-    // [perf] AudioContext + graph build cost at mount. On Chrome the context is
-    // created suspended and this is cheap; if Firefox is slow here, this is why.
-    console.log(
-      `[perf] audio graph init: ${(performance.now() - perfT0).toFixed(0)}ms (ctx.state=${ctx.state})`,
-    );
 
     const data = new Uint8Array(analyser.frequencyBinCount);
     const tick = () => {

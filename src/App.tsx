@@ -191,14 +191,7 @@ export default function App() {
           }
         }
 
-        const perfT0 = performance.now();
         const loaded = needsPrompt ? [] : await storage.getPlaylists();
-        // [perf] How long restoring the persisted library takes (IDB read +
-        // rebuilding File objects / object URLs). Scales with library size.
-        const songCount = loaded.reduce((n, p) => n + p.songs.length, 0);
-        console.log(
-          `[perf] library load: ${(performance.now() - perfT0).toFixed(0)}ms (${songCount} songs, ${needsPrompt ? 'permission-gated' : 'restored'})`,
-        );
         const storedEq = await storage.getEqPreset();
         const storedVolume = await storage.getVolume();
         setLibraryRoots(roots);
