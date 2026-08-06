@@ -698,7 +698,7 @@ export default function App() {
           : playlistsRef.current.find((p) => p.id === aid)?.name ?? 'this playlist';
       requestConfirm(
         `Delete "${song.title}"?`,
-        `Removes from "${playlistName}". ${aid === 'library' ? '' : 'Song remains in Library.'}`,
+        `Removes from "${playlistName}". ${aid === 'library' || aid === 'favorites' ? '' : 'Song remains in Library.'}`,
         () => {
           setPlaylists((prev) =>
             prev.map((p) => ({ ...p, songs: p.songs.filter((s) => s.id !== id) })),
