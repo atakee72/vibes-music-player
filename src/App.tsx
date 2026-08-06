@@ -153,7 +153,10 @@ export default function App() {
   // random pick and desync the preloaded element from what actually plays.
   const nextSong = useMemo(
     () => nextInPlaylist(currentSong, activePlaylist?.songs ?? [], repeatMode, shuffle),
-    [currentSong, activePlaylist?.songs, repeatMode, shuffle],
+    // Keyed on track IDENTITY, not the object: currentSong's reference churns on
+    // metadata merges (favorite toggle, lyrics fetch) and recomputing would
+    // re-roll shuffle's random pick and desync the gapless preload (CLAUDE.md).
+    [currentSong?.id, activePlaylist?.songs, repeatMode, shuffle],
   );
   const tintColor = useDominantColor(currentSong?.coverArt);
   const { canInstall, promptInstall, isIOS } = useInstallPrompt();

@@ -75,6 +75,7 @@ describe('SongList', () => {
           onPlay={onPlay}
           onPause={onPause}
           onDelete={vi.fn()}
+          onToggleFavorite={vi.fn()}
           onBatchDelete={vi.fn()}
           onReorder={vi.fn()}
           isFilterActive={false}
