@@ -8,6 +8,7 @@ function renderSidebar(overrides: Partial<Parameters<typeof Sidebar>[0]> = {}) {
   const onCreate = vi.fn();
   const onDelete = vi.fn();
   const onClose = vi.fn();
+  const onRename = vi.fn();
   const library = makePlaylist({ id: 'library', name: 'Library' });
   const mix = makePlaylist({ id: 'mix-1', name: 'Mix' });
 
@@ -19,13 +20,14 @@ function renderSidebar(overrides: Partial<Parameters<typeof Sidebar>[0]> = {}) {
         onSelect={onSelect}
         onCreate={onCreate}
         onDelete={onDelete}
+        onRename={onRename}
         isOpen={false}
         onClose={onClose}
         {...overrides}
       />
     </DndContext>,
   );
-  return { ...utils, onSelect, onCreate, onDelete, onClose, library, mix };
+  return { ...utils, onSelect, onCreate, onDelete, onClose, onRename, library, mix };
 }
 
 describe('Sidebar', () => {
@@ -82,5 +84,17 @@ describe('Sidebar', () => {
     renderSidebar();
     expect(screen.getByText('Mix')).toBeInTheDocument();
     expect(screen.getByText('Library')).toBeInTheDocument();
+  });
+
+  it('shows a rename button for user playlists that fires onRename, not onSelect', () => {
+    const { onRename, onSelect, mix } = renderSidebar();
+    fireEvent.click(screen.getByRole('button', { name: 'Rename Mix' }));
+    expect(onRename).toHaveBeenCalledWith(mix.id);
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('does NOT show a rename button for the Library playlist', () => {
+    renderSidebar();
+    expect(screen.queryByRole('button', { name: 'Rename Library' })).not.toBeInTheDocument();
   });
 });

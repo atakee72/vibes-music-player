@@ -1,5 +1,5 @@
 import { useDroppable } from '@dnd-kit/core';
-import { Music, PanelLeftClose, Plus, Trash2 } from 'lucide-react';
+import { Music, PanelLeftClose, Pencil, Plus, Trash2 } from 'lucide-react';
 import type { Playlist } from '../types';
 
 interface SidebarProps {
@@ -8,6 +8,7 @@ interface SidebarProps {
   onSelect: (id: string) => void;
   onCreate: () => void;
   onDelete: (id: string) => void;
+  onRename: (id: string) => void;
   isOpen: boolean;
   onClose: () => void;
 }
@@ -17,10 +18,11 @@ interface PlaylistRowProps {
   active: boolean;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
+  onRename: (id: string) => void;
   onClose: () => void;
 }
 
-function PlaylistRow({ playlist, active, onSelect, onDelete, onClose }: PlaylistRowProps) {
+function PlaylistRow({ playlist, active, onSelect, onDelete, onRename, onClose }: PlaylistRowProps) {
   const { setNodeRef, isOver } = useDroppable({ id: `playlist-${playlist.id}` });
   return (
     <div
@@ -44,16 +46,28 @@ function PlaylistRow({ playlist, active, onSelect, onDelete, onClose }: Playlist
         <p className="text-xs text-white/50">{playlist.songs.length} songs</p>
       </div>
       {playlist.id !== 'library' && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete(playlist.id);
-          }}
-          className="opacity-0 group-hover:opacity-100 p-1 hover:bg-danger/20 rounded transition-all"
-          aria-label={`Delete ${playlist.name}`}
-        >
-          <Trash2 className="h-3 w-3 text-danger" />
-        </button>
+        <div className="flex items-center">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onRename(playlist.id);
+            }}
+            className="opacity-0 group-hover:opacity-100 p-1 hover:bg-white/10 rounded transition-all"
+            aria-label={`Rename ${playlist.name}`}
+          >
+            <Pencil className="h-3 w-3 text-white/70" />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(playlist.id);
+            }}
+            className="opacity-0 group-hover:opacity-100 p-1 hover:bg-danger/20 rounded transition-all"
+            aria-label={`Delete ${playlist.name}`}
+          >
+            <Trash2 className="h-3 w-3 text-danger" />
+          </button>
+        </div>
       )}
     </div>
   );
@@ -65,6 +79,7 @@ export function Sidebar({
   onSelect,
   onCreate,
   onDelete,
+  onRename,
   isOpen,
   onClose,
 }: SidebarProps) {
@@ -110,6 +125,7 @@ export function Sidebar({
             active={p.id === activePlaylistId}
             onSelect={onSelect}
             onDelete={onDelete}
+            onRename={onRename}
             onClose={onClose}
           />
         ))}
