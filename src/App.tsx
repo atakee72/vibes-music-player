@@ -185,9 +185,13 @@ export default function App() {
   // random pick and desync the preloaded element from what actually plays.
   const nextSong = useMemo(
     () => nextInPlaylist(currentSong, activePlaylist?.songs ?? [], repeatMode, shuffle),
-    // Keyed on track IDENTITY, not the object: currentSong's reference churns on
-    // metadata merges (favorite toggle, lyrics fetch) and recomputing would
-    // re-roll shuffle's random pick and desync the gapless preload (CLAUDE.md).
+    // Keyed on track IDENTITY (currentSong?.id), not the object, so metadata
+    // merges (favorite toggle, lyrics fetch) on the PLAYING song don't re-roll
+    // shuffle's random pick. NOT fully protected: activePlaylist?.songs is
+    // still a reference dep, so mutating a song INSIDE the active playlist
+    // (e.g. hearting it) recomputes and may re-roll shuffle; the audio engine
+    // self-heals the preload on the next timeupdate, so worst case is a rare
+    // non-gapless track boundary, never a wrong song or a stall.
     [currentSong?.id, activePlaylist?.songs, repeatMode, shuffle],
   );
   const tintColor = useDominantColor(currentSong?.coverArt);
@@ -646,7 +650,9 @@ export default function App() {
           : playlists.find((p) => p.id === activePlaylistId)?.name ?? 'this playlist';
       requestConfirm(
         `Delete ${ids.length} ${ids.length === 1 ? 'song' : 'songs'}?`,
-        `${ids.length} ${ids.length === 1 ? 'song' : 'songs'} will be removed from "${playlistName}".`,
+        activePlaylistId === 'favorites'
+          ? `${ids.length} ${ids.length === 1 ? 'song' : 'songs'} will be permanently removed from your library and all playlists.`
+          : `${ids.length} ${ids.length === 1 ? 'song' : 'songs'} will be removed from "${playlistName}".`,
         () => {
           const idSet = new Set(ids);
           setPlaylists((prev) =>
@@ -674,10 +680,11 @@ export default function App() {
 
   const toggleFavorite = useCallback((id: string) => {
     setPlaylists((prev) =>
-      prev.map((p) => ({
-        ...p,
-        songs: p.songs.map((s) => (s.id === id ? { ...s, favorite: !s.favorite } : s)),
-      })),
+      prev.map((p) =>
+        p.songs.some((s) => s.id === id)
+          ? { ...p, songs: p.songs.map((s) => (s.id === id ? { ...s, favorite: !s.favorite } : s)) }
+          : p,
+      ),
     );
     setCurrentSong((prev) =>
       prev?.id === id ? { ...prev, favorite: !prev.favorite } : prev,
@@ -711,7 +718,9 @@ export default function App() {
           : playlistsRef.current.find((p) => p.id === aid)?.name ?? 'this playlist';
       requestConfirm(
         `Delete "${song.title}"?`,
-        `Removes from "${playlistName}". ${aid === 'library' || aid === 'favorites' ? '' : 'Song remains in Library.'}`,
+        aid === 'favorites'
+          ? 'Permanently removes from your library and all playlists.'
+          : `Removes from "${playlistName}". ${aid === 'library' ? '' : 'Song remains in Library.'}`,
         () => {
           setPlaylists((prev) =>
             prev.map((p) => ({ ...p, songs: p.songs.filter((s) => s.id !== id) })),
@@ -826,10 +835,14 @@ export default function App() {
         if (targetId === 'favorites') {
           const idSet = new Set(ids);
           setPlaylists((prev) =>
-            prev.map((p) => ({
-              ...p,
-              songs: p.songs.map((s) => (idSet.has(s.id) ? { ...s, favorite: true } : s)),
-            })),
+            prev.map((p) =>
+              p.songs.some((s) => idSet.has(s.id))
+                ? {
+                    ...p,
+                    songs: p.songs.map((s) => (idSet.has(s.id) ? { ...s, favorite: true } : s)),
+                  }
+                : p,
+            ),
           );
           setCurrentSong((prev) =>
             prev && idSet.has(prev.id) ? { ...prev, favorite: true } : prev,
