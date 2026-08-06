@@ -557,8 +557,13 @@
 - App.tsx's save handler branches: on `StorageQuotaError`, shows a
   notification ("Storage full…"). Silent failure was the root cause of
   the "library gets reset" symptom from Phase 5.5's audit.
-- `getStorageEstimate()` wraps `navigator.storage.estimate()` for future
-  use (warning at 90%). Not currently wired into any UI.
+- `getStorageEstimate()` wraps `navigator.storage.estimate()`. **Early
+  warning wired**: after each successful debounced save, App.tsx checks
+  `formatStorageWarning(est)` (pure, unit-tested; threshold
+  `STORAGE_WARN_PERCENT = 90`) and toasts once per session
+  (`storageWarnedRef`) — warns BEFORE saves start failing, complementing
+  the after-failure `StorageQuotaError` toast. The estimate check has its
+  own `.catch` so an estimate failure never reads as a save failure.
 
 ## PWA / installability
 

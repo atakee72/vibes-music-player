@@ -1,5 +1,6 @@
 import {
   addLibraryRoot,
+  formatStorageWarning,
   getEqPreset,
   getLibraryRoots,
   getPlaylists,
@@ -236,5 +237,21 @@ describe('storage — playlists', () => {
 
     const loaded = await getPlaylists();
     expect(loaded[0].songs).toHaveLength(0);
+  });
+});
+
+describe('storage — early quota warning', () => {
+  it('returns null for a missing estimate and under the 90% threshold', () => {
+    expect(formatStorageWarning(null)).toBeNull();
+    expect(formatStorageWarning({ usage: 899, quota: 1000, percent: 89.9 })).toBeNull();
+  });
+
+  it('formats a rounded warning at and above 90%', () => {
+    expect(formatStorageWarning({ usage: 900, quota: 1000, percent: 90 })).toBe(
+      'Storage almost full (90% used) — new songs may fail to save.',
+    );
+    expect(formatStorageWarning({ usage: 924, quota: 1000, percent: 92.4 })).toBe(
+      'Storage almost full (92% used) — new songs may fail to save.',
+    );
   });
 });

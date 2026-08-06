@@ -293,18 +293,36 @@ export default function App() {
   // batch delete, reorder) collapse into one save instead of one per change.
   // Trade-off: changes within 500ms of tab close may be lost.
   const saveTimerRef = useRef<number | null>(null);
+  const storageWarnedRef = useRef(false); // early 90% warning fires once per session
   useEffect(() => {
     if (!loadedRef.current) return;
     if (saveTimerRef.current !== null) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = window.setTimeout(() => {
-      storage.savePlaylists(playlists).catch((err) => {
-        console.error('Save failed:', err);
-        if (err instanceof storage.StorageQuotaError) {
-          setNotification(
-            'Storage full. New songs may not survive a reload — free space or remove tracks.',
-          );
-        }
-      });
+      storage
+        .savePlaylists(playlists)
+        .then(() => {
+          if (storageWarnedRef.current) return;
+          storage
+            .getStorageEstimate()
+            .then((est) => {
+              const warning = storage.formatStorageWarning(est);
+              if (warning) {
+                storageWarnedRef.current = true;
+                setNotification(warning);
+              }
+            })
+            .catch(() => {
+              // estimate unavailable — never surface as a save error
+            });
+        })
+        .catch((err) => {
+          console.error('Save failed:', err);
+          if (err instanceof storage.StorageQuotaError) {
+            setNotification(
+              'Storage full. New songs may not survive a reload — free space or remove tracks.',
+            );
+          }
+        });
       saveTimerRef.current = null;
     }, 500);
     return () => {

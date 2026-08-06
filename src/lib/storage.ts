@@ -76,6 +76,20 @@ export async function getStorageEstimate(): Promise<{
   return { usage, quota, percent: quota > 0 ? (usage / quota) * 100 : 0 };
 }
 
+export const STORAGE_WARN_PERCENT = 90;
+
+/**
+ * Early quota warning: complements StorageQuotaError, which only fires AFTER
+ * a save has failed — this warns while saves still succeed. Returns null when
+ * under threshold or when the estimate is unavailable (unsupported browser).
+ */
+export function formatStorageWarning(
+  est: { usage: number; quota: number; percent: number } | null,
+): string | null {
+  if (!est || est.percent < STORAGE_WARN_PERCENT) return null;
+  return `Storage almost full (${Math.round(est.percent)}% used) — new songs may fail to save.`;
+}
+
 export async function getLibraryRoots(): Promise<LibraryRoot[]> {
   return (await get<LibraryRoot[]>(ROOTS_KEY)) ?? [];
 }
