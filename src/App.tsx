@@ -146,13 +146,22 @@ export default function App() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const { extractMetadata } = useMetadataExtractor();
 
-  // Library is a guaranteed superset of every playlist (ingest always lands
-  // there, Ctrl-move OUT of Library is prevented, delete removes everywhere),
-  // so deriving favorites from Library alone is complete.
-  const favoriteSongs = useMemo(
-    () => (playlists.find((p) => p.id === 'library')?.songs ?? []).filter((s) => s.favorite),
-    [playlists],
-  );
+  // Derived from ALL playlists, deduped by id (Library first in state order):
+  // ingest adds songs only to the active playlist, so Library is NOT a strict
+  // superset. toggleFavorite maps over all playlists, so duplicates agree.
+  const favoriteSongs = useMemo(() => {
+    const seen = new Set<string>();
+    const out: Song[] = [];
+    for (const p of playlists) {
+      for (const s of p.songs) {
+        if (s.favorite && !seen.has(s.id)) {
+          seen.add(s.id);
+          out.push(s);
+        }
+      }
+    }
+    return out;
+  }, [playlists]);
   const virtualFavorites = useMemo<Playlist>(
     () => ({ id: 'favorites', name: 'Favorites', songs: favoriteSongs, createdAt: FAVORITES_CREATED }),
     [favoriteSongs],
@@ -542,9 +551,11 @@ export default function App() {
       for (const file of arr) {
         try {
           const song = await extractMetadata(file);
+          // 'favorites' is a virtual view — route ingested songs to Library.
+          const targetId = activePlaylistId === 'favorites' ? 'library' : activePlaylistId;
           setPlaylists((prev) =>
             prev.map((p) =>
-              p.id === activePlaylistId ? { ...p, songs: [...p.songs, song] } : p,
+              p.id === targetId ? { ...p, songs: [...p.songs, song] } : p,
             ),
           );
           if (!firstIngestThisCall) {
@@ -578,9 +589,11 @@ export default function App() {
       }
 
       setLibraryRoots((prev) => [...prev, root]);
+      // 'favorites' is a virtual view — route ingested songs to Library.
+      const targetId = activePlaylistId === 'favorites' ? 'library' : activePlaylistId;
       setPlaylists((prev) =>
         prev.map((p) =>
-          p.id === activePlaylistId ? { ...p, songs: [...p.songs, ...songs] } : p,
+          p.id === targetId ? { ...p, songs: [...p.songs, ...songs] } : p,
         ),
       );
       setShowUpload(false);
@@ -838,8 +851,9 @@ export default function App() {
           ((activatorEvent as PointerEvent | KeyboardEvent | MouseEvent | null)?.ctrlKey ||
             (activatorEvent as PointerEvent | KeyboardEvent | MouseEvent | null)?.metaKey) ??
           false;
-        // Special case: never move from Library (always copy)
-        const effectiveMove = isMove && activePlaylistId !== 'library';
+        // Never move out of Library or the virtual Favorites view (always copy)
+        const effectiveMove =
+          isMove && activePlaylistId !== 'library' && activePlaylistId !== 'favorites';
 
         setPlaylists((prev) =>
           prev.map((p) => {
