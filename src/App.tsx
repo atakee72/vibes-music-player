@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import {
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react';
 import { createPortal } from 'react-dom';
 import {
   DndContext,
@@ -31,27 +40,40 @@ import { Sidebar } from './components/Sidebar';
 import { SongList } from './components/SongList';
 import { PlayerBar } from './components/PlayerBar';
 import { NowPlayingHero } from './components/NowPlayingHero';
-import { MobileNowPlaying } from './components/MobileNowPlaying';
 import { HeaderMenu, type HeaderAction } from './components/HeaderMenu';
 import * as storage from './lib/storage';
 import { ingestDirectoryHandle } from './lib/ingest';
 import { filterSongs } from './lib/filter';
 import { sortSongs, SORT_LABELS, type SortKey } from './lib/sort';
 import { extractLyrics } from './lib/lyrics';
-import { fetchLyricsOnline } from './lib/lyrics-online';
 import { nextInPlaylist } from './lib/queue';
 import type { EqPreset } from './lib/eq';
 import { useDominantColor } from './hooks/useDominantColor';
 import { useInstallPrompt } from './hooks/useInstallPrompt';
-import { MiniPlayer } from './components/MiniPlayer';
-import { parseM3U, parsePLS, matchImportEntries } from './lib/playlist-import';
-import { parseLRC } from './lib/lrc';
-import { LyricsPanel } from './components/LyricsPanel';
-import { ConfirmModal } from './components/ConfirmModal';
-import { PromptModal } from './components/PromptModal';
-import { serializeM3U, sanitizeFilename } from './lib/playlist-export';
 import { encodeSharePayload, decodeSharePayload, type SharedTrack } from './lib/share';
-import { SharedTrackModal } from './components/SharedTrackModal';
+
+// Code-split: these surfaces aren't needed for first paint, so they load on
+// demand (first open) instead of sitting in the startup chunk. The import/
+// export libs (playlist-import, lrc, playlist-export, lyrics-online) are
+// likewise `await import()`ed inside their handlers.
+const MobileNowPlaying = lazy(() =>
+  import('./components/MobileNowPlaying').then((m) => ({ default: m.MobileNowPlaying })),
+);
+const MiniPlayer = lazy(() =>
+  import('./components/MiniPlayer').then((m) => ({ default: m.MiniPlayer })),
+);
+const LyricsPanel = lazy(() =>
+  import('./components/LyricsPanel').then((m) => ({ default: m.LyricsPanel })),
+);
+const ConfirmModal = lazy(() =>
+  import('./components/ConfirmModal').then((m) => ({ default: m.ConfirmModal })),
+);
+const PromptModal = lazy(() =>
+  import('./components/PromptModal').then((m) => ({ default: m.PromptModal })),
+);
+const SharedTrackModal = lazy(() =>
+  import('./components/SharedTrackModal').then((m) => ({ default: m.SharedTrackModal })),
+);
 
 type LibraryStatus = 'loading' | 'ready' | 'needs-prompt';
 
@@ -87,6 +109,8 @@ export default function App() {
   const [pipWindow, setPipWindow] = useState<Window | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
   const [showLyrics, setShowLyrics] = useState(false);
+  const lyricsEverOpenedRef = useRef(false);
+  const mobilePlayerEverOpenedRef = useRef(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const [sharedTrack, setSharedTrack] = useState<SharedTrack | null>(null);
   const [confirm, setConfirm] = useState<{
@@ -333,6 +357,7 @@ export default function App() {
     async (files: File[]) => {
       const libraryPlaylist = playlists.find((p) => p.id === 'library');
       const librarySongs = libraryPlaylist?.songs ?? [];
+      const { parseM3U, parsePLS, matchImportEntries } = await import('./lib/playlist-import');
 
       for (const file of files) {
         const text = await file.text();
@@ -362,6 +387,7 @@ export default function App() {
 
   const handleLrcImport = useCallback(
     async (files: File[]) => {
+      const { parseLRC } = await import('./lib/lrc');
       for (const file of files) {
         const text = await file.text();
         const lyrics = parseLRC(text);
@@ -457,6 +483,7 @@ export default function App() {
         }
       }
       if (!lyrics || lyrics.length === 0) {
+        const { fetchLyricsOnline } = await import('./lib/lyrics-online');
         lyrics = await fetchLyricsOnline({
           title: song.title,
           artist: song.artist,
@@ -649,9 +676,10 @@ export default function App() {
   );
 
   const exportPlaylist = useCallback(
-    (playlistId: string) => {
+    async (playlistId: string) => {
       const playlist = playlists.find((p) => p.id === playlistId);
       if (!playlist) return;
+      const { serializeM3U, sanitizeFilename } = await import('./lib/playlist-export');
       const text = serializeM3U(playlist);
       const blob = new Blob([text], { type: 'audio/x-mpegurl' });
       const url = URL.createObjectURL(blob);
@@ -1005,6 +1033,15 @@ export default function App() {
       : []),
   ];
 
+  // Lazy-mount gating for the usePresence surfaces: they must STAY mounted
+  // after first open so their exit animation can play (a bare `{open && ...}`
+  // would unmount abruptly), but mounting them eagerly would defeat the
+  // code-split. Monotonic render-phase ref writes: once opened, always mounted.
+  if (showLyrics) lyricsEverOpenedRef.current = true;
+  if (mobilePlayerOpen) mobilePlayerEverOpenedRef.current = true;
+  const mountLyricsPanel = showLyrics || lyricsEverOpenedRef.current;
+  const mountMobileNowPlaying = mobilePlayerOpen || mobilePlayerEverOpenedRef.current;
+
   return (
     <div
       className="h-screen text-white flex flex-col overflow-hidden"
@@ -1279,16 +1316,20 @@ export default function App() {
                     : undefined
                 }
               />
-              <LyricsPanel
-                open={showLyrics}
-                lyrics={currentSong?.lyrics}
-                currentTime={currentTime}
-                onClose={() => setShowLyrics(false)}
-                onSeek={seek}
-                onFetch={currentSong ? handleFetchLyrics : undefined}
-                fetching={fetchingLyrics}
-                fetchError={fetchLyricsError}
-              />
+              {mountLyricsPanel && (
+                <Suspense fallback={null}>
+                  <LyricsPanel
+                    open={showLyrics}
+                    lyrics={currentSong?.lyrics}
+                    currentTime={currentTime}
+                    onClose={() => setShowLyrics(false)}
+                    onSeek={seek}
+                    onFetch={currentSong ? handleFetchLyrics : undefined}
+                    fetching={fetchingLyrics}
+                    fetchError={fetchLyricsError}
+                  />
+                </Suspense>
+              )}
             </div>
           </div>
         </div>
@@ -1320,46 +1361,52 @@ export default function App() {
 
       </DndContext>
 
-      <MobileNowPlaying
-        open={mobilePlayerOpen}
-        onClose={() => setMobilePlayerOpen(false)}
-        song={currentSong}
-        playlistName={activePlaylist?.name}
-        isPlaying={isPlaying}
-        currentTime={currentTime}
-        duration={duration}
-        visualizerData={visualizerData}
-        repeatMode={repeatMode}
-        shuffle={shuffle}
-        eqPreset={eqPreset}
-        volume={volume}
-        onPlayPause={togglePlayPause}
-        onPrev={playPrev}
-        onNext={playNext}
-        onSeek={seek}
-        onCycleRepeat={cycleRepeat}
-        onToggleShuffle={() => setShuffle((s) => !s)}
-        onEqPresetChange={setEqPreset}
-        onVolumeChange={setVolume}
-        onToggleLyrics={() => {
-          setShowLyrics((v) => !v);
-          // Close the full-screen view so the lyrics panel (lower z-index) shows.
-          setMobilePlayerOpen(false);
-        }}
-        onShare={handleShare}
-      />
+      {mountMobileNowPlaying && (
+        <Suspense fallback={null}>
+          <MobileNowPlaying
+            open={mobilePlayerOpen}
+            onClose={() => setMobilePlayerOpen(false)}
+            song={currentSong}
+            playlistName={activePlaylist?.name}
+            isPlaying={isPlaying}
+            currentTime={currentTime}
+            duration={duration}
+            visualizerData={visualizerData}
+            repeatMode={repeatMode}
+            shuffle={shuffle}
+            eqPreset={eqPreset}
+            volume={volume}
+            onPlayPause={togglePlayPause}
+            onPrev={playPrev}
+            onNext={playNext}
+            onSeek={seek}
+            onCycleRepeat={cycleRepeat}
+            onToggleShuffle={() => setShuffle((s) => !s)}
+            onEqPresetChange={setEqPreset}
+            onVolumeChange={setVolume}
+            onToggleLyrics={() => {
+              setShowLyrics((v) => !v);
+              // Close the full-screen view so the lyrics panel (lower z-index) shows.
+              setMobilePlayerOpen(false);
+            }}
+            onShare={handleShare}
+          />
+        </Suspense>
+      )}
 
       {pipWindow &&
         currentSong &&
         createPortal(
-          <MiniPlayer
-            song={currentSong}
-            isPlaying={isPlaying}
-            tintColor={tintColor}
-            onPlayPause={togglePlayPause}
-            onPrev={playPrev}
-            onNext={playNext}
-          />,
+          <Suspense fallback={null}>
+            <MiniPlayer
+              song={currentSong}
+              isPlaying={isPlaying}
+              tintColor={tintColor}
+              onPlayPause={togglePlayPause}
+              onPrev={playPrev}
+              onNext={playNext}
+            />
+          </Suspense>,
           pipWindow.document.body,
         )}
 
@@ -1413,32 +1460,44 @@ export default function App() {
         </div>
       )}
 
-      <ConfirmModal
-        open={confirm !== null}
-        title={confirm?.title ?? ''}
-        message={confirm?.message ?? ''}
-        confirmLabel={confirm?.confirmLabel}
-        onConfirm={() => {
-          confirm?.onConfirm();
-          setConfirm(null);
-        }}
-        onCancel={() => setConfirm(null)}
-      />
+      {confirm !== null && (
+        <Suspense fallback={null}>
+          <ConfirmModal
+            open
+            title={confirm.title}
+            message={confirm.message}
+            confirmLabel={confirm.confirmLabel}
+            onConfirm={() => {
+              confirm.onConfirm();
+              setConfirm(null);
+            }}
+            onCancel={() => setConfirm(null)}
+          />
+        </Suspense>
+      )}
 
-      <PromptModal
-        open={promptState !== null}
-        title={promptState?.title ?? ''}
-        placeholder={promptState?.placeholder}
-        defaultValue={promptState?.defaultValue}
-        confirmLabel={promptState?.confirmLabel}
-        onConfirm={(value) => {
-          promptState?.onConfirm(value);
-          setPromptState(null);
-        }}
-        onCancel={() => setPromptState(null)}
-      />
+      {promptState !== null && (
+        <Suspense fallback={null}>
+          <PromptModal
+            open
+            title={promptState.title}
+            placeholder={promptState.placeholder}
+            defaultValue={promptState.defaultValue}
+            confirmLabel={promptState.confirmLabel}
+            onConfirm={(value) => {
+              promptState.onConfirm(value);
+              setPromptState(null);
+            }}
+            onCancel={() => setPromptState(null)}
+          />
+        </Suspense>
+      )}
 
-      <SharedTrackModal track={sharedTrack} onClose={() => setSharedTrack(null)} />
+      {sharedTrack !== null && (
+        <Suspense fallback={null}>
+          <SharedTrackModal track={sharedTrack} onClose={() => setSharedTrack(null)} />
+        </Suspense>
+      )}
 
       <audio ref={audioRefA} className="hidden" crossOrigin="anonymous" />
       <audio ref={audioRefB} className="hidden" crossOrigin="anonymous" />

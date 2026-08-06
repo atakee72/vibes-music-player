@@ -479,6 +479,25 @@
   observer falls back to a 1024×5000 viewport when the real measurement
   is zero. Real browsers use the actual rect.
 
+## Code splitting (startup perf)
+
+- The startup chunk is deliberately kept lean. **Off the critical path**:
+  `music-metadata` (dynamic `import()` everywhere), the six deferred UI
+  surfaces in `App.tsx` (`MobileNowPlaying`, `MiniPlayer`, `LyricsPanel`,
+  `ConfirmModal`, `PromptModal`, `SharedTrackModal` — all `React.lazy` +
+  `<Suspense fallback={null}>`), and the on-demand libs
+  (`playlist-import`, `lyrics-online`, `playlist-export` — `await import()`
+  inside their handlers). Don't re-add static imports for any of these;
+  each one lands back in the startup bundle.
+- **`usePresence` surfaces can't be `{open && <X/>}`-gated** (that kills the
+  exit animation) but also shouldn't mount eagerly. The pattern: a monotonic
+  render-phase ref (`lyricsEverOpenedRef` / `mobilePlayerEverOpenedRef`) —
+  first open mounts the lazy chunk, and it stays mounted afterwards so exits
+  animate. The plain modals self-null when closed, so they use simple
+  conditional mounting.
+- `lrc` stays in the startup chunk on purpose: eagerly-imported
+  `lib/lyrics.ts` needs `parseLRC`. It's ~1 kB — not worth contorting.
+
 ## Memoization gotchas
 
 - `SortableRow` is `React.memo`-wrapped. For this to actually skip
