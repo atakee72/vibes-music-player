@@ -77,6 +77,8 @@ const SharedTrackModal = lazy(() =>
 
 type LibraryStatus = 'loading' | 'ready' | 'needs-prompt';
 
+const FAVORITES_CREATED = new Date(0); // stable identity for the virtual playlist
+
 function ensureLibrary(playlists: Playlist[]): Playlist[] {
   if (playlists.some((p) => p.id === 'library')) return playlists;
   return [
@@ -144,7 +146,28 @@ export default function App() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const { extractMetadata } = useMetadataExtractor();
 
-  const activePlaylist = playlists.find((p) => p.id === activePlaylistId);
+  // Library is a guaranteed superset of every playlist (ingest always lands
+  // there, Ctrl-move OUT of Library is prevented, delete removes everywhere),
+  // so deriving favorites from Library alone is complete.
+  const favoriteSongs = useMemo(
+    () => (playlists.find((p) => p.id === 'library')?.songs ?? []).filter((s) => s.favorite),
+    [playlists],
+  );
+  const virtualFavorites = useMemo<Playlist>(
+    () => ({ id: 'favorites', name: 'Favorites', songs: favoriteSongs, createdAt: FAVORITES_CREATED }),
+    [favoriteSongs],
+  );
+  // Display list only — 'favorites' must never enter `playlists` state.
+  const sidebarPlaylists = useMemo(() => {
+    const idx = playlists.findIndex((p) => p.id === 'library');
+    const arr = [...playlists];
+    arr.splice(idx + 1, 0, virtualFavorites);
+    return arr;
+  }, [playlists, virtualFavorites]);
+  const activePlaylist =
+    activePlaylistId === 'favorites'
+      ? virtualFavorites
+      : playlists.find((p) => p.id === activePlaylistId);
   const filteredSongs = filterSongs(activePlaylist?.songs ?? [], searchQuery);
   // View-only ordering for the list; playback still walks the playlist order.
   const visibleSongs = sortSongs(filteredSongs, sortBy);
@@ -605,7 +628,9 @@ export default function App() {
   const handleBatchDelete = useCallback(
     (ids: string[]) => {
       const playlistName =
-        playlists.find((p) => p.id === activePlaylistId)?.name ?? 'this playlist';
+        activePlaylistId === 'favorites'
+          ? 'Favorites'
+          : playlists.find((p) => p.id === activePlaylistId)?.name ?? 'this playlist';
       requestConfirm(
         `Delete ${ids.length} ${ids.length === 1 ? 'song' : 'songs'}?`,
         `${ids.length} ${ids.length === 1 ? 'song' : 'songs'} will be removed from "${playlistName}".`,
@@ -668,7 +693,9 @@ export default function App() {
       if (!song) return;
       const aid = activePlaylistIdRef.current;
       const playlistName =
-        playlistsRef.current.find((p) => p.id === aid)?.name ?? 'this playlist';
+        aid === 'favorites'
+          ? 'Favorites'
+          : playlistsRef.current.find((p) => p.id === aid)?.name ?? 'this playlist';
       requestConfirm(
         `Delete "${song.title}"?`,
         `Removes from "${playlistName}". ${aid === 'library' ? '' : 'Song remains in Library.'}`,
@@ -685,7 +712,8 @@ export default function App() {
 
   const exportPlaylist = useCallback(
     async (playlistId: string) => {
-      const playlist = playlists.find((p) => p.id === playlistId);
+      const playlist =
+        playlistId === 'favorites' ? virtualFavorites : playlists.find((p) => p.id === playlistId);
       if (!playlist) return;
       const { serializeM3U, sanitizeFilename } = await import('./lib/playlist-export');
       const text = serializeM3U(playlist);
@@ -699,7 +727,7 @@ export default function App() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     },
-    [playlists],
+    [playlists, virtualFavorites],
   );
 
   const refreshLibrary = useCallback(async () => {
@@ -782,9 +810,28 @@ export default function App() {
         const ids = (active.data.current?.ids as string[] | undefined) ?? [
           String(active.id),
         ];
-        const songsToCopy = playlists
-          .find((p) => p.id === activePlaylistId)
-          ?.songs.filter((s) => ids.includes(s.id)) ?? [];
+        if (targetId === 'favorites') {
+          const idSet = new Set(ids);
+          setPlaylists((prev) =>
+            prev.map((p) => ({
+              ...p,
+              songs: p.songs.map((s) => (idSet.has(s.id) ? { ...s, favorite: true } : s)),
+            })),
+          );
+          setCurrentSong((prev) =>
+            prev && idSet.has(prev.id) ? { ...prev, favorite: true } : prev,
+          );
+          setNotification(
+            `Added ${ids.length} ${ids.length === 1 ? 'song' : 'songs'} to Favorites`,
+          );
+          setSelectionMode(false);
+          return;
+        }
+        const sourceSongs =
+          activePlaylistId === 'favorites'
+            ? favoriteSongs
+            : playlists.find((p) => p.id === activePlaylistId)?.songs ?? [];
+        const songsToCopy = sourceSongs.filter((s) => ids.includes(s.id));
         if (songsToCopy.length === 0) return;
 
         const isMove =
@@ -831,7 +878,7 @@ export default function App() {
         handleReorder(arrayMove(activePlaylist.songs, oldIndex, newIndex));
       }
     },
-    [playlists, activePlaylistId, selectionMode, handleReorder],
+    [playlists, activePlaylistId, selectionMode, handleReorder, favoriteSongs],
   );
 
   const togglePip = useCallback(async () => {
@@ -1114,7 +1161,7 @@ export default function App() {
             aria-hidden="true"
           />
           <Sidebar
-            playlists={playlists}
+            playlists={sidebarPlaylists}
             activePlaylistId={activePlaylistId}
             onSelect={setActivePlaylistId}
             onCreate={() => {
@@ -1131,7 +1178,7 @@ export default function App() {
               });
             }}
             onDelete={(id) => {
-              if (id === 'library') return;
+              if (id === 'library' || id === 'favorites') return;
               const playlist = playlists.find((p) => p.id === id);
               if (!playlist) return;
               requestConfirm(
@@ -1144,7 +1191,7 @@ export default function App() {
               );
             }}
             onRename={(id) => {
-              if (id === 'library') return;
+              if (id === 'library' || id === 'favorites') return;
               const playlist = playlists.find((p) => p.id === id);
               if (!playlist) return;
               setPromptState({
@@ -1327,7 +1374,9 @@ export default function App() {
                 onToggleFavorite={toggleFavorite}
                 onBatchDelete={handleBatchDelete}
                 onReorder={handleReorder}
-                isFilterActive={searchQuery.trim().length > 0 || sortBy !== 'manual'}
+                isFilterActive={
+                  searchQuery.trim().length > 0 || sortBy !== 'manual' || activePlaylistId === 'favorites'
+                }
                 selectionMode={selectionMode}
                 onSelectionModeChange={setSelectionMode}
                 emptyHint={
@@ -1336,7 +1385,12 @@ export default function App() {
                         primary: `No matches for "${searchQuery.trim()}"`,
                         secondary: 'Try a different search',
                       }
-                    : undefined
+                    : activePlaylistId === 'favorites'
+                      ? {
+                          primary: 'No favorites yet',
+                          secondary: 'Click the heart on a song to add it',
+                        }
+                      : undefined
                 }
               />
               {mountLyricsPanel && (

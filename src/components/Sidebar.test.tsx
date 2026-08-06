@@ -97,4 +97,15 @@ describe('Sidebar', () => {
     renderSidebar();
     expect(screen.queryByRole('button', { name: 'Rename Library' })).not.toBeInTheDocument();
   });
+
+  it('shows no rename or delete button for the Favorites virtual playlist', () => {
+    renderSidebar({
+      playlists: [
+        makePlaylist({ id: 'library', name: 'Library' }),
+        makePlaylist({ id: 'favorites', name: 'Favorites' }),
+      ],
+    });
+    expect(screen.queryByRole('button', { name: 'Rename Favorites' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete Favorites' })).not.toBeInTheDocument();
+  });
 });

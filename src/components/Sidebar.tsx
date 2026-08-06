@@ -45,7 +45,7 @@ function PlaylistRow({ playlist, active, onSelect, onDelete, onRename, onClose }
         <p className="text-sm font-medium truncate">{playlist.name}</p>
         <p className="text-xs text-white/50">{playlist.songs.length} songs</p>
       </div>
-      {playlist.id !== 'library' && (
+      {playlist.id !== 'library' && playlist.id !== 'favorites' && (
         <div className="flex items-center">
           <button
             onClick={(e) => {
