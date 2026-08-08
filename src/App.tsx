@@ -672,8 +672,12 @@ export default function App() {
       // Consuming from the queue? Drop everything up to AND including the
       // consumed entry — resolveNextSong may have skipped leading entries
       // equal to the (old) current song, and they must not linger at the head.
-      // Safe: when nextSong came from the playlist walk instead, the queue
-      // held only current-duplicates, so findIndex is -1 by construction.
+      // When nextSong came from the playlist walk instead, findIndex is
+      // almost always -1 (the queue held only current-duplicates); the one
+      // exception — single-song playlist under repeat-all, where the walk
+      // wraps to current itself and can match a stale queued duplicate — is
+      // also safe: slicing off that duplicate is harmless, it could never
+      // have played anyway.
       const qi = queue.findIndex((s) => s.id === nextSong.id);
       if (qi !== -1) setQueue((q) => q.slice(qi + 1));
       setCurrentSong(nextSong);
