@@ -98,9 +98,17 @@ shipped 2026-08-06; the queue is the remaining piece).
 ## Error handling / edge cases
 
 - Queued song deleted from the library (app-wide delete): the delete handlers
-  also filter it out of `queue` — a deleted song must not play.
-- Queue head equals the current song: allowed (replays the song); no
-  special-casing.
+  also filter it out of `queue` — a deleted song must not play. The
+  **Refresh-library orphan removal purges the queue the same way**.
+- **Queue head equal to the current song is NOT supported** (amended
+  2026-08-08 after audit): the engine's `ended` handler treats
+  `nextSong.url === active.src` as repeat-one and replays in place WITHOUT
+  calling `onEnded`, so the head would never dequeue — an infinite loop.
+  Therefore: the add actions refuse the currently-playing song ("Already
+  playing" toast), and `resolveNextSong` skips queue entries matching the
+  current song's id (they stay queued and become playable once a different
+  song is current); `playNext`'s dequeue drops the skipped run together with
+  the consumed entry.
 - Switching playlists with a non-empty queue: the queue is playlist-independent
   and keeps playing; the drain-back anchor only ever points into the *active*
   playlist, resetting as playlist songs play.
