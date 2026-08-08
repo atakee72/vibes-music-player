@@ -1,4 +1,4 @@
-import { nextInPlaylist } from './queue';
+import { nextInPlaylist, resolveNextSong, upNextPreview } from './queue';
 import { makeSong } from '../test-utils';
 
 const a = makeSong({ title: 'A' });
@@ -59,5 +59,67 @@ describe('nextInPlaylist', () => {
       expect(nextInPlaylist(a, songs, 'none')).toBe(b);
       expect(nextInPlaylist(a, songs, 'none', false)).toBe(b);
     });
+  });
+});
+
+describe('resolveNextSong', () => {
+  it('repeat-one wins over the queue', () => {
+    expect(resolveNextSong({ current: a, queue: [b], songs, repeatMode: 'one' })).toBe(a);
+  });
+
+  it('queue head wins over the playlist walk', () => {
+    expect(resolveNextSong({ current: a, queue: [c], songs, repeatMode: 'none' })).toBe(c);
+  });
+
+  it('queue head wins even under shuffle', () => {
+    expect(resolveNextSong({ current: a, queue: [b], songs, repeatMode: 'none', shuffle: true })).toBe(b);
+  });
+
+  it('empty queue falls back to the plain playlist walk', () => {
+    expect(resolveNextSong({ current: a, queue: [], songs, repeatMode: 'none' })).toBe(b);
+    expect(resolveNextSong({ current: c, queue: [], songs, repeatMode: 'all' })).toBe(a);
+    expect(resolveNextSong({ current: c, queue: [], songs, repeatMode: 'none' })).toBeNull();
+  });
+
+  it('drains back via the anchor when current is not in songs', () => {
+    const foreign = makeSong({ title: 'Foreign' });
+    expect(
+      resolveNextSong({ current: foreign, queue: [], songs, repeatMode: 'none', anchor: a }),
+    ).toBe(b);
+  });
+
+  it('returns null when a foreign current has no anchor', () => {
+    expect(resolveNextSong({ current: makeSong(), queue: [], songs, repeatMode: 'none' })).toBeNull();
+  });
+
+  it('skips queue entries equal to the current song (engine replay-in-place guard)', () => {
+    // Head equals current → would never dequeue (engine replays in place
+    // without onEnded); resolution must skip to the first different entry.
+    expect(resolveNextSong({ current: a, queue: [a, c], songs, repeatMode: 'none' })).toBe(c);
+  });
+
+  it('falls back to the playlist walk when the queue is only current-duplicates', () => {
+    expect(resolveNextSong({ current: a, queue: [a, a], songs, repeatMode: 'none' })).toBe(b);
+  });
+});
+
+describe('upNextPreview', () => {
+  it('lists the following songs, stopping at the end under repeat=none', () => {
+    expect(upNextPreview(a, songs, 'none')).toEqual([b, c]);
+    expect(upNextPreview(c, songs, 'none')).toEqual([]);
+  });
+
+  it('wraps under repeat=all up to the count', () => {
+    expect(upNextPreview(b, songs, 'all', 4)).toEqual([c, a, b, c]);
+  });
+
+  it('caps at count', () => {
+    expect(upNextPreview(a, songs, 'all', 2)).toEqual([b, c]);
+  });
+
+  it('returns [] for repeat-one, a missing current, or an unknown current', () => {
+    expect(upNextPreview(a, songs, 'one')).toEqual([]);
+    expect(upNextPreview(null, songs, 'none')).toEqual([]);
+    expect(upNextPreview(makeSong(), songs, 'none')).toEqual([]);
   });
 });
