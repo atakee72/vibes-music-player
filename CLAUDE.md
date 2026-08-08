@@ -448,11 +448,16 @@
   dequeue slices past the consumed entry (dropping any skipped run with it).
 - **Resolution is pure**: `resolveNextSong` (`src/lib/queue.ts`, unit-tested)
   — repeat-one → current (queue WAITS); queue head; else `nextInPlaylist`
-  from current-if-in-playlist else the drain-back anchor
-  (`lastPlaylistSongRef` — last song that played FROM the active playlist),
-  so a drained queue never strands playback. The `nextSong` memo consumes it
-  (with `queue` as a dep), so the **gapless preload follows the queue**
-  automatically; `playNext` dequeues when it consumes the head.
+  from the **Spotify-style bookmark**: `lastPlaylistSongRef` holds the last
+  song that played via the PLAYLIST FLOW (row click / prev / walk advance) and
+  is deliberately NOT moved when a song arrives from the queue — so a queued
+  detour resumes where the listener left off. A valid bookmark wins even when
+  current is in the playlist; a stale one (playlist switch) falls back to
+  current. Updated imperatively at the three new-song sites (playNext walk
+  branch, playPrev, handlePlaySong) — **don't convert it to an effect**, an
+  effect can't tell how a song arrived. The `nextSong` memo consumes the
+  resolver (with `queue` as a dep), so the **gapless preload follows the
+  queue** automatically; `playNext` dequeues when it consumes the head.
 - App-wide deletes (Library/Favorites view) purge deleted songs from the
   queue; scoped user-playlist deletes don't.
 - **`QueuePanel`** mirrors LyricsPanel: slide-in, `usePresence`, `open` prop,

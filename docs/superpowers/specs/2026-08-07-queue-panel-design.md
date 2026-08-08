@@ -119,6 +119,14 @@ shipped 2026-08-06; the queue is the remaining piece).
   the drain-back anchor still points into the previous playlist, so a
   non-shuffle drain can stop instead of resuming — degrades to stop-at-end,
   never a crash. Revisit if it annoys in practice.
+- **Amendment (2026-08-08, user-requested): drain-back is now Spotify-style.**
+  The anchor is a bookmark of the last song played via the playlist FLOW
+  (never moved by queue arrivals) and takes precedence over the current
+  song's position — after a queued detour, the walk resumes where the
+  listener left off, not from the queued song's spot. A stale anchor (not in
+  the active playlist) falls back to current-if-in-playlist, which also
+  softens the erratum above. Verified live: play s1 → queue s3 → Next →
+  s3 → Next → **s2**.
 
 ## Testing
 

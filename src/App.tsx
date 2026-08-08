@@ -187,14 +187,13 @@ export default function App() {
   const visibleSongs = sortSongs(filteredSongs, sortBy);
 
   const [queue, setQueue] = useState<Song[]>([]);
-  // Last song that played FROM the active playlist — resolveNextSong's
-  // drain-back base when the queue empties on a foreign song.
+  // Spotify-style bookmark: the last song that played via the PLAYLIST FLOW
+  // (row click, prev/next walk) — deliberately NOT updated when a song
+  // arrives from the queue, so a queued detour returns to where the listener
+  // left off. Updated imperatively at the three sites that set a NEW current
+  // song (playNext's walk branch, playPrev, handlePlaySong) — an effect can't
+  // tell how a song arrived, so don't convert this back into one.
   const lastPlaylistSongRef = useRef<Song | null>(null);
-  useEffect(() => {
-    if (currentSong && activePlaylist?.songs.some((s) => s.id === currentSong.id)) {
-      lastPlaylistSongRef.current = currentSong;
-    }
-  }, [currentSong, activePlaylist]);
 
   // Memoized so the engine's gapless preload and `playNext` agree on the *same*
   // next song — critical under shuffle, where recomputing would re-roll the
@@ -224,10 +223,15 @@ export default function App() {
   // pick is knowable (and only when it isn't the queue head we already show).
   const upNext = useMemo(() => {
     const songs = activePlaylist?.songs ?? [];
+    // Mirror resolveNextSong's Spotify-style base: valid bookmark first,
+    // then current-if-in-playlist — so the preview matches what will play.
+    const anchor = lastPlaylistSongRef.current;
     const base =
-      currentSong && songs.some((s) => s.id === currentSong.id)
-        ? currentSong
-        : lastPlaylistSongRef.current;
+      anchor && songs.some((s) => s.id === anchor.id)
+        ? anchor
+        : currentSong && songs.some((s) => s.id === currentSong.id)
+          ? currentSong
+          : null;
     if (shuffle) {
       const pending = queue.filter((s) => s.id !== currentSong?.id);
       return nextSong && pending.length === 0 ? [nextSong] : [];
@@ -699,10 +703,14 @@ export default function App() {
       // wraps to current itself and can match a stale queued duplicate — is
       // also safe: slicing off that duplicate is harmless, it could never
       // have played anyway.
+      const cameFromQueue = queue.some((s) => s.id === nextSong.id);
       setQueue((q) => {
         const qi = q.findIndex((s) => s.id === nextSong.id);
         return qi === -1 ? q : q.slice(qi + 1);
       });
+      // Advancing through the playlist moves the Spotify-style bookmark;
+      // consuming from the queue leaves it where the listener left off.
+      if (!cameFromQueue) lastPlaylistSongRef.current = nextSong;
       setCurrentSong(nextSong);
     }
   };
@@ -711,7 +719,10 @@ export default function App() {
     if (!activePlaylist || !currentSong) return;
     const idx = activePlaylist.songs.findIndex((s) => s.id === currentSong.id);
     const prev = idx - 1;
-    if (prev >= 0) setCurrentSong(activePlaylist.songs[prev]);
+    if (prev >= 0) {
+      lastPlaylistSongRef.current = activePlaylist.songs[prev];
+      setCurrentSong(activePlaylist.songs[prev]);
+    }
   };
 
   // Keep the engine's onEnded ref pointing at the freshest playNext closure
@@ -766,6 +777,9 @@ export default function App() {
   );
 
   const handlePlaySong = useCallback((song: Song) => {
+    // A manual pick re-bookmarks the walk (the clicked song is always in the
+    // visible/active playlist).
+    lastPlaylistSongRef.current = song;
     setCurrentSong(song);
   }, []);
 

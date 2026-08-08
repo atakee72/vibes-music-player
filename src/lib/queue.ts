@@ -65,7 +65,18 @@ export function resolveNextSong({
   // Skipped entries stay queued; they become playable once current changes.
   const head = queue.find((s) => s.id !== current?.id);
   if (head) return head;
-  const base = current && songs.some((s) => s.id === current.id) ? current : anchor;
+  // Spotify-style resume: `anchor` is the bookmark — the last song that
+  // played via the PLAYLIST FLOW (the caller never moves it for songs that
+  // arrived from the queue). A valid anchor wins even when `current` is in
+  // `songs`, so a queued detour returns to where the listener left off.
+  // A stale anchor (not in `songs`, e.g. after a playlist switch) falls back
+  // to `current`.
+  const base =
+    anchor && songs.some((s) => s.id === anchor.id)
+      ? anchor
+      : current && songs.some((s) => s.id === current.id)
+        ? current
+        : null;
   return nextInPlaylist(base, songs, repeatMode, shuffle);
 }
 

@@ -88,6 +88,21 @@ describe('resolveNextSong', () => {
     ).toBe(b);
   });
 
+  it('Spotify-style: a valid anchor wins even when current IS in songs', () => {
+    // Listening to `a`, queued `c` played (anchor stayed `a`): the walk
+    // resumes after `a` (→ b), not after `c` (→ null under repeat=none).
+    expect(
+      resolveNextSong({ current: c, queue: [], songs, repeatMode: 'none', anchor: a }),
+    ).toBe(b);
+  });
+
+  it('falls back to current when the anchor is stale (not in songs)', () => {
+    const staleAnchor = makeSong({ title: 'Old Playlist Song' });
+    expect(
+      resolveNextSong({ current: a, queue: [], songs, repeatMode: 'none', anchor: staleAnchor }),
+    ).toBe(b);
+  });
+
   it('returns null when a foreign current has no anchor', () => {
     expect(resolveNextSong({ current: makeSong(), queue: [], songs, repeatMode: 'none' })).toBeNull();
   });
