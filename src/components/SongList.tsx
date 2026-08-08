@@ -147,11 +147,17 @@ const SortableRow = memo(function SortableRow({
   // Outside selection mode, listeners attach only to the GripVertical handle.
   const rowListeners = selectionMode && selected ? listeners : undefined;
 
+  // dnd-kit sets aria-disabled on the whole row when sorting is off (filtered
+  // views, Favorites, selection mode) — screen readers then announce every
+  // row control as disabled although play/heart/delete all work. Only DRAG is
+  // disabled, so drop that attribute from the spread.
+  const { 'aria-disabled': _dndAriaDisabled, ...rowAttributes } = attributes;
+
   return (
     <div
       ref={setNodeRef}
       style={style}
-      {...attributes}
+      {...rowAttributes}
       {...rowListeners}
       onClick={(e) => onRowClick(song, e)}
       onDoubleClick={() => onPlay(song)}

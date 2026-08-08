@@ -26,7 +26,9 @@ interface QueuePanelProps {
   upNext: Song[];
   shuffle: boolean;
   onClose: () => void;
-  onRemove: (index: number) => void;
+  /** `id` rides along so the handler can verify the index is still fresh —
+   *  the queue can shrink between paint and click (auto-advance dequeue). */
+  onRemove: (index: number, id: string) => void;
   onReorder: (from: number, to: number) => void;
   onClear: () => void;
 }
@@ -47,7 +49,7 @@ function QueueRow({
 }: {
   song: Song;
   index: number;
-  onRemove: (index: number) => void;
+  onRemove: (index: number, id: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
     id: `q-${index}`,
@@ -68,7 +70,7 @@ function QueueRow({
       </button>
       <SongLine song={song} />
       <button
-        onClick={() => onRemove(index)}
+        onClick={() => onRemove(index, song.id)}
         className="p-1 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-white/10 rounded"
         aria-label={`Remove ${song.title} from queue`}
       >

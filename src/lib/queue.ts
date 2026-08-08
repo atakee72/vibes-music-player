@@ -97,8 +97,12 @@ export function upNextPreview(
   if (!current || songs.length === 0 || repeatMode === 'one') return [];
   const idx = songs.findIndex((s) => s.id === current.id);
   if (idx === -1) return [];
+  // Under 'all', cap at one full cycle: previewing the wrap more than once
+  // renders duplicate rows without adding information (degenerate case: a
+  // single-song playlist would show `count` identical rows).
+  const max = repeatMode === 'all' ? Math.min(count, songs.length) : count;
   const out: Song[] = [];
-  for (let i = 1; i <= count; i++) {
+  for (let i = 1; i <= max; i++) {
     const j = idx + i;
     if (j < songs.length) out.push(songs[j]);
     else if (repeatMode === 'all') out.push(songs[j % songs.length]);

@@ -39,6 +39,28 @@ describe('RowMenu', () => {
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
 
+  it('focuses the first item on open; Escape closes and refocuses the trigger', () => {
+    renderMenu();
+    const trigger = screen.getByRole('button', { name: 'More actions for Alpha' });
+    fireEvent.click(trigger);
+    expect(screen.getAllByRole('menuitem')[0]).toHaveFocus();
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it('arrow keys move focus between menu items and wrap', () => {
+    renderMenu();
+    fireEvent.click(screen.getByRole('button', { name: 'More actions for Alpha' }));
+    const items = screen.getAllByRole('menuitem');
+    fireEvent.keyDown(items[0], { key: 'ArrowDown' });
+    expect(items[1]).toHaveFocus();
+    fireEvent.keyDown(items[1], { key: 'ArrowDown' });
+    expect(items[0]).toHaveFocus();
+    fireEvent.keyDown(items[0], { key: 'ArrowUp' });
+    expect(items[1]).toHaveFocus();
+  });
+
   it('notifies onOpenChange on trigger toggle, item click, and outside click', () => {
     const onOpenChange = vi.fn();
     render(

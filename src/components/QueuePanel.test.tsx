@@ -35,12 +35,12 @@ describe('QueuePanel', () => {
     expect(screen.getByText('Current Jam')).toBeInTheDocument();
   });
 
-  it('queue rows render with remove buttons firing onRemove with the index', () => {
+  it('queue rows render with remove buttons firing onRemove with index AND id', () => {
     const a = makeSong({ title: 'Alpha' });
     const b = makeSong({ title: 'Bravo' });
     const { onRemove } = renderPanel({ queue: [a, b] });
     fireEvent.click(screen.getByRole('button', { name: 'Remove Bravo from queue' }));
-    expect(onRemove).toHaveBeenCalledWith(1);
+    expect(onRemove).toHaveBeenCalledWith(1, b.id);
   });
 
   it('duplicate queue entries render one row each', () => {

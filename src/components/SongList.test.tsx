@@ -214,4 +214,11 @@ describe('SongList', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: /Add to queue/ }));
     expect(onAddToQueue).toHaveBeenCalledWith(song.id);
   });
+
+  it('rows are not marked aria-disabled in filtered views (dnd disabled ≠ row disabled)', () => {
+    const song = makeSong({ title: 'Alpha' });
+    renderSongList({ songs: [song], isFilterActive: true });
+    const row = screen.getByRole('button', { name: /^Alpha Artist/ });
+    expect(row).not.toHaveAttribute('aria-disabled');
+  });
 });

@@ -1,4 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from 'react';
 import { ListEnd, ListStart, MoreHorizontal } from 'lucide-react';
 
 interface RowMenuProps {
@@ -18,6 +23,8 @@ interface RowMenuProps {
 export function RowMenu({ songTitle, onPlayNext, onAddToQueue, onOpenChange }: RowMenuProps) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const setOpenNotify = (v: boolean) => {
     setOpen(v);
@@ -32,6 +39,33 @@ export function RowMenu({ songTitle, onPlayNext, onAddToQueue, onOpenChange }: R
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
   }, [open]);
+
+  // Keyboard users land inside the menu on open.
+  useEffect(() => {
+    if (!open) return;
+    menuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus();
+  }, [open]);
+
+  const onKeyDown = (e: ReactKeyboardEvent) => {
+    if (!open) return;
+    if (e.key === 'Escape') {
+      // Stop before App's Escape chain (selection mode / search) reacts.
+      e.stopPropagation();
+      setOpenNotify(false);
+      triggerRef.current?.focus();
+      return;
+    }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const items = Array.from(
+        menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? [],
+      );
+      if (items.length === 0) return;
+      const idx = items.indexOf(document.activeElement as HTMLButtonElement);
+      const delta = e.key === 'ArrowDown' ? 1 : -1;
+      items[(idx + delta + items.length) % items.length]?.focus();
+    }
+  };
 
   const item = (label: string, Icon: typeof ListStart, action: () => void) => (
     <button
@@ -49,8 +83,9 @@ export function RowMenu({ songTitle, onPlayNext, onAddToQueue, onOpenChange }: R
   );
 
   return (
-    <div ref={wrapRef} className="relative">
+    <div ref={wrapRef} className="relative" onKeyDown={onKeyDown}>
       <button
+        ref={triggerRef}
         onClick={(e) => {
           e.stopPropagation();
           setOpenNotify(!open);
@@ -64,6 +99,7 @@ export function RowMenu({ songTitle, onPlayNext, onAddToQueue, onOpenChange }: R
       </button>
       {open && (
         <div
+          ref={menuRef}
           role="menu"
           className="absolute right-0 top-full z-20 mt-1 w-44 rounded-lg border border-white/10 bg-surface/95 p-1 shadow-xl backdrop-blur-xl"
         >

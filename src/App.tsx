@@ -808,8 +808,11 @@ export default function App() {
     setNotification(`Added to queue: ${song.title}`);
   }, []);
 
-  const removeFromQueue = useCallback((index: number) => {
-    setQueue((q) => q.filter((_, i) => i !== index));
+  const removeFromQueue = useCallback((index: number, id: string) => {
+    // Stale-index guard: the queue can shrink between paint and click
+    // (auto-advance dequeues the head). Only remove when index and id still
+    // agree — a mismatched click is dropped rather than removing a neighbor.
+    setQueue((q) => (q[index]?.id === id ? q.filter((_, i) => i !== index) : q));
   }, []);
   const reorderQueue = useCallback((from: number, to: number) => {
     setQueue((q) => safeQueueMove(q, from, to));

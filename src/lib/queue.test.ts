@@ -124,8 +124,13 @@ describe('upNextPreview', () => {
     expect(upNextPreview(c, songs, 'none')).toEqual([]);
   });
 
-  it('wraps under repeat=all up to the count', () => {
-    expect(upNextPreview(b, songs, 'all', 4)).toEqual([c, a, b, c]);
+  it('wraps under repeat=all, capped at one full cycle', () => {
+    expect(upNextPreview(b, songs, 'all', 4)).toEqual([c, a, b]);
+  });
+
+  it('single-song playlist under repeat=all previews the loop once, not count times', () => {
+    const solo = makeSong({ title: 'Solo' });
+    expect(upNextPreview(solo, [solo], 'all')).toEqual([solo]);
   });
 
   it('caps at count', () => {
