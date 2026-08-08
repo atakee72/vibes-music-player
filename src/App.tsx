@@ -46,7 +46,7 @@ import { ingestDirectoryHandle } from './lib/ingest';
 import { filterSongs } from './lib/filter';
 import { sortSongs, SORT_LABELS, type SortKey } from './lib/sort';
 import { extractLyrics } from './lib/lyrics';
-import { resolveNextSong } from './lib/queue';
+import { resolveNextSong, upNextPreview } from './lib/queue';
 import type { EqPreset } from './lib/eq';
 import { useDominantColor } from './hooks/useDominantColor';
 import { useInstallPrompt } from './hooks/useInstallPrompt';
@@ -64,6 +64,9 @@ const MiniPlayer = lazy(() =>
 );
 const LyricsPanel = lazy(() =>
   import('./components/LyricsPanel').then((m) => ({ default: m.LyricsPanel })),
+);
+const QueuePanel = lazy(() =>
+  import('./components/QueuePanel').then((m) => ({ default: m.QueuePanel })),
 );
 const ConfirmModal = lazy(() =>
   import('./components/ConfirmModal').then((m) => ({ default: m.ConfirmModal })),
@@ -112,6 +115,8 @@ export default function App() {
   const [notification, setNotification] = useState<string | null>(null);
   const [showLyrics, setShowLyrics] = useState(false);
   const lyricsEverOpenedRef = useRef(false);
+  const [showQueue, setShowQueue] = useState(false);
+  const queueEverOpenedRef = useRef(false);
   const mobilePlayerEverOpenedRef = useRef(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const [sharedTrack, setSharedTrack] = useState<SharedTrack | null>(null);
@@ -214,6 +219,21 @@ export default function App() {
     // `queue` is a dep on purpose: queuing a song MUST retarget the preload.
     [currentSong?.id, activePlaylist?.songs, repeatMode, shuffle, queue],
   );
+
+  // Read-only "up next" for the queue panel. Under shuffle only the memoized
+  // pick is knowable (and only when it isn't the queue head we already show).
+  const upNext = useMemo(() => {
+    const songs = activePlaylist?.songs ?? [];
+    const base =
+      currentSong && songs.some((s) => s.id === currentSong.id)
+        ? currentSong
+        : lastPlaylistSongRef.current;
+    if (shuffle) {
+      return nextSong && (queue.length === 0 || nextSong.id !== queue[0].id) ? [nextSong] : [];
+    }
+    return upNextPreview(base, songs, repeatMode);
+  }, [activePlaylist?.songs, currentSong, shuffle, repeatMode, nextSong, queue]);
+
   const tintColor = useDominantColor(currentSong?.coverArt);
   const { canInstall, promptInstall, isIOS } = useInstallPrompt();
 
@@ -771,6 +791,14 @@ export default function App() {
     setNotification(`Added to queue: ${song.title}`);
   }, []);
 
+  const removeFromQueue = useCallback((index: number) => {
+    setQueue((q) => q.filter((_, i) => i !== index));
+  }, []);
+  const reorderQueue = useCallback((from: number, to: number) => {
+    setQueue((q) => arrayMove(q, from, to));
+  }, []);
+  const clearQueue = useCallback(() => setQueue([]), []);
+
   const toggleFavorite = useCallback((id: string) => {
     setPlaylists((prev) =>
       prev.map((p) =>
@@ -1145,8 +1173,16 @@ export default function App() {
       Slash: () => searchInputRef.current?.focus(),
       KeyL: () => {
         setShowLyrics((v) => !v);
+        setShowQueue(false);
         // Mirror the in-view Lyrics button: the panel is z-40, the full-screen
         // now-playing view is z-[60], so close the view or the panel opens hidden.
+        if (mobilePlayerOpen) setMobilePlayerOpen(false);
+      },
+      KeyQ: () => {
+        setShowQueue((v) => !v);
+        // Panels share the right-edge slot — Lyrics and Queue are exclusive;
+        // and like Lyrics, the z-[60] full-screen view must close (z-40 panel).
+        setShowLyrics(false);
         if (mobilePlayerOpen) setMobilePlayerOpen(false);
       },
       Escape: () => {
@@ -1187,7 +1223,10 @@ export default function App() {
       key: 'lyrics',
       label: 'Lyrics',
       icon: Mic2,
-      onClick: () => setShowLyrics((v) => !v),
+      onClick: () => {
+        setShowLyrics((v) => !v);
+        setShowQueue(false);
+      },
       active: showLyrics,
     },
     ...(currentSong
@@ -1226,8 +1265,10 @@ export default function App() {
   // would unmount abruptly), but mounting them eagerly would defeat the
   // code-split. Monotonic render-phase ref writes: once opened, always mounted.
   if (showLyrics) lyricsEverOpenedRef.current = true;
+  if (showQueue) queueEverOpenedRef.current = true;
   if (mobilePlayerOpen) mobilePlayerEverOpenedRef.current = true;
   const mountLyricsPanel = showLyrics || lyricsEverOpenedRef.current;
+  const mountQueuePanel = showQueue || queueEverOpenedRef.current;
   const mountMobileNowPlaying = mobilePlayerOpen || mobilePlayerEverOpenedRef.current;
 
   return (
@@ -1404,7 +1445,10 @@ export default function App() {
                     Select
                   </button>
                   <button
-                    onClick={() => setShowLyrics((v) => !v)}
+                    onClick={() => {
+                      setShowLyrics((v) => !v);
+                      setShowQueue(false);
+                    }}
                     className={`px-3 py-2 rounded-lg transition-all duration-200 text-sm font-medium ${
                       showLyrics
                         ? 'bg-amber/20 text-amber border border-amber/30'
@@ -1543,6 +1587,21 @@ export default function App() {
                   />
                 </Suspense>
               )}
+              {mountQueuePanel && (
+                <Suspense fallback={null}>
+                  <QueuePanel
+                    open={showQueue}
+                    currentSong={currentSong}
+                    queue={queue}
+                    upNext={upNext}
+                    shuffle={shuffle}
+                    onClose={() => setShowQueue(false)}
+                    onRemove={removeFromQueue}
+                    onReorder={reorderQueue}
+                    onClear={clearQueue}
+                  />
+                </Suspense>
+              )}
             </div>
           </div>
         </div>
@@ -1569,6 +1628,12 @@ export default function App() {
         onTogglePip={togglePip}
         supportsPip={'documentPictureInPicture' in window}
         isPipOpen={pipWindow !== null}
+        onToggleQueue={() => {
+          setShowQueue((v) => !v);
+          setShowLyrics(false);
+          if (mobilePlayerOpen) setMobilePlayerOpen(false);
+        }}
+        isQueueOpen={showQueue}
         onExpand={() => setMobilePlayerOpen(true)}
         onToggleFavorite={currentSong ? () => toggleFavorite(currentSong.id) : undefined}
       />
@@ -1600,7 +1665,13 @@ export default function App() {
             onVolumeChange={setVolume}
             onToggleLyrics={() => {
               setShowLyrics((v) => !v);
+              setShowQueue(false);
               // Close the full-screen view so the lyrics panel (lower z-index) shows.
+              setMobilePlayerOpen(false);
+            }}
+            onToggleQueue={() => {
+              setShowQueue((v) => !v);
+              setShowLyrics(false);
               setMobilePlayerOpen(false);
             }}
             onShare={handleShare}

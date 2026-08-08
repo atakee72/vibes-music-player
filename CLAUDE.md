@@ -436,6 +436,34 @@
   + PlayerBar (all sizes — the mobile favoriting surface). `text-coral` +
   `fill-current` when on; `aria-pressed` carries the state. Never `danger`.
 
+## Queue (play-next)
+
+- `queue: Song[]` in App.tsx, **session-only** (never persisted). "Play
+  next" prepends, "Add to queue" appends; queuing never removes songs from
+  playlists. Duplicates allowed → queue rows use index-based keys.
+- **The currently-playing song can't be queued** ("Already playing" toast),
+  and `resolveNextSong` skips queue entries equal to current: the engine's
+  replay-in-place path (`next.url === active.src`) never calls `onEnded`, so
+  such a head could never dequeue — it would loop forever. `playNext`'s
+  dequeue slices past the consumed entry (dropping any skipped run with it).
+- **Resolution is pure**: `resolveNextSong` (`src/lib/queue.ts`, unit-tested)
+  — repeat-one → current (queue WAITS); queue head; else `nextInPlaylist`
+  from current-if-in-playlist else the drain-back anchor
+  (`lastPlaylistSongRef` — last song that played FROM the active playlist),
+  so a drained queue never strands playback. The `nextSong` memo consumes it
+  (with `queue` as a dep), so the **gapless preload follows the queue**
+  automatically; `playNext` dequeues when it consumes the head.
+- App-wide deletes (Library/Favorites view) purge deleted songs from the
+  queue; scoped user-playlist deletes don't.
+- **`QueuePanel`** mirrors LyricsPanel: slide-in, `usePresence`, `open` prop,
+  lazy + mount-once ref. Sections: Now playing / In queue (remove ×,
+  drag-reorder via a panel-local DndContext, Clear) / Up next
+  (`upNextPreview` walk; under shuffle only the memoized pick + note).
+  Lyrics and Queue are **mutually exclusive** (same right-edge slot).
+- Openers: PlayerBar ListMusic (desktop cluster), MobileNowPlaying button
+  (closes the full-screen view), **Q** key. Row "⋯" (`RowMenu`) is the add
+  surface — desktop rows only (mobile has no hover cluster; heart precedent).
+
 ## Confirmation modals
 
 - `ConfirmModal` (`src/components/ConfirmModal.tsx`) is the reusable

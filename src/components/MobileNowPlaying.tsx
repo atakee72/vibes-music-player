@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import {
   ChevronDown,
+  ListMusic,
   Mic2,
   Pause,
   Play,
@@ -42,6 +43,7 @@ interface MobileNowPlayingProps {
   onEqPresetChange: (preset: EqPreset) => void;
   onVolumeChange: (v: number) => void;
   onToggleLyrics: () => void;
+  onToggleQueue: () => void;
   onShare: () => void;
 }
 
@@ -80,6 +82,7 @@ export function MobileNowPlaying({
   onEqPresetChange,
   onVolumeChange,
   onToggleLyrics,
+  onToggleQueue,
   onShare,
 }: MobileNowPlayingProps) {
   const { mounted, visible } = usePresence(open && !!song);
@@ -193,6 +196,14 @@ export function MobileNowPlaying({
             aria-label="Toggle lyrics"
           >
             <Mic2 className="h-5 w-5" />
+          </button>
+
+          <button
+            onClick={onToggleQueue}
+            className="p-2 rounded-full bg-white/5 text-white/70 hover:bg-white/10 transition-colors"
+            aria-label="Toggle queue"
+          >
+            <ListMusic className="h-5 w-5" />
           </button>
 
           <div className="relative flex items-center">

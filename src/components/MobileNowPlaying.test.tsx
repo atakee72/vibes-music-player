@@ -14,6 +14,7 @@ function renderView(overrides = {}) {
     onEqPresetChange: vi.fn(),
     onVolumeChange: vi.fn(),
     onToggleLyrics: vi.fn(),
+    onToggleQueue: vi.fn(),
     onShare: vi.fn(),
   };
   const utils = render(
@@ -73,5 +74,11 @@ describe('MobileNowPlaying', () => {
       target: { value: 'Bass Boost' },
     });
     expect(view.onEqPresetChange).toHaveBeenCalledWith('Bass Boost');
+  });
+
+  it('queue button fires onToggleQueue', () => {
+    const { onToggleQueue } = renderView();
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle queue' }));
+    expect(onToggleQueue).toHaveBeenCalledTimes(1);
   });
 });

@@ -12,6 +12,7 @@ function renderPlayerBar(overrides: Partial<Parameters<typeof PlayerBar>[0]> = {
   const onEqPresetChange = vi.fn();
   const onVolumeChange = vi.fn();
   const onToggleFavorite = vi.fn();
+  const onToggleQueue = vi.fn();
   const utils = render(
     <PlayerBar
       song={null}
@@ -32,10 +33,11 @@ function renderPlayerBar(overrides: Partial<Parameters<typeof PlayerBar>[0]> = {
       onEqPresetChange={onEqPresetChange}
       onVolumeChange={onVolumeChange}
       onToggleFavorite={onToggleFavorite}
+      onToggleQueue={onToggleQueue}
       {...overrides}
     />,
   );
-  return { ...utils, onPlayPause, onPrev, onNext, onSeek, onCycleRepeat, onToggleShuffle, onEqPresetChange, onVolumeChange, onToggleFavorite };
+  return { ...utils, onPlayPause, onPrev, onNext, onSeek, onCycleRepeat, onToggleShuffle, onEqPresetChange, onVolumeChange, onToggleFavorite, onToggleQueue };
 }
 
 describe('PlayerBar', () => {
@@ -233,5 +235,11 @@ describe('PlayerBar', () => {
       'aria-pressed',
       'true',
     );
+  });
+
+  it('queue button fires onToggleQueue', () => {
+    const { onToggleQueue } = renderPlayerBar({ song: makeSong() });
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle queue' }));
+    expect(onToggleQueue).toHaveBeenCalledTimes(1);
   });
 });

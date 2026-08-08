@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   ChevronUp,
   Heart,
+  ListMusic,
   Music,
   Pause,
   PictureInPicture2,
@@ -40,6 +41,8 @@ interface PlayerBarProps {
   onTogglePip?: () => void;
   supportsPip?: boolean;
   isPipOpen?: boolean;
+  onToggleQueue?: () => void;
+  isQueueOpen?: boolean;
   volume: number;
   onVolumeChange: (v: number) => void;
   /** Mobile only: open the full-screen now-playing view (tap the cover/title). */
@@ -71,6 +74,8 @@ export function PlayerBar({
   onTogglePip,
   supportsPip,
   isPipOpen,
+  onToggleQueue,
+  isQueueOpen,
   volume,
   onVolumeChange,
   onExpand,
@@ -276,6 +281,17 @@ export function PlayerBar({
               />
             ))}
           </div>
+          {onToggleQueue && (
+            <button
+              onClick={onToggleQueue}
+              className="p-1 hover:bg-white/10 rounded transition-colors"
+              aria-label="Toggle queue"
+            >
+              <ListMusic
+                className={`h-4 w-4 lg:h-5 lg:w-5 ${isQueueOpen ? 'text-amber' : 'text-white/60'}`}
+              />
+            </button>
+          )}
           {supportsPip && (
             <button
               onClick={onTogglePip}
