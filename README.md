@@ -44,7 +44,8 @@ pnpm test:run  # Vitest single pass
 - Responsive layout — sidebar collapses on mobile, controls reflow under
   `lg`, and a full-screen mobile **now-playing view** (tap the mini player bar)
   with the orb + a circular visualizer
-- **Keyboard shortcuts**: `Space` play/pause, `←`/`→` prev/next, `/` focus
+- **Keyboard shortcuts**: `Space` play/pause, `←`/`→` seek ±10s,
+  `Shift+←`/`→` prev/next, `L` lyrics, `Q` queue, `/` focus
   search, `Esc` close modal / clear search / blur
 - **Type-to-filter** the current playlist by title, artist, album, or genre
 - **Now-playing hero + VibeOrb** — the playing track gets a glowing album-art
@@ -96,6 +97,17 @@ pnpm test:run  # Vitest single pass
   track's metadata (title, artist, album) — never the audio file. The
   recipient sees a card describing the track; they play it from their own
   copy or not at all
+- **Favorites** — heart songs from the rows, the now-playing hero, or the
+  player bar; an auto-maintained Favorites view appears in the sidebar
+  (drop songs onto it to heart them in bulk)
+- **Play-next queue** — `⋯` on any row queues a song ("Play next" / "Add to
+  queue"); the queue panel (`Q`, or the player-bar button) shows and edits
+  what's coming, with an honest "Up next" preview. Queued songs ride the
+  gapless preload, and playback resumes where you left off afterwards
+  (Spotify-style)
+- **Rename playlists** — pencil icon on sidebar rows, prefilled dialog
+- **Early storage warning** — a one-time toast at 90% quota usage, before
+  saves start failing
 
 ## Project layout
 

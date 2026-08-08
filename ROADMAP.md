@@ -639,6 +639,37 @@ lyrics (CORS works at runtime) + graceful no-match.
 
 ---
 
+## Post-1.0 wave — perf round 2, Favorites, Queue (shipped, Aug 2026)
+
+- **Startup perf round 2**: code-split the deferred UI surfaces (modals,
+  MiniPlayer, LyricsPanel, MobileNowPlaying) + import/export libs out of the
+  startup chunk (`index` 159→145 kB); SW navigation preload; lazy
+  `music-metadata`; parallel library restore; `vite:preloadError` reload
+  guard against post-deploy stale-chunk 404s. User-confirmed fast in
+  production Firefox; `[perf]` diagnostic logs removed after verification.
+- **Rename playlists** (sidebar pencil → prefilled PromptModal, select-on-open).
+- **Favorites**: `Song.favorite` flag (persists via the storage Omit+spread
+  for free), hearts in rows / hero / player bar, virtual "Favorites"
+  sidebar view derived from all playlists (deduped — ingest adds only to
+  the active playlist, so Library is not a strict superset). Drop-on-row
+  hearts in bulk. Shuffle/gapless protected by keying the `nextSong` memo
+  on track identity.
+- **Play-next queue**: pure `resolveNextSong`/`upNextPreview` in
+  `lib/queue.ts`; session-only `queue` state; `RowMenu` (the previously
+  dead `⋯` button); lazy `QueuePanel` (LyricsPanel pattern) with editable
+  queue + honest up-next preview; PlayerBar/MobileNowPlaying/`Q` openers,
+  Lyrics↔Queue exclusivity. Notable catches: queueing the current song
+  would infinite-loop against the engine's replay-in-place path (now
+  guarded); the row menu was occluded by virtualized-row stacking contexts
+  (z-index raise on the open row); **Spotify-style drain-back** — playback
+  resumes from the pre-queue bookmark, not the queued song's position.
+- **Fixes along the way**: playlist-scoped song delete (dialog and behavior
+  finally agree; Library/Favorites delete stays app-wide with honest copy),
+  `.m3u` double-ingest (`audio/x-mpegurl` passes the audio filter), 90%
+  storage-quota warning toast wired to `getStorageEstimate()`.
+- Full design/audit trail for the queue: `docs/superpowers/specs/`
+  `2026-08-07-queue-panel-design.md` (with amendments).
+
 ## Out of scope (forever)
 
 - **Cloud sync / accounts** — would break the "nothing leaves your device"
@@ -673,4 +704,9 @@ lyrics (CORS works at runtime) + graceful no-match.
 | Mobile | `feat: mobile now-playing view + slim mobile player bar` (header wrap + mini bar + frame-D view + visualizer ring; 3 + docs commits) |
 | Polish 2 | `fix: animate sidebar open/close` + compact hero + header `⋯` menu + scrolling titles (4 + docs commits) |
 
-Total: 202 tests, all green; `pnpm build` clean; production live.
+| Perf round 2 | `290367f` — `perf: code-split deferred UI surfaces + import/export libs out of startup chunk` |
+| Rename | `bf32a37` — `feat: rename playlists via prompt modal` |
+| Favorites | `1ae0cad` — `fix: preserve playlist refs on favorite toggle; honest Favorites delete copy` (final of 7) |
+| Queue | `bb54bab` — `feat: Spotify-style queue drain-back (resume from pre-queue position)` (final of 6) |
+
+Total: 263 tests, all green; `pnpm build` clean; production live.
