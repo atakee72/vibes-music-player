@@ -286,6 +286,7 @@ export function PlayerBar({
               onClick={onToggleQueue}
               className="p-1 hover:bg-white/10 rounded transition-colors"
               aria-label="Toggle queue"
+              title="Queue"
             >
               <ListMusic
                 className={`h-4 w-4 lg:h-5 lg:w-5 ${isQueueOpen ? 'text-amber' : 'text-white/60'}`}
