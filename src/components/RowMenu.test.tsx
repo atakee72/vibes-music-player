@@ -38,4 +38,29 @@ describe('RowMenu', () => {
     fireEvent.mouseDown(document.body);
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
+
+  it('notifies onOpenChange on trigger toggle, item click, and outside click', () => {
+    const onOpenChange = vi.fn();
+    render(
+      <RowMenu
+        songTitle="Alpha"
+        onPlayNext={vi.fn()}
+        onAddToQueue={vi.fn()}
+        onOpenChange={onOpenChange}
+      />,
+    );
+    const trigger = screen.getByRole('button', { name: 'More actions for Alpha' });
+
+    fireEvent.click(trigger);
+    expect(onOpenChange).toHaveBeenLastCalledWith(true);
+
+    fireEvent.click(screen.getByRole('menuitem', { name: /Play next/ }));
+    expect(onOpenChange).toHaveBeenLastCalledWith(false);
+
+    fireEvent.click(trigger);
+    expect(onOpenChange).toHaveBeenLastCalledWith(true);
+
+    fireEvent.mouseDown(document.body);
+    expect(onOpenChange).toHaveBeenLastCalledWith(false);
+  });
 });

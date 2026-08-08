@@ -46,7 +46,7 @@ import { ingestDirectoryHandle } from './lib/ingest';
 import { filterSongs } from './lib/filter';
 import { sortSongs, SORT_LABELS, type SortKey } from './lib/sort';
 import { extractLyrics } from './lib/lyrics';
-import { resolveNextSong, upNextPreview } from './lib/queue';
+import { resolveNextSong, safeQueueMove, upNextPreview } from './lib/queue';
 import type { EqPreset } from './lib/eq';
 import { useDominantColor } from './hooks/useDominantColor';
 import { useInstallPrompt } from './hooks/useInstallPrompt';
@@ -229,7 +229,8 @@ export default function App() {
         ? currentSong
         : lastPlaylistSongRef.current;
     if (shuffle) {
-      return nextSong && (queue.length === 0 || nextSong.id !== queue[0].id) ? [nextSong] : [];
+      const pending = queue.filter((s) => s.id !== currentSong?.id);
+      return nextSong && pending.length === 0 ? [nextSong] : [];
     }
     return upNextPreview(base, songs, repeatMode);
   }, [activePlaylist?.songs, currentSong, shuffle, repeatMode, nextSong, queue]);
@@ -698,8 +699,10 @@ export default function App() {
       // wraps to current itself and can match a stale queued duplicate — is
       // also safe: slicing off that duplicate is harmless, it could never
       // have played anyway.
-      const qi = queue.findIndex((s) => s.id === nextSong.id);
-      if (qi !== -1) setQueue((q) => q.slice(qi + 1));
+      setQueue((q) => {
+        const qi = q.findIndex((s) => s.id === nextSong.id);
+        return qi === -1 ? q : q.slice(qi + 1);
+      });
       setCurrentSong(nextSong);
     }
   };
@@ -795,7 +798,7 @@ export default function App() {
     setQueue((q) => q.filter((_, i) => i !== index));
   }, []);
   const reorderQueue = useCallback((from: number, to: number) => {
-    setQueue((q) => arrayMove(q, from, to));
+    setQueue((q) => safeQueueMove(q, from, to));
   }, []);
   const clearQueue = useCallback(() => setQueue([]), []);
 

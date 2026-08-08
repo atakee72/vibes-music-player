@@ -1,4 +1,4 @@
-import { nextInPlaylist, resolveNextSong, upNextPreview } from './queue';
+import { nextInPlaylist, resolveNextSong, safeQueueMove, upNextPreview } from './queue';
 import { makeSong } from '../test-utils';
 
 const a = makeSong({ title: 'A' });
@@ -121,5 +121,19 @@ describe('upNextPreview', () => {
     expect(upNextPreview(a, songs, 'one')).toEqual([]);
     expect(upNextPreview(null, songs, 'none')).toEqual([]);
     expect(upNextPreview(makeSong(), songs, 'none')).toEqual([]);
+  });
+});
+
+describe('safeQueueMove', () => {
+  it('moves an element forward and backward', () => {
+    expect(safeQueueMove([1, 2, 3], 0, 2)).toEqual([2, 3, 1]);
+    expect(safeQueueMove([1, 2, 3], 2, 0)).toEqual([3, 1, 2]);
+  });
+
+  it('returns the array unchanged for stale/out-of-range indices', () => {
+    const arr = [1, 2];
+    expect(safeQueueMove(arr, 2, 0)).toBe(arr);
+    expect(safeQueueMove(arr, 0, 5)).toBe(arr);
+    expect(safeQueueMove(arr, -1, 0)).toBe(arr);
   });
 });

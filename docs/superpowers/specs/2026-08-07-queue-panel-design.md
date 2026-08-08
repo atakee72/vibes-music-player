@@ -115,6 +115,10 @@ shipped 2026-08-06; the queue is the remaining piece).
 - Duplicate adds are allowed (queueing a song twice plays it twice) — queue
   rows therefore need index-based keys/ids (`queue-${index}-${song.id}`), not
   bare song ids.
+- Erratum (final review, v1 accepted): after switching playlists mid-queue,
+  the drain-back anchor still points into the previous playlist, so a
+  non-shuffle drain can stop instead of resuming — degrades to stop-at-end,
+  never a crash. Revisit if it annoys in practice.
 
 ## Testing
 

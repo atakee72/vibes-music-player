@@ -65,6 +65,7 @@ interface SortableRowProps {
   onAddToQueue: (id: string) => void;
   onRowClick: (song: Song, e: React.MouseEvent) => void;
   onLongPress: (song: Song) => void;
+  onMenuOpenChange: (id: string, open: boolean) => void;
 }
 
 const SortableRow = memo(function SortableRow({
@@ -83,6 +84,7 @@ const SortableRow = memo(function SortableRow({
   onAddToQueue,
   onRowClick,
   onLongPress,
+  onMenuOpenChange,
 }: SortableRowProps) {
   // Derive drag payload inside the row so it's stable when selection state
   // hasn't changed. `selectedIds` Set reference is stable across renders
@@ -289,6 +291,7 @@ const SortableRow = memo(function SortableRow({
                 songTitle={song.title}
                 onPlayNext={() => onPlayNext(song.id)}
                 onAddToQueue={() => onAddToQueue(song.id)}
+                onOpenChange={(open) => onMenuOpenChange(song.id, open)}
               />
             </div>
           </div>
@@ -318,6 +321,17 @@ export function SongList({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const lastClickedRef = useRef<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Which row's "⋯" menu is open, if any — the virtual row wrapper for this
+  // id gets a raised z-index so the menu paints above the FOLLOWING virtual
+  // rows (each transformed wrapper is its own stacking context with
+  // z-index: auto, so without this the next row occludes an open menu and
+  // swallows its clicks). Stable callback so SortableRow's memoized props
+  // don't change identity.
+  const [menuOpenRowId, setMenuOpenRowId] = useState<string | null>(null);
+  const handleMenuOpenChange = useCallback((id: string, open: boolean) => {
+    setMenuOpenRowId((prev) => (open ? id : prev === id ? null : prev));
+  }, []);
 
   const isDesktop =
     typeof window !== 'undefined' &&
@@ -499,6 +513,7 @@ export function SongList({
                   left: 0,
                   right: 0,
                   transform: `translateY(${virtualItem.start}px)`,
+                  zIndex: menuOpenRowId === song.id ? 30 : undefined,
                 }}
               >
                 <SortableRow
@@ -517,6 +532,7 @@ export function SongList({
                   onAddToQueue={onAddToQueue}
                   onRowClick={handleRowClick}
                   onLongPress={handleLongPress}
+                  onMenuOpenChange={handleMenuOpenChange}
                 />
               </div>
             );

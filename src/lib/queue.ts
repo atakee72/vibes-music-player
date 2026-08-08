@@ -95,3 +95,16 @@ export function upNextPreview(
   }
   return out;
 }
+
+/**
+ * Bounds-safe arrayMove for the queue: drag-end indices can be stale when the
+ * queue shrank mid-drag (playNext dequeued during the gesture). Returns the
+ * array unchanged when either index is out of range.
+ */
+export function safeQueueMove<T>(arr: T[], from: number, to: number): T[] {
+  if (from < 0 || to < 0 || from >= arr.length || to >= arr.length) return arr;
+  const next = arr.slice();
+  const [moved] = next.splice(from, 1);
+  next.splice(to, 0, moved);
+  return next;
+}

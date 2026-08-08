@@ -5,20 +5,29 @@ interface RowMenuProps {
   songTitle: string;
   onPlayNext: () => void;
   onAddToQueue: () => void;
+  /** Notified on every open/close transition — lets the virtualized list
+   *  raise this row's wrapper z-index while the menu is open (CLAUDE.md
+   *  "RowMenu occluded by following virtualized rows"). */
+  onOpenChange?: (open: boolean) => void;
 }
 
 /**
  * The song-row "⋯" dropdown. Local open state + outside-click close — same
  * convention-break precedent as PlayerBar's `eqOpen` (CLAUDE.md).
  */
-export function RowMenu({ songTitle, onPlayNext, onAddToQueue }: RowMenuProps) {
+export function RowMenu({ songTitle, onPlayNext, onAddToQueue, onOpenChange }: RowMenuProps) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
+
+  const setOpenNotify = (v: boolean) => {
+    setOpen(v);
+    onOpenChange?.(v);
+  };
 
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
-      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+      if (!wrapRef.current?.contains(e.target as Node)) setOpenNotify(false);
     };
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
@@ -29,7 +38,7 @@ export function RowMenu({ songTitle, onPlayNext, onAddToQueue }: RowMenuProps) {
       role="menuitem"
       onClick={(e) => {
         e.stopPropagation();
-        setOpen(false);
+        setOpenNotify(false);
         action();
       }}
       className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-white/80 hover:bg-white/10 transition-colors"
@@ -44,7 +53,7 @@ export function RowMenu({ songTitle, onPlayNext, onAddToQueue }: RowMenuProps) {
       <button
         onClick={(e) => {
           e.stopPropagation();
-          setOpen((v) => !v);
+          setOpenNotify(!open);
         }}
         className="p-2 hover:bg-white/10 rounded-lg transition-colors"
         aria-label={`More actions for ${songTitle}`}
