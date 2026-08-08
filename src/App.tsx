@@ -46,7 +46,7 @@ import { ingestDirectoryHandle } from './lib/ingest';
 import { filterSongs } from './lib/filter';
 import { sortSongs, SORT_LABELS, type SortKey } from './lib/sort';
 import { extractLyrics } from './lib/lyrics';
-import { nextInPlaylist } from './lib/queue';
+import { resolveNextSong } from './lib/queue';
 import type { EqPreset } from './lib/eq';
 import { useDominantColor } from './hooks/useDominantColor';
 import { useInstallPrompt } from './hooks/useInstallPrompt';
@@ -180,11 +180,30 @@ export default function App() {
   const filteredSongs = filterSongs(activePlaylist?.songs ?? [], searchQuery);
   // View-only ordering for the list; playback still walks the playlist order.
   const visibleSongs = sortSongs(filteredSongs, sortBy);
+
+  const [queue, setQueue] = useState<Song[]>([]);
+  // Last song that played FROM the active playlist — resolveNextSong's
+  // drain-back base when the queue empties on a foreign song.
+  const lastPlaylistSongRef = useRef<Song | null>(null);
+  useEffect(() => {
+    if (currentSong && activePlaylist?.songs.some((s) => s.id === currentSong.id)) {
+      lastPlaylistSongRef.current = currentSong;
+    }
+  }, [currentSong, activePlaylist]);
+
   // Memoized so the engine's gapless preload and `playNext` agree on the *same*
   // next song — critical under shuffle, where recomputing would re-roll the
   // random pick and desync the preloaded element from what actually plays.
   const nextSong = useMemo(
-    () => nextInPlaylist(currentSong, activePlaylist?.songs ?? [], repeatMode, shuffle),
+    () =>
+      resolveNextSong({
+        current: currentSong,
+        queue,
+        songs: activePlaylist?.songs ?? [],
+        repeatMode,
+        shuffle,
+        anchor: lastPlaylistSongRef.current,
+      }),
     // Keyed on track IDENTITY (currentSong?.id), not the object, so metadata
     // merges (favorite toggle, lyrics fetch) on the PLAYING song don't re-roll
     // shuffle's random pick. NOT fully protected: activePlaylist?.songs is
@@ -192,7 +211,8 @@ export default function App() {
     // (e.g. hearting it) recomputes and may re-roll shuffle; the audio engine
     // self-heals the preload on the next timeupdate, so worst case is a rare
     // non-gapless track boundary, never a wrong song or a stall.
-    [currentSong?.id, activePlaylist?.songs, repeatMode, shuffle],
+    // `queue` is a dep on purpose: queuing a song MUST retarget the preload.
+    [currentSong?.id, activePlaylist?.songs, repeatMode, shuffle, queue],
   );
   const tintColor = useDominantColor(currentSong?.coverArt);
   const { canInstall, promptInstall, isIOS } = useInstallPrompt();
@@ -648,7 +668,16 @@ export default function App() {
     }
     // Consume the memoized `nextSong` so the song that plays is exactly the one
     // the engine preloaded for gapless (matters under shuffle — see useMemo).
-    if (nextSong) setCurrentSong(nextSong);
+    if (nextSong) {
+      // Consuming from the queue? Drop everything up to AND including the
+      // consumed entry — resolveNextSong may have skipped leading entries
+      // equal to the (old) current song, and they must not linger at the head.
+      // Safe: when nextSong came from the playlist walk instead, the queue
+      // held only current-duplicates, so findIndex is -1 by construction.
+      const qi = queue.findIndex((s) => s.id === nextSong.id);
+      if (qi !== -1) setQueue((q) => q.slice(qi + 1));
+      setCurrentSong(nextSong);
+    }
   };
 
   const playPrev = () => {
@@ -690,7 +719,10 @@ export default function App() {
                 )
               : prev.map((p) => ({ ...p, songs: p.songs.filter((s) => !idSet.has(s.id)) })),
           );
-          if (!scoped) setCurrentSong((prev) => (prev && idSet.has(prev.id) ? null : prev));
+          if (!scoped) {
+            setCurrentSong((prev) => (prev && idSet.has(prev.id) ? null : prev));
+            setQueue((q) => q.filter((s) => !idSet.has(s.id)));
+          }
         },
       );
     },
@@ -708,6 +740,31 @@ export default function App() {
 
   const handlePlaySong = useCallback((song: Song) => {
     setCurrentSong(song);
+  }, []);
+
+  const playNextInQueue = useCallback((id: string) => {
+    // The currently-playing song can't be queued: the engine's replay-in-place
+    // path (next.url === active.src) never calls onEnded, so it could never
+    // dequeue — see the spec's amended edge case.
+    if (currentSongIdRef.current === id) {
+      setNotification('Already playing');
+      return;
+    }
+    const song = filteredSongsRef.current.find((s) => s.id === id);
+    if (!song) return;
+    setQueue((q) => [song, ...q]);
+    setNotification(`Playing next: ${song.title}`);
+  }, []);
+
+  const addToQueue = useCallback((id: string) => {
+    if (currentSongIdRef.current === id) {
+      setNotification('Already playing');
+      return;
+    }
+    const song = filteredSongsRef.current.find((s) => s.id === id);
+    if (!song) return;
+    setQueue((q) => [...q, song]);
+    setNotification(`Added to queue: ${song.title}`);
   }, []);
 
   const toggleFavorite = useCallback((id: string) => {
@@ -766,7 +823,10 @@ export default function App() {
               : prev.map((p) => ({ ...p, songs: p.songs.filter((s) => s.id !== id) })),
           );
           // Scoped removal keeps the song in the library — don't stop playback.
-          if (!scoped) setCurrentSong((prev) => (prev?.id === id ? null : prev));
+          if (!scoped) {
+            setCurrentSong((prev) => (prev?.id === id ? null : prev));
+            setQueue((q) => q.filter((s) => s.id !== id));
+          }
         },
       );
     },
@@ -844,6 +904,7 @@ export default function App() {
       }),
     );
     setCurrentSong((prev) => (prev && removedIds.has(prev.id) ? null : prev));
+    setQueue((q) => q.filter((s) => !removedIds.has(s.id)));
 
     if (newSongs.length === 0 && removedIds.size === 0) {
       setNotification('Library is up to date');
@@ -1440,6 +1501,8 @@ export default function App() {
                 onPlay={handlePlaySong}
                 onPause={togglePlayPause}
                 onDelete={handleDeleteSong}
+                onPlayNext={playNextInQueue}
+                onAddToQueue={addToQueue}
                 onToggleFavorite={toggleFavorite}
                 onBatchDelete={handleBatchDelete}
                 onReorder={handleReorder}

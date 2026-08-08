@@ -11,7 +11,6 @@ import {
   Clock,
   GripVertical,
   Heart,
-  MoreHorizontal,
   Music,
   Pause,
   Play,
@@ -19,6 +18,7 @@ import {
   X,
 } from 'lucide-react';
 import type { Song } from '../types';
+import { RowMenu } from './RowMenu';
 
 interface SongListProps {
   songs: Song[];
@@ -32,6 +32,8 @@ interface SongListProps {
   onToggleFavorite: (id: string) => void;
   onBatchDelete: (ids: string[]) => void;
   onReorder: (songs: Song[]) => void;
+  onPlayNext: (id: string) => void;
+  onAddToQueue: (id: string) => void;
   isFilterActive: boolean;
   emptyHint?: { primary: string; secondary: string };
 }
@@ -59,6 +61,8 @@ interface SortableRowProps {
   onPause: () => void;
   onDelete: (id: string) => void;
   onToggleFavorite: (id: string) => void;
+  onPlayNext: (id: string) => void;
+  onAddToQueue: (id: string) => void;
   onRowClick: (song: Song, e: React.MouseEvent) => void;
   onLongPress: (song: Song) => void;
 }
@@ -75,6 +79,8 @@ const SortableRow = memo(function SortableRow({
   onPause,
   onDelete,
   onToggleFavorite,
+  onPlayNext,
+  onAddToQueue,
   onRowClick,
   onLongPress,
 }: SortableRowProps) {
@@ -279,12 +285,11 @@ const SortableRow = memo(function SortableRow({
               >
                 <Trash2 className="h-4 w-4 text-danger" />
               </button>
-              <button
-                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-                aria-label="More"
-              >
-                <MoreHorizontal className="h-4 w-4 text-white/60" />
-              </button>
+              <RowMenu
+                songTitle={song.title}
+                onPlayNext={() => onPlayNext(song.id)}
+                onAddToQueue={() => onAddToQueue(song.id)}
+              />
             </div>
           </div>
         </div>
@@ -305,6 +310,8 @@ export function SongList({
   onToggleFavorite,
   onBatchDelete,
   onReorder,
+  onPlayNext,
+  onAddToQueue,
   isFilterActive,
   emptyHint = DEFAULT_EMPTY_HINT,
 }: SongListProps) {
@@ -506,6 +513,8 @@ export function SongList({
                   onPause={onPause}
                   onDelete={onDelete}
                   onToggleFavorite={onToggleFavorite}
+                  onPlayNext={onPlayNext}
+                  onAddToQueue={onAddToQueue}
                   onRowClick={handleRowClick}
                   onLongPress={handleLongPress}
                 />

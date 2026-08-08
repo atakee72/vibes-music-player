@@ -11,6 +11,8 @@ function renderSongList(overrides: Partial<Parameters<typeof SongList>[0]> = {})
   const onReorder = vi.fn();
   const onSelectionModeChange = vi.fn();
   const onToggleFavorite = vi.fn();
+  const onPlayNext = vi.fn();
+  const onAddToQueue = vi.fn();
   const utils = render(
     <DndContext>
       <SongList
@@ -25,12 +27,25 @@ function renderSongList(overrides: Partial<Parameters<typeof SongList>[0]> = {})
         onBatchDelete={onBatchDelete}
         onReorder={onReorder}
         onToggleFavorite={onToggleFavorite}
+        onPlayNext={onPlayNext}
+        onAddToQueue={onAddToQueue}
         isFilterActive={false}
         {...overrides}
       />
     </DndContext>,
   );
-  return { ...utils, onPlay, onPause, onDelete, onBatchDelete, onReorder, onSelectionModeChange, onToggleFavorite };
+  return {
+    ...utils,
+    onPlay,
+    onPause,
+    onDelete,
+    onBatchDelete,
+    onReorder,
+    onSelectionModeChange,
+    onToggleFavorite,
+    onPlayNext,
+    onAddToQueue,
+  };
 }
 
 describe('SongList', () => {
@@ -78,6 +93,8 @@ describe('SongList', () => {
           onToggleFavorite={vi.fn()}
           onBatchDelete={vi.fn()}
           onReorder={vi.fn()}
+          onPlayNext={vi.fn()}
+          onAddToQueue={vi.fn()}
           isFilterActive={false}
         />
       </DndContext>,
@@ -179,5 +196,22 @@ describe('SongList', () => {
     renderSongList({ songs: [fav] });
     const btn = screen.getByRole('button', { name: 'Remove Bravo from Favorites' });
     expect(btn).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('row menu Play next fires onPlayNext with the song id, not onPlay', () => {
+    const song = makeSong({ title: 'Alpha' });
+    const { onPlayNext, onPlay } = renderSongList({ songs: [song] });
+    fireEvent.click(screen.getByRole('button', { name: 'More actions for Alpha' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /Play next/ }));
+    expect(onPlayNext).toHaveBeenCalledWith(song.id);
+    expect(onPlay).not.toHaveBeenCalled();
+  });
+
+  it('row menu Add to queue fires onAddToQueue with the song id', () => {
+    const song = makeSong({ title: 'Bravo' });
+    const { onAddToQueue } = renderSongList({ songs: [song] });
+    fireEvent.click(screen.getByRole('button', { name: 'More actions for Bravo' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /Add to queue/ }));
+    expect(onAddToQueue).toHaveBeenCalledWith(song.id);
   });
 });
