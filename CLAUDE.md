@@ -285,7 +285,11 @@
 - **`MobileNowPlaying`** (`src/components/MobileNowPlaying.tsx`) is the
   full-screen (`fixed inset-0 z-[60]`) frame-D view — the orb wrapped by
   `OrbVisualizerRing`, title, scrubbable progress, full transport, and the
-  controls trimmed from the mobile bar (lyrics, EQ, volume, share). **Despite the
+  controls trimmed from the mobile bar (lyrics, EQ, volume, share). Volume is
+  a **tap-to-open popover** (round icon button + slider above the row — the
+  inline flex-1 slider was unusably narrow there; `volOpen` local state, EQ
+  precedent). Root bg is `bg-deep supports-[backdrop-filter]:bg-deep/95` so
+  browsers without backdrop-filter get solid, not see-through. **Despite the
   name it now renders on every size** (the `lg:hidden` was dropped) — on desktop
   it opens by clicking the bottom `PlayerBar`'s cover/title (the `onExpand` no
   longer gated to mobile); on mobile, by tapping the mini-bar. State

@@ -81,4 +81,13 @@ describe('MobileNowPlaying', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Toggle queue' }));
     expect(onToggleQueue).toHaveBeenCalledTimes(1);
   });
+
+  it('volume is a popover: closed by default, tap opens slider, change fires callback', () => {
+    const { onVolumeChange } = renderView();
+    expect(screen.queryByLabelText('Volume')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Volume controls' }));
+    const slider = screen.getByLabelText('Volume');
+    fireEvent.change(slider, { target: { value: '40' } });
+    expect(onVolumeChange).toHaveBeenCalledWith(0.4);
+  });
 });

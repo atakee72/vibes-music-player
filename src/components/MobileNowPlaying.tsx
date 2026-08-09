@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import {
   ChevronDown,
   ListMusic,
@@ -12,7 +12,10 @@ import {
   SkipBack,
   SkipForward,
   Sliders,
+  Volume,
+  Volume1,
   Volume2,
+  VolumeX,
 } from 'lucide-react';
 import type { RepeatMode, Song } from '../types';
 import { EQ_PRESET_NAMES, type EqPreset } from '../lib/eq';
@@ -86,6 +89,22 @@ export function MobileNowPlaying({
   onShare,
 }: MobileNowPlayingProps) {
   const { mounted, visible } = usePresence(open && !!song);
+
+  // Volume popover: the inline slider was unusable squeezed into the crowded
+  // utility row on narrow screens — a tap opens a full-width slider instead.
+  // Local UI state, same convention-break precedent as PlayerBar's eqOpen.
+  const [volOpen, setVolOpen] = useState(false);
+  const volWrapRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!volOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (!volWrapRef.current?.contains(e.target as Node)) setVolOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [volOpen]);
+  const VolumeIcon =
+    volume === 0 ? VolumeX : volume < 0.34 ? Volume : volume < 0.67 ? Volume1 : Volume2;
   if (!mounted || !song) return null;
 
   const RepeatIcon = repeatMode === 'one' ? Repeat1 : Repeat;
@@ -93,7 +112,7 @@ export function MobileNowPlaying({
 
   return (
     <div
-      className={`fixed inset-0 z-[60] flex flex-col bg-deep/95 backdrop-blur-2xl p-6 motion-safe:transition-all motion-safe:duration-300 ${
+      className={`fixed inset-0 z-[60] flex flex-col bg-deep supports-[backdrop-filter]:bg-deep/95 backdrop-blur-2xl p-6 motion-safe:transition-all motion-safe:duration-300 ${
         visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
       }`}
     >
@@ -222,17 +241,28 @@ export function MobileNowPlaying({
             </select>
           </div>
 
-          <div className="flex flex-1 items-center gap-2">
-            <Volume2 className="h-4 w-4 shrink-0 text-white/60" />
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={Math.round(volume * 100)}
-              onChange={(e) => onVolumeChange(Number(e.target.value) / 100)}
-              className="w-full accent-amber"
-              aria-label="Volume"
-            />
+          <div ref={volWrapRef} className="relative">
+            {volOpen && (
+              <div className="absolute bottom-full right-0 z-10 mb-2 w-48 rounded-xl border border-white/10 bg-surface/95 p-3 shadow-xl backdrop-blur-xl">
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={Math.round(volume * 100)}
+                  onChange={(e) => onVolumeChange(Number(e.target.value) / 100)}
+                  className="w-full accent-amber"
+                  aria-label="Volume"
+                />
+              </div>
+            )}
+            <button
+              onClick={() => setVolOpen((v) => !v)}
+              className="p-2 rounded-full bg-white/5 text-white/70 hover:bg-white/10 transition-colors"
+              aria-label="Volume controls"
+              aria-expanded={volOpen}
+            >
+              <VolumeIcon className="h-5 w-5" />
+            </button>
           </div>
 
           <button
