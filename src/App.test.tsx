@@ -44,25 +44,26 @@ const store = vi.hoisted(() => ({
   estimate: null as null | { usage: number; quota: number; percent: number },
 }));
 
-vi.mock('./lib/storage', () => ({
-  getPlaylists: vi.fn(async () => store.playlists),
-  getLibraryRoots: vi.fn(async () => []),
-  savePlaylists: vi.fn(async () => {}),
-  getEqPreset: vi.fn(async () => 'Off'),
-  saveEqPreset: vi.fn(async () => {}),
-  getVolume: vi.fn(async () => 1),
-  saveVolume: vi.fn(async () => {}),
-  addLibraryRoot: vi.fn(async () => null),
-  ensurePersisted: vi.fn(async () => {}),
-  getStorageEstimate: vi.fn(async () => store.estimate),
-  formatStorageWarning: vi.fn(
-    (est: { percent: number } | null) =>
-      est && est.percent >= 90
-        ? `Storage almost full (${Math.round(est.percent)}% used) — new songs may fail to save.`
-        : null,
-  ),
-  StorageQuotaError: class StorageQuotaError extends Error {},
-}));
+vi.mock('./lib/storage', async () => {
+  // Keep the REAL pure pieces (threshold logic, error class) so the warning
+  // test exercises genuine formatting, not a mock echoing itself.
+  const actual = await vi.importActual<typeof import('./lib/storage')>('./lib/storage');
+  return {
+    getPlaylists: vi.fn(async () => store.playlists),
+    getLibraryRoots: vi.fn(async () => []),
+    savePlaylists: vi.fn(async () => {}),
+    getEqPreset: vi.fn(async () => 'Off'),
+    saveEqPreset: vi.fn(async () => {}),
+    getVolume: vi.fn(async () => 1),
+    saveVolume: vi.fn(async () => {}),
+    addLibraryRoot: vi.fn(async () => null),
+    ensurePersisted: vi.fn(async () => {}),
+    getStorageEstimate: vi.fn(async () => store.estimate),
+    formatStorageWarning: actual.formatStorageWarning,
+    STORAGE_WARN_PERCENT: actual.STORAGE_WARN_PERCENT,
+    StorageQuotaError: actual.StorageQuotaError,
+  };
+});
 
 async function renderApp(seed?: { playlists?: Playlist[] }) {
   store.playlists = seed?.playlists ?? [];
@@ -142,7 +143,8 @@ describe('App', () => {
     });
     fireEvent.click(screen.getByText('Mix'));
     fireEvent.click(screen.getByRole('button', { name: 'Delete song' }));
-    expect(screen.getByText(/Song remains in Library/)).toBeInTheDocument();
+    // find*: ConfirmModal is lazy-loaded — sync get* races the chunk import
+    expect(await screen.findByText(/Song remains in Library/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
     await waitFor(() =>
       expect(screen.getByText('No songs in this playlist')).toBeInTheDocument(),
@@ -160,7 +162,9 @@ describe('App', () => {
       ],
     });
     fireEvent.click(screen.getByRole('button', { name: 'Delete song' }));
-    expect(screen.getByText(/Permanently removes from your library and all playlists/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Permanently removes from your library and all playlists/),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
     await waitFor(() => expect(screen.queryByText('Doomed')).not.toBeInTheDocument());
     fireEvent.click(screen.getByText('Mix'));
@@ -289,7 +293,21 @@ describe('App', () => {
     expect(
       await screen.findByText(/Storage almost full \(92% used\)/, undefined, { timeout: 3000 }),
     ).toBeInTheDocument();
-  });
+    // "Once per session": wait for the toast to auto-dismiss, mutate again,
+    // let the next debounced save land — no second warning appears.
+    await waitFor(
+      () => expect(screen.queryByText(/Storage almost full/)).not.toBeInTheDocument(),
+      { timeout: 6000 },
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'New Playlist' }));
+    fireEvent.change(await screen.findByPlaceholderText('Playlist name'), {
+      target: { value: 'Filler2' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+    await screen.findByText('Filler2');
+    await new Promise((r) => setTimeout(r, 700)); // let the debounce fire
+    expect(screen.queryByText(/Storage almost full/)).not.toBeInTheDocument();
+  }, 15000); // the toast's 5s auto-dismiss is part of the once-per-session check
 
   it('an .m3u upload creates a playlist and is not ingested as a song', async () => {
     await renderApp({
