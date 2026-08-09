@@ -310,6 +310,16 @@
   `truncate` — report `scrollWidth === clientWidth`, hiding real overflow).
 - The desktop `NowPlayingHero` is intentionally **compact** (`h-[180px]`, ~136px
   orb) so the song list keeps usable height beneath it.
+- **Mobile row actions**: rows show an always-visible `⋯` (`lg:hidden`,
+  hidden in selection mode) opening `RowActionSheet` — a bottom sheet
+  (usePresence slide-up) with Play next / Add to queue / heart / Delete,
+  reusing SongList's existing callbacks; `sheetSong` state is local to
+  SongList. **The sheet renders at SongList root, never inside the
+  virtualized row wrappers — their `transform` makes them the containing
+  block for `position: fixed`** (same trap family as the RowMenu occlusion).
+  Mobile rows also show a display-only coral heart beside the duration when
+  favorited. Sidebar rename/delete pencils are visible-by-default below
+  `lg` (`opacity-100 lg:opacity-0 lg:group-hover:opacity-100`).
 
 ## Document Picture-in-Picture
 

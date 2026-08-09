@@ -108,4 +108,10 @@ describe('Sidebar', () => {
     expect(screen.queryByRole('button', { name: 'Rename Favorites' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Delete Favorites' })).not.toBeInTheDocument();
   });
+
+  it('rename and delete buttons are visible-by-default below lg (hover-revealed only on desktop)', () => {
+    renderSidebar();
+    expect(screen.getByRole('button', { name: 'Rename Mix' })).toHaveClass('lg:opacity-0');
+    expect(screen.getByRole('button', { name: 'Delete Mix' })).toHaveClass('lg:opacity-0');
+  });
 });

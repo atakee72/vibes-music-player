@@ -52,7 +52,7 @@ function PlaylistRow({ playlist, active, onSelect, onDelete, onRename, onClose }
               e.stopPropagation();
               onRename(playlist.id);
             }}
-            className="opacity-0 group-hover:opacity-100 p-1 hover:bg-white/10 rounded transition-all"
+            className="opacity-100 lg:opacity-0 lg:group-hover:opacity-100 p-1 hover:bg-white/10 rounded transition-all"
             aria-label={`Rename ${playlist.name}`}
           >
             <Pencil className="h-3 w-3 text-white/70" />
@@ -62,7 +62,7 @@ function PlaylistRow({ playlist, active, onSelect, onDelete, onRename, onClose }
               e.stopPropagation();
               onDelete(playlist.id);
             }}
-            className="opacity-0 group-hover:opacity-100 p-1 hover:bg-danger/20 rounded transition-all"
+            className="opacity-100 lg:opacity-0 lg:group-hover:opacity-100 p-1 hover:bg-danger/20 rounded transition-all"
             aria-label={`Delete ${playlist.name}`}
           >
             <Trash2 className="h-3 w-3 text-danger" />
