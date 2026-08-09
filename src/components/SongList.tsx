@@ -11,6 +11,7 @@ import {
   Clock,
   GripVertical,
   Heart,
+  MoreHorizontal,
   Music,
   Pause,
   Play,
@@ -19,6 +20,7 @@ import {
 } from 'lucide-react';
 import type { Song } from '../types';
 import { RowMenu } from './RowMenu';
+import { RowActionSheet } from './RowActionSheet';
 
 interface SongListProps {
   songs: Song[];
@@ -63,6 +65,7 @@ interface SortableRowProps {
   onToggleFavorite: (id: string) => void;
   onPlayNext: (id: string) => void;
   onAddToQueue: (id: string) => void;
+  onOpenSheet: (song: Song) => void;
   onRowClick: (song: Song, e: React.MouseEvent) => void;
   onLongPress: (song: Song) => void;
   onMenuOpenChange: (id: string, open: boolean) => void;
@@ -82,6 +85,7 @@ const SortableRow = memo(function SortableRow({
   onToggleFavorite,
   onPlayNext,
   onAddToQueue,
+  onOpenSheet,
   onRowClick,
   onLongPress,
   onMenuOpenChange,
@@ -254,6 +258,12 @@ const SortableRow = memo(function SortableRow({
                   {(song.file.size / 1048576).toFixed(1)} MB
                 </span>
               )}
+              {song.favorite && (
+                <Heart
+                  aria-label="Favorited"
+                  className="h-3 w-3 text-coral fill-current"
+                />
+              )}
             </div>
           </div>
           <div className="hidden lg:flex items-center space-x-4">
@@ -303,6 +313,22 @@ const SortableRow = memo(function SortableRow({
           </div>
         </div>
       </div>
+
+      {!selectionMode && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenSheet(song);
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          // ^ keeps the row's 500ms long-press (selection mode) and the drag
+          //   sensor from starting on presses of this button
+          className="lg:hidden shrink-0 p-3 -mr-1 hover:bg-white/10 rounded-lg transition-colors"
+          aria-label={`Actions for ${song.title}`}
+        >
+          <MoreHorizontal className="h-5 w-5 text-white/60" />
+        </button>
+      )}
     </div>
   );
 });
@@ -338,6 +364,13 @@ export function SongList({
   const handleMenuOpenChange = useCallback((id: string, open: boolean) => {
     setMenuOpenRowId((prev) => (open ? id : prev === id ? null : prev));
   }, []);
+
+  // Mobile action sheet target — local like selectedIds (convention-break
+  // precedent). The sheet renders at root level: NEVER inside the virtual
+  // row wrappers, whose transform would hijack its position:fixed.
+  const [sheetSong, setSheetSong] = useState<Song | null>(null);
+  const openSheet = useCallback((song: Song) => setSheetSong(song), []);
+  const closeSheet = useCallback(() => setSheetSong(null), []);
 
   const isDesktop =
     typeof window !== 'undefined' &&
@@ -460,91 +493,102 @@ export function SongList({
   const totalSize = virtualizer.getTotalSize();
 
   return (
-    <div ref={scrollRef} className="flex-1 overflow-y-auto outline-none">
-      {selectionMode && (
-        <div className="sticky top-0 z-10 flex items-center justify-between bg-surface/95 backdrop-blur-xl border-b border-white/10 px-4 py-2">
-          <span className="text-sm text-white/80">
-            {selectedIds.size} selected
-          </span>
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={handleSelectAll}
-              className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded-lg text-white/80 text-sm transition-colors"
-              aria-label="Select all"
-            >
-              Select all
-            </button>
-            <button
-              onClick={handleBatchDelete}
-              disabled={selectedIds.size === 0}
-              className="flex items-center space-x-1 px-3 py-1 bg-danger/20 hover:bg-danger/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg text-danger text-sm transition-colors"
-              aria-label="Delete selected"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              <span>Delete</span>
-            </button>
-            <button
-              onClick={handleCancel}
-              className="flex items-center space-x-1 px-3 py-1 bg-white/5 hover:bg-white/10 rounded-lg text-white/80 text-sm transition-colors"
-              aria-label="Cancel selection"
-            >
-              <X className="h-3.5 w-3.5" />
-              <span>Cancel</span>
-            </button>
-          </div>
-        </div>
-      )}
-      <SortableContext
-        items={songs.map((s) => s.id)}
-        strategy={verticalListSortingStrategy}
-        disabled={isFilterActive || selectionMode}
-      >
-        <div
-          className="p-2 lg:p-4"
-          style={{ position: 'relative', height: `${totalSize}px` }}
-        >
-          {virtualItems.map((virtualItem) => {
-            const song = songs[virtualItem.index];
-            const active = currentSong?.id === song.id;
-            const activePlaying = active && isPlaying;
-            const isSelected = selectedIds.has(song.id);
-            return (
-              <div
-                key={virtualItem.key}
-                ref={virtualizer.measureElement}
-                data-index={virtualItem.index}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  transform: `translateY(${virtualItem.start}px)`,
-                  zIndex: menuOpenRowId === song.id ? 30 : undefined,
-                }}
+    <>
+      <div ref={scrollRef} className="flex-1 overflow-y-auto outline-none">
+        {selectionMode && (
+          <div className="sticky top-0 z-10 flex items-center justify-between bg-surface/95 backdrop-blur-xl border-b border-white/10 px-4 py-2">
+            <span className="text-sm text-white/80">
+              {selectedIds.size} selected
+            </span>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={handleSelectAll}
+                className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded-lg text-white/80 text-sm transition-colors"
+                aria-label="Select all"
               >
-                <SortableRow
-                  song={song}
-                  active={active}
-                  activePlaying={activePlaying}
-                  selected={isSelected}
-                  selectionMode={selectionMode}
-                  isFilterActive={isFilterActive}
-                  selectedIds={selectedIds}
-                  onPlay={onPlay}
-                  onPause={onPause}
-                  onDelete={onDelete}
-                  onToggleFavorite={onToggleFavorite}
-                  onPlayNext={onPlayNext}
-                  onAddToQueue={onAddToQueue}
-                  onRowClick={handleRowClick}
-                  onLongPress={handleLongPress}
-                  onMenuOpenChange={handleMenuOpenChange}
-                />
-              </div>
-            );
-          })}
-        </div>
-      </SortableContext>
-    </div>
+                Select all
+              </button>
+              <button
+                onClick={handleBatchDelete}
+                disabled={selectedIds.size === 0}
+                className="flex items-center space-x-1 px-3 py-1 bg-danger/20 hover:bg-danger/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg text-danger text-sm transition-colors"
+                aria-label="Delete selected"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span>Delete</span>
+              </button>
+              <button
+                onClick={handleCancel}
+                className="flex items-center space-x-1 px-3 py-1 bg-white/5 hover:bg-white/10 rounded-lg text-white/80 text-sm transition-colors"
+                aria-label="Cancel selection"
+              >
+                <X className="h-3.5 w-3.5" />
+                <span>Cancel</span>
+              </button>
+            </div>
+          </div>
+        )}
+        <SortableContext
+          items={songs.map((s) => s.id)}
+          strategy={verticalListSortingStrategy}
+          disabled={isFilterActive || selectionMode}
+        >
+          <div
+            className="p-2 lg:p-4"
+            style={{ position: 'relative', height: `${totalSize}px` }}
+          >
+            {virtualItems.map((virtualItem) => {
+              const song = songs[virtualItem.index];
+              const active = currentSong?.id === song.id;
+              const activePlaying = active && isPlaying;
+              const isSelected = selectedIds.has(song.id);
+              return (
+                <div
+                  key={virtualItem.key}
+                  ref={virtualizer.measureElement}
+                  data-index={virtualItem.index}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    transform: `translateY(${virtualItem.start}px)`,
+                    zIndex: menuOpenRowId === song.id ? 30 : undefined,
+                  }}
+                >
+                  <SortableRow
+                    song={song}
+                    active={active}
+                    activePlaying={activePlaying}
+                    selected={isSelected}
+                    selectionMode={selectionMode}
+                    isFilterActive={isFilterActive}
+                    selectedIds={selectedIds}
+                    onPlay={onPlay}
+                    onPause={onPause}
+                    onDelete={onDelete}
+                    onToggleFavorite={onToggleFavorite}
+                    onPlayNext={onPlayNext}
+                    onAddToQueue={onAddToQueue}
+                    onOpenSheet={openSheet}
+                    onRowClick={handleRowClick}
+                    onLongPress={handleLongPress}
+                    onMenuOpenChange={handleMenuOpenChange}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </SortableContext>
+      </div>
+      <RowActionSheet
+        song={sheetSong}
+        onPlayNext={onPlayNext}
+        onAddToQueue={onAddToQueue}
+        onToggleFavorite={onToggleFavorite}
+        onDelete={onDelete}
+        onClose={closeSheet}
+      />
+    </>
   );
 }

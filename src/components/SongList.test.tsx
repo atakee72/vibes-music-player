@@ -221,4 +221,32 @@ describe('SongList', () => {
     const row = screen.getByRole('button', { name: /^Alpha Artist/ });
     expect(row).not.toHaveAttribute('aria-disabled');
   });
+
+  it('mobile ⋯ opens the action sheet for that song', () => {
+    const song = makeSong({ title: 'Alpha', artist: 'Artist X' });
+    renderSongList({ songs: [song] });
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for Alpha' }));
+    expect(screen.getByRole('dialog', { name: 'Actions for Alpha' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Play next' })).toBeInTheDocument();
+  });
+
+  it('mobile ⋯ is hidden in selection mode', () => {
+    const song = makeSong({ title: 'Alpha' });
+    renderSongList({ songs: [song], selectionMode: true });
+    expect(screen.queryByRole('button', { name: 'Actions for Alpha' })).not.toBeInTheDocument();
+  });
+
+  it('sheet actions route to the SongList props with the song id', () => {
+    const song = makeSong({ title: 'Alpha' });
+    const { onAddToQueue } = renderSongList({ songs: [song] });
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for Alpha' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add to queue' }));
+    expect(onAddToQueue).toHaveBeenCalledWith(song.id);
+  });
+
+  it('mobile rows show a favorited indicator when the song is hearted', () => {
+    const fav = makeSong({ title: 'Bravo', favorite: true });
+    renderSongList({ songs: [fav] });
+    expect(screen.getByLabelText('Favorited')).toBeInTheDocument();
+  });
 });
