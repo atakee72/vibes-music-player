@@ -1245,7 +1245,12 @@ export default function App() {
         }
       },
     },
-    { isBlocked: showUpload },
+    {
+      // Any App-level modal suppresses shortcuts (Escape still passes) —
+      // the focus traps park focus on modal buttons, and q/l/slash firing
+      // behind a dialog would act on hidden UI.
+      isBlocked: showUpload || confirm !== null || promptState !== null || sharedTrack !== null,
+    },
   );
 
   // Secondary header actions — shown inline on desktop, in the `⋯` menu on mobile.

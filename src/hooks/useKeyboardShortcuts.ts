@@ -38,6 +38,9 @@ function isInputFocused(): boolean {
  * - Input-focus guard: when an <input>, <textarea>, [contenteditable] etc. is
  *   focused, only Escape fires (so text editing works normally).
  * - Modal suppression: pass `{ isBlocked: true }` to limit firing to Escape only.
+ * - Space-on-button guard: when a <button> is focused, Space is left to the
+ *   browser (button activation) — the a11y focus traps park focus on modal
+ *   buttons, and Space there must press the button, never toggle playback.
  * - preventDefault is called for Space (page scroll) and Slash (Firefox Quick Find).
  */
 export function useKeyboardShortcuts(handlers: Handlers, options: Options = {}): void {
@@ -57,6 +60,11 @@ export function useKeyboardShortcuts(handlers: Handlers, options: Options = {}):
 
       const inputBlocking = isInputFocused() || optionsRef.current.isBlocked === true;
       if (inputBlocking && code !== 'Escape') return;
+
+      // Space on a focused <button> must ACTIVATE the button (native behavior),
+      // not fire the play/pause shortcut — critical for the modal focus traps,
+      // which deliberately park focus on buttons (e.g. ConfirmModal's Cancel).
+      if (code === 'Space' && document.activeElement?.tagName === 'BUTTON') return;
 
       if (PREVENT_DEFAULT_CODES.has(code)) event.preventDefault();
       handler(event);

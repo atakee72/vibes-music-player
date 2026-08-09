@@ -94,6 +94,35 @@ describe('useDialogFocus', () => {
     expect(screen.getByRole('button', { name: 'First' })).toHaveFocus();
   });
 
+  it('hidden elements are never wrap targets (upload dialog hidden file input)', () => {
+    function WithHiddenInput() {
+      const [open, setOpen] = useState(false);
+      const ref = useRef<HTMLDivElement>(null);
+      useDialogFocus(open, ref);
+      return (
+        <div>
+          <button onClick={() => setOpen(true)}>Open dialog</button>
+          {open && (
+            <div ref={ref} role="dialog" aria-label="Upload-like">
+              <button>Browse</button>
+              <input style={{ display: 'none' }} aria-label="hidden file input" />
+            </div>
+          )}
+        </div>
+      );
+    }
+    render(<WithHiddenInput />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open dialog' }));
+    const browse = screen.getByRole('button', { name: 'Browse' });
+    expect(browse).toHaveFocus();
+    // Browse is both first AND last visible focusable — Tab must wrap to it,
+    // never to the display:none input.
+    tab();
+    expect(browse).toHaveFocus();
+    tab(true);
+    expect(browse).toHaveFocus();
+  });
+
   it('is inert while inactive (no listener, no restore bookkeeping)', () => {
     render(<Harness />);
     const outside = screen.getByRole('button', { name: 'Outside button' });

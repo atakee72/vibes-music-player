@@ -24,6 +24,11 @@ interface DialogFocusOptions {
  *
  * Panels (Queue/Lyrics) and the desktop sidebar are non-modal — do NOT trap
  * them; this hook is for `aria-modal` dialog surfaces only.
+ *
+ * NOT stack-aware: at most one trap may be active at a time. Today that
+ * holds by construction (surfaces close before opening the next — e.g. the
+ * action sheet closes before its Delete opens ConfirmModal). If overlapping
+ * dialogs ever become reachable, add an active-trap stack here first.
  */
 export function useDialogFocus(
   active: boolean,
@@ -38,11 +43,22 @@ export function useDialogFocus(
     restoreRef.current =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
 
+    // Hidden elements (e.g. the upload dialog's `className="hidden"` file
+    // input) must not become wrap targets: focusing a display:none node is a
+    // silent no-op, which would kill Shift+Tab at that edge and let forward
+    // Tab escape the dialog. Computed style (not getClientRects) on purpose:
+    // happy-dom has no layout engine and reports rects for everything.
+    const visibleFocusables = (container: HTMLElement): HTMLElement[] =>
+      Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((el) => {
+        const style = window.getComputedStyle(el);
+        return style.display !== 'none' && style.visibility !== 'hidden';
+      });
+
     if (initialFocus) {
       const container = containerRef.current;
       const target =
         container?.querySelector<HTMLElement>('[data-autofocus]') ??
-        container?.querySelector<HTMLElement>(FOCUSABLE);
+        (container ? visibleFocusables(container)[0] : undefined);
       target?.focus();
     }
 
@@ -50,7 +66,7 @@ export function useDialogFocus(
       if (e.key !== 'Tab') return;
       const container = containerRef.current;
       if (!container) return;
-      const focusables = Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE));
+      const focusables = visibleFocusables(container);
       if (focusables.length === 0) return;
 
       const activeEl = document.activeElement;

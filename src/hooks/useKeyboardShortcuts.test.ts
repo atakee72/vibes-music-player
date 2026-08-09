@@ -72,4 +72,33 @@ describe('useKeyboardShortcuts', () => {
     expect(space).not.toHaveBeenCalled();
     expect(escape).toHaveBeenCalledTimes(1);
   });
+
+  it('Space on a focused <button> is left to the browser (button activation, no shortcut)', () => {
+    const space = vi.fn();
+    renderHook(() => useKeyboardShortcuts({ Space: space }));
+
+    const button = document.createElement('button');
+    button.setAttribute('data-test-cleanup', '');
+    document.body.appendChild(button);
+    button.focus();
+    expect(document.activeElement).toBe(button);
+
+    const event = press('Space');
+    expect(space).not.toHaveBeenCalled();
+    // The hook must not preventDefault either — that would kill activation.
+    expect(event.defaultPrevented).toBe(false);
+    button.remove();
+  });
+
+  it('other shortcuts still fire with a button focused (only Space is special-cased)', () => {
+    const q = vi.fn();
+    renderHook(() => useKeyboardShortcuts({ KeyQ: q }));
+    const button = document.createElement('button');
+    button.setAttribute('data-test-cleanup', '');
+    document.body.appendChild(button);
+    button.focus();
+    press('KeyQ');
+    expect(q).toHaveBeenCalledTimes(1);
+    button.remove();
+  });
 });
