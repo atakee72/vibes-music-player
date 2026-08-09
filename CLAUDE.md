@@ -121,6 +121,10 @@
 - Pass `{ isBlocked: showUpload }` (or similar) to suppress everything
   except Escape while a modal is open. The hook handles that with one
   branch — don't sprinkle guards into individual handlers.
+- **Space on a focused `<button>` activates the button, not play/pause** —
+  app-wide, by design (the a11y focus traps park focus on modal buttons;
+  native activation must win). The hook skips Space entirely (no handler,
+  no preventDefault) when `activeElement` is a BUTTON.
 - Currently wired in App.tsx: Space=play/pause, ←/→=seek ∓10s,
   **Shift+←/→**=prev/next track, `L`=toggle lyrics, `/`=focus search,
   Escape=chain (see "Selection mode" section for the full priority order).
