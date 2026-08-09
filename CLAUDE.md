@@ -732,9 +732,16 @@
 - Test files are **co-located** (`Sidebar.test.tsx` next to `Sidebar.tsx`).
 - `src/test-utils.ts` has `makeSong` / `makePlaylist` factories. Use them
   instead of hand-rolling fixtures in each test.
-- **`App.tsx` has no tests** by design — it's coupled to `AudioContext` and
-  RAF, and the mocking surface isn't worth it until we refactor that
-  pipeline (slated for the gapless-playback work).
+- **`App.tsx` IS tested** (`src/App.test.tsx`, since 2026-08-09) — the old
+  "coupled to AudioContext/RAF" rationale died when the engine moved into
+  `useAudioEngine`. The harness mocks exactly four things: `useAudioEngine`
+  (fake with a captured `onEnded` so tests can simulate track end),
+  `useMediaSession` (no-op), `./lib/storage` (in-memory; the factory must
+  export EVERY name App imports, incl. `StorageQuotaError`), and
+  `music-metadata` (App calls `parseBlob` directly in the cover self-heal +
+  lyrics re-parse paths). **Gotcha: the modals are lazy-loaded** — the first
+  interaction with any modal in a test must `await screen.find*` (a sync
+  `get*` right after the opening click races the chunk import).
 - The Sidebar trash-button test specifically uses `fireEvent.click` (not a
   direct prop call) because the test exists to verify `stopPropagation`,
   which only matters when a real DOM event bubbles.

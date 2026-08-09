@@ -76,7 +76,8 @@ happy-path tests covering the three components and the metadata hook.
 - **App.tsx not tested**: deferred until Phase 3 when the audio chain
   refactor would extract it into a testable hook anyway. (Still no App.tsx
   tests at Phase 3.5 — the engine extraction successfully made App.tsx
-  thin enough.)
+  thin enough. **Resolved 2026-08-09**: `src/App.test.tsx` — an 18-test
+  wiring suite over a 4-mock harness; see CLAUDE.md "Testing".)
 
 ---
 
