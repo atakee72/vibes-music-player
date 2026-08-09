@@ -30,6 +30,7 @@ interface PendingEntry {
 let worker: Worker | null = null;
 let workerBroken = import.meta.env.MODE === 'test';
 let nextId = 0;
+let consecutiveTimeouts = 0;
 const pending = new Map<number, PendingEntry>();
 
 /** Give up on the worker for this session; re-run everything in flight on
@@ -64,6 +65,7 @@ function getWorker(): Worker | null {
       }
       const entry = pending.get(e.data.id);
       if (!entry) return; // late message after timeout/failover — ignore
+      consecutiveTimeouts = 0; // the worker is alive after all
       pending.delete(e.data.id);
       clearTimeout(entry.timer);
       entry.resolve(e.data.ok ? e.data.meta : null);
@@ -99,6 +101,9 @@ function workerExtract(file: File): Promise<ExtractedMeta | null> {
       if (!pending.has(id)) return;
       pending.delete(id);
       void mainThreadExtract(file).then(resolve);
+      // A worker that times out repeatedly with no error event is dead —
+      // don't make every remaining file eat the full timeout serially.
+      if (++consecutiveTimeouts >= 2) failOverAll();
     }, REQUEST_TIMEOUT_MS);
     pending.set(id, { resolve, file, timer });
     const request: MetadataRequest = { id, file };
