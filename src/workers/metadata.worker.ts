@@ -15,12 +15,24 @@ export interface MetadataRequest {
 
 export type MetadataResponse =
   | { id: number; ok: true; meta: ExtractedMeta }
-  | { id: number; ok: false };
+  | { id: number; ok: false; workerEnv?: boolean };
 
 self.onmessage = async (e: MessageEvent<MetadataRequest>) => {
   const { id, file } = e.data;
+
+  // Environment failure (chunk fetch failed mid-deploy, CSP, …) is NOT the
+  // file's fault — flag it so the client fails over to the main thread
+  // instead of emitting metadata-less fallback songs for the whole batch.
+  let parseBlob: typeof import('music-metadata').parseBlob;
   try {
-    const { parseBlob } = await import('music-metadata');
+    ({ parseBlob } = await import('music-metadata'));
+  } catch {
+    const response: MetadataResponse = { id, ok: false, workerEnv: true };
+    self.postMessage(response);
+    return;
+  }
+
+  try {
     const meta = await parseBlob(file);
     const response: MetadataResponse = { id, ok: true, meta: extractSongMeta(meta, file.name) };
     self.postMessage(response);

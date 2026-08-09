@@ -5,11 +5,13 @@
  * failure, unsupported browser path, or already-small image returns the
  * original blob unchanged.
  *
- * Main-thread Image + canvas + toBlob on purpose (not OffscreenCanvas),
- * matching the documented rationale in src/lib/colors.ts — drawImage over
- * blob URLs has edge cases in some browser contexts that the regular canvas
- * path avoids. The per-image cost (~tens of ms) amortizes fine across ingest
- * since the CPU-heavy tag parsing now happens off-thread.
+ * Main-thread Image + canvas + toBlob on purpose (not OffscreenCanvas) —
+ * the same regular-canvas approach colors.ts uses for dominant-color
+ * extraction: drawImage over blob URLs has edge cases in some browser
+ * contexts that the plain-canvas path avoids, and neither Image nor
+ * document.createElement exists in a worker anyway. The per-image cost
+ * (~tens of ms) amortizes fine across ingest since the CPU-heavy tag
+ * parsing happens off-thread.
  */
 export function downscaleCover(
   blob: Blob,
@@ -44,9 +46,12 @@ export function downscaleCover(
           const ctx = canvas.getContext('2d');
           if (!ctx) return done(blob);
           ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          // PNG stays PNG: re-encoding transparent art to JPEG would paint
+          // the alpha channel black. Everything else compacts to JPEG.
+          const outType = blob.type === 'image/png' ? 'image/png' : 'image/jpeg';
           canvas.toBlob(
             (out) => done(out && out.size > 0 && out.size < blob.size ? out : blob),
-            'image/jpeg',
+            outType,
             0.85,
           );
         } catch {

@@ -629,18 +629,39 @@ export default function App() {
       }
       if (playlistFiles.length > 0) await handlePlaylistImport(playlistFiles);
       if (arr.length > 0) {
-        // Parallel extraction: the metadata client's worker pool bounds
-        // concurrency; `map` (not race-append) keeps ingest order stable.
-        // extractMetadata never rejects (it returns a fallback Song), so
-        // Promise.all is safe. One batched state update instead of N.
-        const songs = await Promise.all(arr.map((file) => extractMetadata(file)));
+        // Parallel extraction (the metadata client's pool bounds concurrency)
+        // with ORDER-STABLE PROGRESSIVE flushes: results land in an
+        // index-addressed array and only the contiguous ready prefix is
+        // appended, so songs appear in drop order every ~8 completions
+        // instead of the list staying empty until the whole batch finishes.
+        // extractMetadata never rejects (fallback Song), so Promise.all is safe.
         // 'favorites' is a virtual view — route ingested songs to Library.
         const targetId = activePlaylistId === 'favorites' ? 'library' : activePlaylistId;
-        setPlaylists((prev) =>
-          prev.map((p) =>
-            p.id === targetId ? { ...p, songs: [...p.songs, ...songs] } : p,
-          ),
+        const results: (Song | undefined)[] = new Array(arr.length);
+        let completed = 0;
+        let flushedUpTo = 0;
+        const flushReadyPrefix = () => {
+          const ready: Song[] = [];
+          while (flushedUpTo < arr.length && results[flushedUpTo] !== undefined) {
+            ready.push(results[flushedUpTo] as Song);
+            flushedUpTo++;
+          }
+          if (ready.length > 0) {
+            setPlaylists((prev) =>
+              prev.map((p) =>
+                p.id === targetId ? { ...p, songs: [...p.songs, ...ready] } : p,
+              ),
+            );
+          }
+        };
+        await Promise.all(
+          arr.map(async (file, i) => {
+            results[i] = await extractMetadata(file);
+            completed++;
+            if (completed % 8 === 0) flushReadyPrefix();
+          }),
         );
+        flushReadyPrefix();
         requestPersistOnce();
       }
       if (lrcFiles.length > 0) await handleLrcImport(lrcFiles);

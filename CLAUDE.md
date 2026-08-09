@@ -112,12 +112,18 @@
 
 - **Tag parsing runs in a Web Worker** (`src/workers/metadata.worker.ts`),
   fed through `src/lib/metadata-client.ts`: request/response by id, a
-  concurrency pool of `min(4, hardwareConcurrency-1)`, and a main-thread
-  fallback (same `parseBlob` + `extractSongMeta` path). Vitest forces the
-  fallback (`import.meta.env.MODE === 'test'` — happy-dom defines a Worker
-  stub, so presence-detection alone is wrong), and any runtime worker error
-  permanently falls back for the session. Extraction must never break
-  because the worker did.
+  concurrency pool of `min(4, max(2, hardwareConcurrency-1))` (single
+  worker — the pool pipelines rather than parallelizes; the win is getting
+  parses OFF the main thread), and a main-thread fallback (same `parseBlob`
+  + `extractSongMeta` path). Vitest forces the fallback
+  (`import.meta.env.MODE === 'test'` — happy-dom defines a Worker stub, so
+  presence-detection alone is wrong). **Every worker failure mode fails
+  over**: construction error, `onerror`, `onmessageerror`, a
+  `workerEnv: true` response (the worker's own music-metadata import
+  failed), and a 30s per-request timeout (a killed worker process fires NO
+  event — without the timeout the pool would leak slots and ingest would
+  hang forever). Extraction must never break, and never hang, because the
+  worker did.
 - **`vite.config.ts` needs `worker: { format: 'es' }`** — the default iife
   can't code-split, which would inline every music-metadata parser chunk
   into one monolithic worker file. The worker shell is ~2 kB; parsers load
@@ -126,16 +132,19 @@
   field mapping shared by worker and fallback — no Blob/URL creation there
   (raw `picData`/`picFormat` bytes come back; the hook builds Blobs).
 - **Cover art is downscaled before persisting** (`src/lib/cover.ts`,
-  512px cap, JPEG q0.85, main-thread Image+canvas per the colors.ts
-  rationale). Contract: NEVER worse than the original — decode failure,
-  small-enough images, and a decode timeout all return the original blob.
-  Applied in `useMetadataExtractor` AND App's cover self-heal effect (the
-  self-heal's parse stays main-thread on purpose: rare one-shot migration).
+  512px cap, JPEG q0.85 — PNG input stays PNG so alpha never goes black;
+  main-thread Image+canvas, the same plain-canvas approach as colors.ts).
+  Contract: NEVER worse than the original — decode failure, small-enough
+  images, and a decode timeout all return the original blob. Applied in
+  `useMetadataExtractor` AND App's cover self-heal effect (the self-heal's
+  parse stays main-thread on purpose: rare one-shot migration).
 - **All three ingest call sites are parallel** (`handleFiles`,
   `addFolderHandle`, `refreshLibrary`): `Promise.all` over `map` (order
-  stable), the client pool bounds actual concurrency, one batched
-  `setPlaylists` per call. `extractMetadata` never rejects (fallback Song),
-  so `Promise.all` is safe.
+  stable), the client pool bounds concurrency. `handleFiles` flushes the
+  contiguous ready PREFIX every ~8 completions (index-addressed results
+  array) so songs appear progressively in drop order; the other two sites
+  batch once. `extractMetadata` never rejects (fallback Song), so
+  `Promise.all` is safe.
 - **OPFS migration: considered and deferred (2026-08-09)** — it would only
   replace the Firefox/Safari IDB-blob path + coverBlobs, at the cost of
   resumable byte-migration scaffolding. Revisit only under real quota
