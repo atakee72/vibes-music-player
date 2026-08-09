@@ -63,7 +63,7 @@ export function RowActionSheet({
       <div
         data-sheet-backdrop
         className={`fixed inset-0 z-50 bg-black/50 motion-safe:transition-opacity motion-safe:duration-300 ${
-          visible ? 'opacity-100' : 'opacity-0'
+          visible ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
         onClick={onClose}
       />

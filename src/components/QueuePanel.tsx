@@ -108,7 +108,7 @@ export function QueuePanel({
     <>
       <div
         className={`fixed inset-0 bg-black/50 z-40 lg:hidden motion-safe:transition-opacity motion-safe:duration-300 ${
-          visible ? 'opacity-100' : 'opacity-0'
+          visible ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
         onClick={onClose}
       />

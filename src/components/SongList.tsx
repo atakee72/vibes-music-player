@@ -260,6 +260,7 @@ const SortableRow = memo(function SortableRow({
               )}
               {song.favorite && (
                 <Heart
+                  role="img"
                   aria-label="Favorited"
                   className="h-3 w-3 text-coral fill-current"
                 />
