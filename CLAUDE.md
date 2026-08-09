@@ -108,6 +108,39 @@
   in source order. We pass a stable `() => onEndedRef.current()` to the hook
   and update `onEndedRef.current = playNext` after definitions exist.
 
+## Ingest pipeline (worker + downscale)
+
+- **Tag parsing runs in a Web Worker** (`src/workers/metadata.worker.ts`),
+  fed through `src/lib/metadata-client.ts`: request/response by id, a
+  concurrency pool of `min(4, hardwareConcurrency-1)`, and a main-thread
+  fallback (same `parseBlob` + `extractSongMeta` path). Vitest forces the
+  fallback (`import.meta.env.MODE === 'test'` — happy-dom defines a Worker
+  stub, so presence-detection alone is wrong), and any runtime worker error
+  permanently falls back for the session. Extraction must never break
+  because the worker did.
+- **`vite.config.ts` needs `worker: { format: 'es' }`** — the default iife
+  can't code-split, which would inline every music-metadata parser chunk
+  into one monolithic worker file. The worker shell is ~2 kB; parsers load
+  dynamically inside it.
+- **`src/lib/metadata-core.ts`** is the pure, structured-clone-serializable
+  field mapping shared by worker and fallback — no Blob/URL creation there
+  (raw `picData`/`picFormat` bytes come back; the hook builds Blobs).
+- **Cover art is downscaled before persisting** (`src/lib/cover.ts`,
+  512px cap, JPEG q0.85, main-thread Image+canvas per the colors.ts
+  rationale). Contract: NEVER worse than the original — decode failure,
+  small-enough images, and a decode timeout all return the original blob.
+  Applied in `useMetadataExtractor` AND App's cover self-heal effect (the
+  self-heal's parse stays main-thread on purpose: rare one-shot migration).
+- **All three ingest call sites are parallel** (`handleFiles`,
+  `addFolderHandle`, `refreshLibrary`): `Promise.all` over `map` (order
+  stable), the client pool bounds actual concurrency, one batched
+  `setPlaylists` per call. `extractMetadata` never rejects (fallback Song),
+  so `Promise.all` is safe.
+- **OPFS migration: considered and deferred (2026-08-09)** — it would only
+  replace the Firefox/Safari IDB-blob path + coverBlobs, at the cost of
+  resumable byte-migration scaffolding. Revisit only under real quota
+  pressure.
+
 ## Keyboard shortcuts
 
 - `useKeyboardShortcuts(handlers, options?)` (`src/hooks/useKeyboardShortcuts.ts`)

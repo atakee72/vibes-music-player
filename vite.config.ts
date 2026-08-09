@@ -6,6 +6,9 @@ export default defineConfig({
   // Absolute base is required for a working service worker (SW scope must
   // resolve from an absolute path). All deploys are root-domain, so '/' is safe.
   base: '/',
+  // ES-format workers: the default iife format cannot code-split, which would
+  // inline every music-metadata parser chunk into one monolithic worker file.
+  worker: { format: 'es' },
   plugins: [
     react(),
     VitePWA({

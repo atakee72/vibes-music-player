@@ -47,6 +47,7 @@ import { ingestDirectoryHandle } from './lib/ingest';
 import { filterSongs } from './lib/filter';
 import { sortSongs, SORT_LABELS, type SortKey } from './lib/sort';
 import { extractLyrics } from './lib/lyrics';
+import { downscaleCover } from './lib/cover';
 import { resolveNextSong, safeQueueMove, upNextPreview } from './lib/queue';
 import type { EqPreset } from './lib/eq';
 import { useDominantColor } from './hooks/useDominantColor';
@@ -401,7 +402,11 @@ export default function App() {
             const meta = await parseBlob(s.file);
             const pic = meta.common.picture?.[0];
             if (pic) {
-              const blob = new Blob([pic.data as BlobPart], { type: pic.format });
+              // Downscale before persisting, same as fresh ingest. The parse
+              // itself deliberately stays main-thread here — this is a rare,
+              // one-shot background migration path, not bulk ingest.
+              const raw = new Blob([pic.data as BlobPart], { type: pic.format });
+              const blob = await downscaleCover(raw);
               updates.set(s.id, { coverArt: URL.createObjectURL(blob), coverBlob: blob });
             } else {
               updates.set(s.id, {});
@@ -623,24 +628,20 @@ export default function App() {
         return;
       }
       if (playlistFiles.length > 0) await handlePlaylistImport(playlistFiles);
-      let firstIngestThisCall = false;
-      for (const file of arr) {
-        try {
-          const song = await extractMetadata(file);
-          // 'favorites' is a virtual view — route ingested songs to Library.
-          const targetId = activePlaylistId === 'favorites' ? 'library' : activePlaylistId;
-          setPlaylists((prev) =>
-            prev.map((p) =>
-              p.id === targetId ? { ...p, songs: [...p.songs, song] } : p,
-            ),
-          );
-          if (!firstIngestThisCall) {
-            firstIngestThisCall = true;
-            requestPersistOnce();
-          }
-        } catch (err) {
-          console.error('Error processing file:', file.name, err);
-        }
+      if (arr.length > 0) {
+        // Parallel extraction: the metadata client's worker pool bounds
+        // concurrency; `map` (not race-append) keeps ingest order stable.
+        // extractMetadata never rejects (it returns a fallback Song), so
+        // Promise.all is safe. One batched state update instead of N.
+        const songs = await Promise.all(arr.map((file) => extractMetadata(file)));
+        // 'favorites' is a virtual view — route ingested songs to Library.
+        const targetId = activePlaylistId === 'favorites' ? 'library' : activePlaylistId;
+        setPlaylists((prev) =>
+          prev.map((p) =>
+            p.id === targetId ? { ...p, songs: [...p.songs, ...songs] } : p,
+          ),
+        );
+        requestPersistOnce();
       }
       if (lrcFiles.length > 0) await handleLrcImport(lrcFiles);
       setShowUpload(false);
@@ -654,15 +655,14 @@ export default function App() {
       if (!root) return; // dedupe — already added
 
       const ingested = await ingestDirectoryHandle(handle);
-      const songs: Song[] = [];
-      for (const { file, fileHandle, relativePath } of ingested) {
-        try {
+      // Parallel extraction (worker pool bounds concurrency); `map` preserves
+      // the walk order so path-based ids line up with stable playlist order.
+      const songs: Song[] = await Promise.all(
+        ingested.map(async ({ file, fileHandle, relativePath }) => {
           const base = await extractMetadata(file);
-          songs.push({ ...base, id: `${root.id}/${relativePath}`, fileHandle });
-        } catch (err) {
-          console.error('Error processing', relativePath, err);
-        }
-      }
+          return { ...base, id: `${root.id}/${relativePath}`, fileHandle };
+        }),
+      );
 
       setLibraryRoots((prev) => [...prev, root]);
       // 'favorites' is a virtual view — route ingested songs to Library.
@@ -929,17 +929,20 @@ export default function App() {
 
     for (const root of libraryRoots) {
       const ingested = await ingestDirectoryHandle(root.handle);
-      for (const { file, fileHandle, relativePath } of ingested) {
+      const fresh = ingested.filter(({ relativePath }) => {
         const id = `${root.id}/${relativePath}`;
         seenIds.add(id);
-        if (existingIds.has(id)) continue;
-        try {
+        return !existingIds.has(id);
+      });
+      // Parallel extraction of only the NEW files (worker pool bounds
+      // concurrency); order within a root is preserved by `map`.
+      const extracted = await Promise.all(
+        fresh.map(async ({ file, fileHandle, relativePath }) => {
           const base = await extractMetadata(file);
-          newSongs.push({ ...base, id, fileHandle });
-        } catch (err) {
-          console.error('Refresh: skipping', file.name, err);
-        }
-      }
+          return { ...base, id: `${root.id}/${relativePath}`, fileHandle };
+        }),
+      );
+      newSongs.push(...extracted);
     }
 
     const removedIds = new Set(

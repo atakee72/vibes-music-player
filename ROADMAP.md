@@ -452,7 +452,11 @@ all five so the player stays smooth from ~50 to thousands of songs.
   than taking those values as `useCallback` deps.
 - **Not wired**: 90%-full warning, OPFS migration, image resizing of
   cover blobs, Web Worker for metadata extraction. All listed as
-  "future, if needed."
+  "future, if needed." *(Resolved 2026-08-09: warning shipped 2026-08-08;
+  worker + cover downscaling shipped — see CLAUDE.md "Ingest pipeline";
+  OPFS considered and DEFERRED: it would only replace the Firefox/Safari
+  IDB-blob path at the cost of resumable byte-migration scaffolding —
+  revisit only under real quota pressure.)*
 
 ---
 

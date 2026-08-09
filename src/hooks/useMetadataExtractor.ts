@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Song } from '../types';
-import { extractLyrics } from '../lib/lyrics';
+import { extractMeta } from '../lib/metadata-client';
+import { downscaleCover } from '../lib/cover';
 
 export function useMetadataExtractor() {
   const [isLoading, setIsLoading] = useState(false);
@@ -8,38 +9,39 @@ export function useMetadataExtractor() {
   const extractMetadata = async (file: File): Promise<Song> => {
     setIsLoading(true);
     try {
-      // Lazy: keep `music-metadata` (~99KB + per-format parser chunks) out of
-      // the startup bundle — it's only needed once the user actually ingests a
-      // file. This was the biggest eager dependency on the load critical path.
-      const { parseBlob } = await import('music-metadata');
-      const meta = await parseBlob(file);
+      // The CPU-heavy tag parsing runs in the metadata worker (pooled, with a
+      // main-thread fallback) — see src/lib/metadata-client.ts. Only the
+      // non-serializable pieces (Blob + object URLs) are built here.
+      const meta = await extractMeta(file);
+      if (!meta) throw new Error('unparseable');
 
       let coverArt: string | undefined;
       let coverBlob: Blob | undefined;
-      if (meta.common.picture && meta.common.picture.length > 0) {
-        const pic = meta.common.picture[0];
-        coverBlob = new Blob([pic.data as BlobPart], { type: pic.format });
+      if (meta.picData && meta.picFormat) {
+        // The documented BlobPart cast (CLAUDE.md "TypeScript gotcha") lives on:
+        // music-metadata's Uint8Array<ArrayBufferLike> doesn't satisfy BlobPart
+        // under strict — don't "fix" it by re-typing.
+        const raw = new Blob([meta.picData as BlobPart], { type: meta.picFormat });
+        coverBlob = await downscaleCover(raw);
         coverArt = URL.createObjectURL(coverBlob);
       }
-
-      const lyrics = extractLyrics(meta);
 
       return {
         id: crypto.randomUUID(),
         url: URL.createObjectURL(file),
-        title: meta.common.title || file.name.replace(/\.[^/.]+$/, ''),
-        artist: meta.common.artist || 'Unknown Artist',
-        album: meta.common.album || 'Unknown Album',
-        duration: meta.format.duration || 0,
-        genre: meta.common.genre?.[0],
-        bpm: meta.common.bpm,
-        year: meta.common.year,
-        bitrate: meta.format.bitrate,
+        title: meta.title,
+        artist: meta.artist,
+        album: meta.album,
+        duration: meta.duration,
+        genre: meta.genre,
+        bpm: meta.bpm,
+        year: meta.year,
+        bitrate: meta.bitrate,
         coverArt,
         coverBlob,
         file,
-        replayGainDb: meta.common.replaygain_track_gain?.dB,
-        lyrics,
+        replayGainDb: meta.replayGainDb,
+        lyrics: meta.lyrics,
       };
     } catch (err) {
       console.error('Error extracting metadata:', err);

@@ -77,8 +77,10 @@ describe('useMetadataExtractor', () => {
     });
 
     expect(song!.coverArt).toBe('blob:stub-url');
-    // Called twice: once for the cover blob, once for the song url
-    expect(URL.createObjectURL).toHaveBeenCalledTimes(2);
+    // Three object URLs: downscaleCover's temporary decode URL (revoked
+    // internally), the final cover blob, and the song url.
+    expect(URL.createObjectURL).toHaveBeenCalledTimes(3);
+    expect(song!.coverBlob).toBeInstanceOf(Blob);
   });
 
   it('falls back when parseBlob throws — title from filename, Unknown Artist/Album', async () => {
