@@ -123,7 +123,8 @@
   branch — don't sprinkle guards into individual handlers.
 - Currently wired in App.tsx: Space=play/pause, ←/→=seek ∓10s,
   **Shift+←/→**=prev/next track, `L`=toggle lyrics, `/`=focus search,
-  Escape=close modal → clear search → blur input. The ←/→ handlers branch on
+  Escape=chain (see "Selection mode" section for the full priority order).
+  The ←/→ handlers branch on
   `event.shiftKey` (the hook passes the event through) and `preventDefault()`
   the arrow's default scroll on the seek path; they read live `currentTime`/
   `duration` via the hook's fresh-closure ref, so no stale-seek bug.
@@ -425,8 +426,12 @@
   `playlist-`, route to cross-playlist drop (copy by default; Ctrl/Meta
   for move; never move out of Library). Otherwise route to reorder.
 - **Escape chain priority** (App.tsx `useKeyboardShortcuts`):
-  selectionMode → close upload → clear search → blur input.
-  ConfirmModal owns its own Escape via a capture-phase listener.
+  mobilePlayerOpen → selectionMode → close upload → close queue panel →
+  close lyrics panel → close sidebar (mobile only) → clear search → blur
+  input. ConfirmModal/PromptModal/SharedTrackModal/RowActionSheet own their
+  Escape via capture-phase listeners; RowMenu/HeaderMenu/EQ popover/volume
+  popover own theirs via component `onKeyDown` + stopPropagation (each
+  refocuses its trigger).
 
 ## Favorites
 
@@ -482,6 +487,31 @@
 - Openers: PlayerBar ListMusic (desktop cluster), MobileNowPlaying button
   (closes the full-screen view), **Q** key. Row "⋯" (`RowMenu`) is the add
   surface — desktop rows only (mobile has no hover cluster; heart precedent).
+
+## Focus & keyboard a11y
+
+- **`useDialogFocus(active, containerRef, { initialFocus? })`**
+  (`src/hooks/useDialogFocus.ts`) is the canonical modal focus manager:
+  saves the opener, focuses `[data-autofocus]` (else first focusable) on
+  open, traps Tab via a **document-level** keydown (a container-scoped
+  listener can't recover focus that escaped to `body` via backdrop click),
+  and restores the opener on close (`isConnected`-guarded).
+- **Applied to the six modal surfaces**: ConfirmModal (`data-autofocus` on
+  Cancel — destructive dialogs must not Enter-confirm by accident),
+  PromptModal (`initialFocus: false` — its rAF input focus/select owns
+  initial focus), SharedTrackModal, RowActionSheet, the inline upload
+  dialog, MobileNowPlaying.
+- **`usePresence` surfaces must key the hook on `open && mounted`**, not
+  `open`: they mount one render after `open` flips (plain `open` would try
+  to focus a not-yet-rendered dialog) and stay mounted ~300ms after close
+  (keying on mount would delay restore until after the exit slide).
+- **Panels are non-modal — never trap them.** QueuePanel/LyricsPanel and
+  the desktop sidebar sit beside interactive content; they get
+  `role="complementary"` + `aria-label` landmarks and close via the App
+  Escape chain instead.
+- Popovers/menus (RowMenu, HeaderMenu, EQ, volume) use the lighter pattern:
+  local Escape `onKeyDown` (stopPropagation) + refocus-the-trigger; RowMenu
+  additionally arrow-key cycles its items.
 
 ## Confirmation modals
 

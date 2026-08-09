@@ -83,6 +83,7 @@ export function PlayerBar({
 }: PlayerBarProps) {
   const [eqOpen, setEqOpen] = useState(false);
   const eqWrapRef = useRef<HTMLDivElement>(null);
+  const eqTriggerRef = useRef<HTMLButtonElement>(null);
   const lastVolumeRef = useRef(volume > 0 ? volume : 1);
 
   useEffect(() => {
@@ -305,8 +306,19 @@ export function PlayerBar({
               <PictureInPicture2 className="h-4 w-4 lg:h-5 lg:w-5" />
             </button>
           )}
-          <div ref={eqWrapRef} className="relative">
+          <div
+            ref={eqWrapRef}
+            className="relative"
+            onKeyDown={(e) => {
+              if (eqOpen && e.key === 'Escape') {
+                e.stopPropagation(); // own the Escape before App's chain
+                setEqOpen(false);
+                eqTriggerRef.current?.focus();
+              }
+            }}
+          >
             <button
+              ref={eqTriggerRef}
               onClick={() => setEqOpen((v) => !v)}
               className={`p-2 hover:bg-white/10 rounded-full transition-colors ${
                 eqPreset !== 'Off' ? 'text-amber' : 'text-white/60'
@@ -317,10 +329,15 @@ export function PlayerBar({
               <Sliders className="h-4 w-4 lg:h-5 lg:w-5" />
             </button>
             {eqOpen && (
-              <div className="absolute bottom-full right-0 mb-2 bg-surface/95 backdrop-blur-xl border border-white/10 rounded-lg shadow-xl py-1 min-w-[140px] z-50">
+              <div
+                role="menu"
+                aria-label="Equalizer presets"
+                className="absolute bottom-full right-0 mb-2 bg-surface/95 backdrop-blur-xl border border-white/10 rounded-lg shadow-xl py-1 min-w-[140px] z-50"
+              >
                 {EQ_PRESET_NAMES.map((name) => (
                   <button
                     key={name}
+                    role="menuitem"
                     onClick={() => {
                       onEqPresetChange(name);
                       setEqOpen(false);

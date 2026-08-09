@@ -23,6 +23,7 @@ import { VibeOrb } from './VibeOrb';
 import { OrbVisualizerRing } from './OrbVisualizerRing';
 import { ScrollingText } from './ScrollingText';
 import { usePresence } from '../hooks/usePresence';
+import { useDialogFocus } from '../hooks/useDialogFocus';
 
 interface MobileNowPlayingProps {
   open: boolean;
@@ -90,11 +91,18 @@ export function MobileNowPlaying({
 }: MobileNowPlayingProps) {
   const { mounted, visible } = usePresence(open && !!song);
 
+  // Focus trap for the full-screen view. Keyed on `open && mounted` (not just
+  // open): usePresence mounts one render after `open` flips, and restore must
+  // fire at close time while the exit slide still plays.
+  const viewRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(open && !!song && mounted, viewRef);
+
   // Volume popover: the inline slider was unusable squeezed into the crowded
   // utility row on narrow screens — a tap opens a full-width slider instead.
   // Local UI state, same convention-break precedent as PlayerBar's eqOpen.
   const [volOpen, setVolOpen] = useState(false);
   const volWrapRef = useRef<HTMLDivElement>(null);
+  const volTriggerRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!volOpen) return;
     const onDown = (e: MouseEvent) => {
@@ -112,6 +120,10 @@ export function MobileNowPlaying({
 
   return (
     <div
+      ref={viewRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Now playing"
       className={`fixed inset-0 z-[60] flex flex-col bg-deep supports-[backdrop-filter]:bg-deep/95 backdrop-blur-2xl p-6 motion-safe:transition-all motion-safe:duration-300 ${
         visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
       }`}
@@ -241,7 +253,17 @@ export function MobileNowPlaying({
             </select>
           </div>
 
-          <div ref={volWrapRef} className="relative">
+          <div
+            ref={volWrapRef}
+            className="relative"
+            onKeyDown={(e) => {
+              if (volOpen && e.key === 'Escape') {
+                e.stopPropagation(); // own the Escape before App's chain
+                setVolOpen(false);
+                volTriggerRef.current?.focus();
+              }
+            }}
+          >
             {volOpen && (
               <div className="absolute bottom-full right-0 z-10 mb-2 w-48 rounded-xl border border-white/10 bg-surface/95 p-3 shadow-xl backdrop-blur-xl">
                 <input
@@ -256,6 +278,7 @@ export function MobileNowPlaying({
               </div>
             )}
             <button
+              ref={volTriggerRef}
               onClick={() => setVolOpen((v) => !v)}
               className="p-2 rounded-full bg-white/5 text-white/70 hover:bg-white/10 transition-colors"
               aria-label="Volume controls"

@@ -90,4 +90,13 @@ describe('MobileNowPlaying', () => {
     fireEvent.change(slider, { target: { value: '40' } });
     expect(onVolumeChange).toHaveBeenCalledWith(0.4);
   });
+
+  it('Escape closes the volume popover and refocuses its trigger', () => {
+    renderView();
+    const trigger = screen.getByRole('button', { name: 'Volume controls' });
+    fireEvent.click(trigger);
+    fireEvent.keyDown(screen.getByLabelText('Volume'), { key: 'Escape' });
+    expect(screen.queryByLabelText('Volume')).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
 });

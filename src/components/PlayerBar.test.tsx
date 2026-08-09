@@ -145,15 +145,10 @@ describe('PlayerBar', () => {
     const eqButton = screen.getByRole('button', { name: 'Equalizer' });
     fireEvent.click(eqButton);
 
-    // Popover should list all five presets
-    const popoverButtons = screen.getAllByRole('button').filter(
-      (b) => ['Off', 'Bass Boost', 'Vocal Boost', 'Treble Boost', 'Acoustic'].includes(
-        b.textContent ?? '',
-      ),
-    );
-    expect(popoverButtons).toHaveLength(5);
+    // Popover is a proper menu listing all five presets
+    expect(screen.getAllByRole('menuitem')).toHaveLength(5);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Bass Boost' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Bass Boost' }));
     expect(onEqPresetChange).toHaveBeenCalledWith('Bass Boost');
   });
 
@@ -241,5 +236,15 @@ describe('PlayerBar', () => {
     const { onToggleQueue } = renderPlayerBar({ song: makeSong() });
     fireEvent.click(screen.getByRole('button', { name: 'Toggle queue' }));
     expect(onToggleQueue).toHaveBeenCalledTimes(1);
+  });
+
+  it('Escape closes the EQ popover and refocuses its trigger', () => {
+    renderPlayerBar({ song: makeSong() });
+    const trigger = screen.getByRole('button', { name: 'Equalizer' });
+    fireEvent.click(trigger);
+    const popover = screen.getByRole('menu', { name: 'Equalizer presets' });
+    fireEvent.keyDown(popover, { key: 'Escape' });
+    expect(screen.queryByRole('menu', { name: 'Equalizer presets' })).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
   });
 });

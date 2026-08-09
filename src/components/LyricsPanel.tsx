@@ -52,6 +52,8 @@ export function LyricsPanel({
         onClick={onClose}
       />
       <div
+        role="complementary"
+        aria-label="Lyrics"
         className={`fixed inset-0 z-40 lg:relative lg:z-auto lg:w-80 flex flex-col bg-surface/95 backdrop-blur-xl border-l border-white/10 motion-safe:transition-transform motion-safe:duration-300 ${
           visible ? 'translate-x-0' : 'translate-x-full'
         }`}

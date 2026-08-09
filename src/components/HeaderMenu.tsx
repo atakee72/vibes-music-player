@@ -19,6 +19,7 @@ export interface HeaderAction {
 export function HeaderMenu({ actions }: { actions: HeaderAction[] }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -32,8 +33,19 @@ export function HeaderMenu({ actions }: { actions: HeaderAction[] }) {
   if (actions.length === 0) return null;
 
   return (
-    <div ref={ref} className="relative lg:hidden">
+    <div
+      ref={ref}
+      className="relative lg:hidden"
+      onKeyDown={(e) => {
+        if (open && e.key === 'Escape') {
+          e.stopPropagation(); // own the Escape before App's chain sees it
+          setOpen(false);
+          triggerRef.current?.focus();
+        }
+      }}
+    >
       <button
+        ref={triggerRef}
         onClick={() => setOpen((v) => !v)}
         className="p-2 rounded-lg bg-white/5 text-white/60 hover:bg-white/10 transition-all"
         aria-label="More actions"

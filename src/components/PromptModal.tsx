@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useDialogFocus } from '../hooks/useDialogFocus';
 
 interface PromptModalProps {
   open: boolean;
@@ -21,6 +22,10 @@ export function PromptModal({
 }: PromptModalProps) {
   const [value, setValue] = useState(defaultValue);
   const inputRef = useRef<HTMLInputElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  // Trap + restore only — the existing rAF input focus/select below owns
+  // initial focus, so the hook must not fight it.
+  useDialogFocus(open, panelRef, { initialFocus: false });
 
   useEffect(() => {
     if (open) {
@@ -60,6 +65,7 @@ export function PromptModal({
       aria-labelledby="prompt-title"
     >
       <div
+        ref={panelRef}
         className="bg-surface/95 backdrop-blur-xl rounded-2xl p-6 w-full max-w-md border border-white/10 space-y-4"
         onClick={(e) => e.stopPropagation()}
       >

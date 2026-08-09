@@ -29,4 +29,13 @@ describe('HeaderMenu', () => {
     expect(onClick).toHaveBeenCalledOnce();
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
+
+  it('Escape closes the menu and refocuses the trigger', () => {
+    render(<HeaderMenu actions={[{ key: 'share', label: 'Share', icon: Share2, onClick: vi.fn() }]} />);
+    const trigger = screen.getByRole('button', { name: 'More actions' });
+    fireEvent.click(trigger);
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
 });

@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Heart, ListEnd, ListStart, Trash2 } from 'lucide-react';
 import type { Song } from '../types';
 import { usePresence } from '../hooks/usePresence';
+import { useDialogFocus } from '../hooks/useDialogFocus';
 
 interface RowActionSheetProps {
   /** The song the sheet acts on; null = closed. The parent renders this
@@ -36,6 +37,13 @@ export function RowActionSheet({
   if (song) lastSongRef.current = song;
   const shown = song ?? lastSongRef.current;
 
+  // Keyed on `open && mounted`: usePresence mounts one render AFTER `open`
+  // flips (so plain `open` would try to focus a not-yet-rendered dialog),
+  // while at close time `open` drops with `mounted` still true — restore
+  // fires immediately, not after the 300ms exit slide.
+  const sheetRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(open && mounted, sheetRef);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -68,6 +76,7 @@ export function RowActionSheet({
         onClick={onClose}
       />
       <div
+        ref={sheetRef}
         role="dialog"
         aria-modal="true"
         aria-label={`Actions for ${shown.title}`}

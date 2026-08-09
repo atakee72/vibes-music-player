@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Music } from 'lucide-react';
+import { useDialogFocus } from '../hooks/useDialogFocus';
 import type { SharedTrack } from '../lib/share';
 
 interface SharedTrackModalProps {
@@ -23,6 +24,9 @@ const formatTime = (s: number) => {
  * doesn't collide with App's Escape chain.
  */
 export function SharedTrackModal({ track, onClose }: SharedTrackModalProps) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(track !== null, panelRef);
+
   useEffect(() => {
     if (!track) return;
     const onKey = (e: KeyboardEvent) => {
@@ -46,6 +50,7 @@ export function SharedTrackModal({ track, onClose }: SharedTrackModalProps) {
       aria-labelledby="shared-track-title"
     >
       <div
+        ref={panelRef}
         className="bg-surface/95 backdrop-blur-xl rounded-2xl p-6 w-full max-w-md border border-white/10 space-y-4"
         onClick={(e) => e.stopPropagation()}
       >

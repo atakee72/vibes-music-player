@@ -34,6 +34,7 @@ import {
 import type { LibraryRoot, LyricLine, Playlist, RepeatMode, Song } from './types';
 import { useMetadataExtractor } from './hooks/useMetadataExtractor';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { useDialogFocus } from './hooks/useDialogFocus';
 import { useMediaSession } from './hooks/useMediaSession';
 import { useAudioEngine } from './hooks/useAudioEngine';
 import { Sidebar } from './components/Sidebar';
@@ -118,6 +119,9 @@ export default function App() {
   const [showQueue, setShowQueue] = useState(false);
   const queueEverOpenedRef = useRef(false);
   const mobilePlayerEverOpenedRef = useRef(false);
+  // Focus trap for the inline upload dialog (component modals own theirs).
+  const uploadPanelRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(showUpload, uploadPanelRef);
   const [selectionMode, setSelectionMode] = useState(false);
   const [sharedTrack, setSharedTrack] = useState<SharedTrack | null>(null);
   const [confirm, setConfirm] = useState<{
@@ -1218,6 +1222,20 @@ export default function App() {
           setShowUpload(false);
           return;
         }
+        if (showQueue) {
+          setShowQueue(false);
+          return;
+        }
+        if (showLyrics) {
+          setShowLyrics(false);
+          return;
+        }
+        // Mobile only: the desktop sidebar is persistent — closing it on
+        // Escape there would be hostile, not helpful.
+        if (sidebarOpen && !window.matchMedia('(min-width: 1024px)').matches) {
+          setSidebarOpen(false);
+          return;
+        }
         if (searchQuery.length > 0) {
           setSearchQuery('');
           return;
@@ -1719,12 +1737,25 @@ export default function App() {
         <div
           className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
           onClick={() => setShowUpload(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Add music"
         >
           <div
+            ref={uploadPanelRef}
             className="bg-surface/90 backdrop-blur-xl rounded-2xl p-6 w-full max-w-md border border-white/10 space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <label className="border-2 border-dashed border-white/20 hover:border-amber rounded-xl p-8 text-center transition-all cursor-pointer block">
+            <label
+              tabIndex={0}
+              data-autofocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  (e.currentTarget.querySelector('input') as HTMLInputElement | null)?.click();
+                }
+              }}
+              className="border-2 border-dashed border-white/20 hover:border-amber focus:border-amber focus:outline-none rounded-xl p-8 text-center transition-all cursor-pointer block">
               <input
                 type="file"
                 multiple
