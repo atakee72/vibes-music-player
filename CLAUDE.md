@@ -108,6 +108,34 @@
   in source order. We pass a stable `() => onEndedRef.current()` to the hook
   and update `onEndedRef.current = playNext` after definitions exist.
 
+## Interop contract (beets, Navidrome, NAS — for external tooling)
+
+Facts other tools (e.g. a beets-managed library feeding Vibes) must know:
+
+- **Vibes reads EMBEDDED tags only** via `music-metadata`: title, artist,
+  album, genre (first entry), bpm, year, bitrate, duration, ReplayGain
+  (`replaygain_track_gain` — beets' `replaygain` plugin writes this),
+  embedded lyrics (USLT/SYLT + common `TXXX:LYRICS`-style frames), and
+  **embedded cover art only** — `cover.jpg`/folder art files are invisible
+  to Vibes. A beets setup feeding Vibes should `embedart`.
+- Vibes downsizes embedded art to ≤512px for ITS OWN storage — it never
+  writes anything back to the files. Vibes is strictly read-only on the
+  music files themselves.
+- **Song ids are path-based** (`${root.id}/${relativePath}`): renaming or
+  moving files (e.g. beets re-organizing by `$albumartist/$album/…`)
+  changes ids → Vibes' Refresh treats it as remove+add, and playlist
+  membership/hearts are lost. **Stabilize beets path formats BEFORE bulk
+  ingest into Vibes**, and export playlists as M3U before any mass
+  reorganize (M3U import re-matches by filename, case-insensitive).
+- M3U is the interchange format both ways (import `.m3u/.m3u8/.pls`,
+  export `.m3u` with `#EXTINF`) — also how playlists can bridge to
+  Navidrome (it reads M3U from the music dir).
+- Current library location: a Dropbox-synced local folder (must be
+  "available offline" — online-only placeholders stall ingest). Planned:
+  UGREEN NAS via SMB mount (Chromium FS Access works on mounted shares);
+  Navidrome covers remote/mobile, Vibes is the LAN/desktop + offline-PWA
+  player. Subsonic-client support considered, deliberately not built.
+
 ## Ingest pipeline (worker + downscale)
 
 - **Tag parsing runs in a Web Worker** (`src/workers/metadata.worker.ts`),
