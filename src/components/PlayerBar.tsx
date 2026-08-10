@@ -143,7 +143,9 @@ export function PlayerBar({
       <div className="lg:hidden px-4 pt-1.5">
         <ScrollingText
           text={song.artist ? `${song.title} · ${song.artist}` : song.title}
-          className="text-xs font-medium font-display text-cream"
+          // Centered while it fits; once it overflows the marquee fills the
+          // width and alignment stops mattering.
+          className="text-center text-xs font-medium font-display text-cream"
         />
       </div>
       <div className="px-4 pt-1 lg:pt-2">
