@@ -1,4 +1,4 @@
-import { ingestDirectoryHandle } from './ingest';
+import { ingestDirectoryHandle, ingestDataTransferItems } from './ingest';
 
 function audioFile(name: string): File {
   return new File([], name, { type: 'audio/mpeg' });
@@ -90,5 +90,105 @@ describe('ingestDirectoryHandle', () => {
     ]);
     const result = await ingestDirectoryHandle(root);
     expect(result.map((r) => r.relativePath).sort()).toEqual(['a.mp3', 'b.flac']);
+  });
+});
+
+// --- drag & drop -----------------------------------------------------------
+
+function fileEntry(name: string, file: File): FileSystemEntry {
+  return {
+    isFile: true,
+    isDirectory: false,
+    name,
+    file: (resolve: (f: File) => void) => resolve(file),
+  } as unknown as FileSystemEntry;
+}
+
+function dirEntry(name: string, children: FileSystemEntry[]): FileSystemEntry {
+  let served = false;
+  return {
+    isFile: false,
+    isDirectory: true,
+    name,
+    createReader: () => ({
+      // readEntries returns batches until empty
+      readEntries: (resolve: (e: FileSystemEntry[]) => void) => {
+        if (served) return resolve([]);
+        served = true;
+        resolve(children);
+      },
+    }),
+  } as unknown as FileSystemEntry;
+}
+
+function itemList(items: Partial<DataTransferItem>[]): DataTransferItemList {
+  return items as unknown as DataTransferItemList;
+}
+
+describe('ingestDataTransferItems', () => {
+  it('Firefox/Safari: a dropped FOLDER is walked via webkitGetAsEntry', async () => {
+    // The regression that made folder drops dead-end in an alert: without this
+    // branch, getAsFile() on a folder yields a 0-byte non-audio File.
+    const folder = dirEntry('Music', [
+      fileEntry('a.mp3', audioFile('a.mp3')),
+      fileEntry('b.flac', new File([], 'b.flac')), // no MIME — extension wins
+      fileEntry('cover.jpg', new File([], 'cover.jpg', { type: 'image/jpeg' })),
+      dirEntry('Playlists', [fileEntry('80s.m3u', new File([], '80s.m3u'))]),
+    ]);
+    const { directoryHandles, files } = await ingestDataTransferItems(
+      itemList([
+        {
+          kind: 'file',
+          webkitGetAsEntry: () => folder,
+          getAsFile: () => new File([], 'Music'), // what a folder looks like here
+        },
+      ]),
+    );
+    expect(directoryHandles).toHaveLength(0);
+    // Songs AND the playlist file come through; the image doesn't.
+    expect(files.map((f) => f.relativePath).sort()).toEqual([
+      'Music/Playlists/80s.m3u',
+      'Music/a.mp3',
+      'Music/b.flac',
+    ]);
+  });
+
+  it('Chromium: a dropped folder comes back as a directory handle for the caller to register', async () => {
+    const handle = { kind: 'directory', name: 'Music' };
+    const { directoryHandles, files } = await ingestDataTransferItems(
+      itemList([
+        {
+          kind: 'file',
+          getAsFileSystemHandle: async () => handle as unknown as FileSystemHandle,
+          getAsFile: () => new File([], 'Music'),
+        },
+      ]),
+    );
+    expect(directoryHandles).toEqual([handle]);
+    expect(files).toHaveLength(0);
+  });
+
+  it('reads every item BEFORE awaiting (the list is invalidated after the first await)', async () => {
+    let awaited = false;
+    const items = itemList([
+      {
+        kind: 'file',
+        // Flips only once the handler yields — that's when a real
+        // DataTransferItemList becomes invalid, not at call time.
+        getAsFileSystemHandle: () =>
+          Promise.resolve().then(() => {
+            awaited = true;
+            return null as unknown as FileSystemHandle;
+          }),
+        getAsFile: () => new File([], 'first.mp3', { type: 'audio/mpeg' }),
+      },
+      {
+        kind: 'file',
+        // Simulates a neutered list: null once the handler has yielded.
+        getAsFile: () => (awaited ? null : new File([], 'second.mp3', { type: 'audio/mpeg' })),
+      },
+    ]);
+    const { files } = await ingestDataTransferItems(items);
+    expect(files.map((f) => f.relativePath).sort()).toEqual(['first.mp3', 'second.mp3']);
   });
 });

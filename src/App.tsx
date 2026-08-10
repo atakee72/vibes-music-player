@@ -43,7 +43,7 @@ import { PlayerBar } from './components/PlayerBar';
 import { NowPlayingHero } from './components/NowPlayingHero';
 import { HeaderMenu, type HeaderAction } from './components/HeaderMenu';
 import * as storage from './lib/storage';
-import { ingestDirectoryHandle } from './lib/ingest';
+import { ingestDirectoryHandle, ingestDataTransferItems } from './lib/ingest';
 import { filterSongs } from './lib/filter';
 // Tiny sync-needed predicate only (file routing + the Refresh walk); the
 // parse/match half of playlist-import stays dynamically imported.
@@ -1332,24 +1332,16 @@ export default function App() {
 
     const items = e.dataTransfer?.items;
     if (items?.length) {
-      const sessionFiles: File[] = [];
-      for (const item of Array.from(items)) {
-        if (item.kind !== 'file') continue;
-        if (typeof item.getAsFileSystemHandle === 'function') {
-          try {
-            const h = await item.getAsFileSystemHandle();
-            if (h?.kind === 'directory') {
-              await addFolderHandle(h as FileSystemDirectoryHandle);
-              continue;
-            }
-          } catch (err) {
-            console.warn('getAsFileSystemHandle failed:', err);
-          }
-        }
-        const f = item.getAsFile();
-        if (f) sessionFiles.push(f);
+      // Delegates to the collector so BOTH folder paths work: Chromium
+      // directory handles (persistable roots) and the Firefox/Safari
+      // webkitGetAsEntry recursion — App used to handle only the former, so
+      // dropping a folder in Firefox silently yielded nothing.
+      const { directoryHandles, files } = await ingestDataTransferItems(items);
+      for (const handle of directoryHandles) await addFolderHandle(handle);
+      if (files.length > 0) await handleFiles(files.map((f) => f.file));
+      if (directoryHandles.length === 0 && files.length === 0) {
+        setNotification('Nothing to add — drop audio files or a folder of music.');
       }
-      if (sessionFiles.length) await handleFiles(sessionFiles);
       return;
     }
 

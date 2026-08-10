@@ -452,6 +452,18 @@ Facts other tools (e.g. a beets-managed library feeding Vibes) must know:
   extracted songs are threaded into `handlePlaylistImport(files, justIngested)`
   — React state isn't committed yet, so without this a combined songs+`.m3u`
   drop would match against an empty library and create empty playlists.
+- **Drag & drop goes through `ingestDataTransferItems`** (`src/lib/ingest.ts`),
+  which returns `{ directoryHandles, files }`: Chromium folder drops yield a
+  persistable directory handle (App registers it via `addFolderHandle`), while
+  Firefox/Safari have no handle API and are walked with
+  `webkitGetAsEntry()` + `readEntries()` into session-only files. **App must
+  not reimplement this inline** — it did once, handling only the Chromium
+  branch, so dropping a folder in Firefox called `getAsFile()` on the folder,
+  got a 0-byte non-audio File, and dead-ended. The collector also
+  **snapshots every item synchronously before the first `await`** — a
+  `DataTransferItemList` is invalidated once the drop handler yields — and
+  filters with `isIngestableFile`, so a dropped music folder delivers its
+  `Playlists/*.m3u` too (handleFiles then routes them).
 - **`src/lib/file-types.ts` owns all file-type predicates** (`isAudioFile`,
   `isPlaylistFileName`, `isLrcFileName`) — a tiny sync-loadable module, so the
   playlist parser can stay dynamically imported. **`isAudioFile` matches MIME

@@ -65,3 +65,12 @@ export function isAudioFile(file: File): boolean {
   if (isPlaylistFileName(file.name) || isLrcFileName(file.name)) return false;
   return file.type.startsWith('audio/') || hasExt(file.name, AUDIO_EXTS);
 }
+
+/**
+ * Anything the app knows how to consume from a drop: audio, playlists, lyrics.
+ * Collectors use this and let `handleFiles` do the routing — a dropped folder
+ * should yield its `Playlists/*.m3u` too, not just its songs.
+ */
+export function isIngestableFile(file: File): boolean {
+  return isAudioFile(file) || isPlaylistFileName(file.name) || isLrcFileName(file.name);
+}

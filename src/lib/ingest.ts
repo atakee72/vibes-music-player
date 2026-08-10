@@ -1,4 +1,4 @@
-import { isAudioFile } from './file-types';
+import { isAudioFile, isIngestableFile } from './file-types';
 export interface IngestedFile {
   file: File;
   fileHandle?: FileSystemFileHandle;
@@ -44,31 +44,59 @@ export async function ingestDirectoryHandle(
   return out;
 }
 
+/** What a drop yielded: Chromium directory handles (persistable as library
+ *  roots) plus loose files — including everything recursively collected from
+ *  a folder dropped in Firefox/Safari, where no handles exist. */
+export interface DroppedItems {
+  directoryHandles: FileSystemDirectoryHandle[];
+  files: IngestedFile[];
+}
+
 /**
- * Walk drag-and-drop DataTransferItems. Tries the modern FS Access API path
- * first (returns handles, suitable for persistence on Chromium). Falls back
- * to webkitGetAsEntry for Firefox/Safari (no handles — session-only files).
+ * Walk drag-and-drop DataTransferItems.
+ *
+ * Chromium: `getAsFileSystemHandle()` yields persistable handles — a dropped
+ * folder comes back as a directory handle the caller registers as a library
+ * root. Firefox/Safari have no such API, so a dropped folder is walked via
+ * `webkitGetAsEntry()` + `readEntries()` into session-only files. Without that
+ * branch, `getAsFile()` on a folder returns a 0-byte non-audio File and the
+ * drop silently yields nothing.
+ *
+ * **Everything is snapshotted synchronously first**: a DataTransferItemList is
+ * invalidated as soon as the drop handler awaits, so calling `getAsFile()` /
+ * `getAsFileSystemHandle()` after the first `await` returns null.
+ *
+ * Files are filtered with `isIngestableFile` (audio + playlists + lyrics) —
+ * routing is the caller's job, so a dropped music folder also delivers its
+ * `Playlists/*.m3u`.
  */
 export async function ingestDataTransferItems(
   items: DataTransferItemList,
-): Promise<IngestedFile[]> {
-  const out: IngestedFile[] = [];
+): Promise<DroppedItems> {
+  const snapshot = Array.from(items)
+    .filter((item) => item.kind === 'file')
+    .map((item) => ({
+      handlePromise:
+        typeof item.getAsFileSystemHandle === 'function' ? item.getAsFileSystemHandle() : null,
+      entry: item.webkitGetAsEntry?.() ?? null,
+      file: item.getAsFile(),
+    }));
 
-  for (const item of Array.from(items)) {
-    if (item.kind !== 'file') continue;
+  const directoryHandles: FileSystemDirectoryHandle[] = [];
+  const files: IngestedFile[] = [];
 
-    // Chromium path — FS Access API
-    if (typeof item.getAsFileSystemHandle === 'function') {
+  for (const snap of snapshot) {
+    if (snap.handlePromise) {
       try {
-        const handle = await item.getAsFileSystemHandle();
+        const handle = await snap.handlePromise;
         if (handle?.kind === 'directory') {
-          out.push(...(await ingestDirectoryHandle(handle as FileSystemDirectoryHandle)));
+          directoryHandles.push(handle as FileSystemDirectoryHandle);
           continue;
         }
         if (handle?.kind === 'file') {
           const fileHandle = handle as FileSystemFileHandle;
           const file = await fileHandle.getFile();
-          if (isAudioFile(file)) out.push({ file, fileHandle, relativePath: file.name });
+          if (isIngestableFile(file)) files.push({ file, fileHandle, relativePath: file.name });
           continue;
         }
       } catch (err) {
@@ -76,19 +104,18 @@ export async function ingestDataTransferItems(
       }
     }
 
-    // Firefox/Safari path — webkitGetAsEntry (no handle, session-only)
-    const entry = item.webkitGetAsEntry?.();
-    if (entry) {
-      out.push(...(await collectFromEntry(entry)));
+    // Firefox/Safari — recurse the dropped entry (session-only, no handles)
+    if (snap.entry) {
+      files.push(...(await collectFromEntry(snap.entry)));
       continue;
     }
 
-    // Final fallback — single plain file
-    const file = item.getAsFile();
-    if (file && isAudioFile(file)) out.push({ file, relativePath: file.name });
+    if (snap.file && isIngestableFile(snap.file)) {
+      files.push({ file: snap.file, relativePath: snap.file.name });
+    }
   }
 
-  return out;
+  return { directoryHandles, files };
 }
 
 async function collectFromEntry(entry: FileSystemEntry, prefix = ''): Promise<IngestedFile[]> {
@@ -99,7 +126,7 @@ async function collectFromEntry(entry: FileSystemEntry, prefix = ''): Promise<In
       const file = await new Promise<File>((resolve, reject) =>
         (entry as FileSystemFileEntry).file(resolve, reject),
       );
-      return isAudioFile(file) ? [{ file, relativePath: path }] : [];
+      return isIngestableFile(file) ? [{ file, relativePath: path }] : [];
     } catch (err) {
       console.warn('ingest: webkit entry file() failed', path, err);
       return [];
