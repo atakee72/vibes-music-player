@@ -156,6 +156,9 @@ export default function App() {
   );
 
   const loadedRef = useRef(false);
+  // Separate from loadedRef: prefs mirror storage even when the library is
+  // permission-gated, so they stay saveable (see the persistence effects).
+  const prefsLoadedRef = useRef(false);
   const persistRequestedRef = useRef(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const { extractMetadata } = useMetadataExtractor();
@@ -299,6 +302,7 @@ export default function App() {
         // before the restore banner can read it back. restoreLibrary() flips
         // this once the user grants permission and the real data is loaded.
         loadedRef.current = !needsPrompt;
+        prefsLoadedRef.current = true;
       } catch (err) {
         console.error('Library load failed:', err);
         setPlaylists(ensureLibrary([]));
@@ -446,14 +450,17 @@ export default function App() {
     })();
   }, [libraryStatus, playlists]);
 
-  // Persist EQ preset on change — same guard
+  // Preferences use their OWN gate: unlike playlists, eqPreset/volume are read
+  // from storage unconditionally at mount, so they always mirror it — a
+  // permission-gated session may still save them (blocking those would drop
+  // the user's EQ/volume changes for no safety benefit).
   useEffect(() => {
-    if (!loadedRef.current) return;
+    if (!prefsLoadedRef.current) return;
     storage.saveEqPreset(eqPreset).catch((err) => console.error('EQ save failed:', err));
   }, [eqPreset]);
 
   useEffect(() => {
-    if (!loadedRef.current) return;
+    if (!prefsLoadedRef.current) return;
     storage.saveVolume(volume).catch((err) => console.error('Volume save failed:', err));
   }, [volume]);
 

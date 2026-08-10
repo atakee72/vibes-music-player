@@ -51,7 +51,7 @@ vi.mock('./lib/storage', async () => {
   const actual = await vi.importActual<typeof import('./lib/storage')>('./lib/storage');
   return {
     getPlaylists: vi.fn(async () => store.playlists),
-      getLibraryRoots: vi.fn(async () => store.roots),
+    getLibraryRoots: vi.fn(async () => store.roots),
     savePlaylists: vi.fn(async () => {}),
     getEqPreset: vi.fn(async () => 'Off'),
     saveEqPreset: vi.fn(async () => {}),
