@@ -713,5 +713,26 @@ lyrics (CORS works at runtime) + graceful no-match.
 | Rename | `bf32a37` — `feat: rename playlists via prompt modal` |
 | Favorites | `1ae0cad` — `fix: preserve playlist refs on favorite toggle; honest Favorites delete copy` (final of 7) |
 | Queue | `bb54bab` — `feat: Spotify-style queue drain-back (resume from pre-queue position)` (final of 6) |
+| Mobile touch | `e8f811b` — `feat: always-visible sidebar pencils on mobile; mobile-affordance docs` (final of 3) |
+| Tech-debt triple | `769562d` — a11y focus traps (`useDialogFocus`), the first `App.test.tsx` suite, Web-Worker ingest + 512px cover downscale (OPFS deferred) |
+| beets integration | `97a1a59` — linked playlists (re-import updates, Refresh re-syncs), extension-based audio detection, Firefox folder drops, mobile title line |
 
-Total: 263 tests, all green; `pnpm build` clean; production live.
+Total: 340 tests, all green; `pnpm build` clean; production live.
+
+## Real-library milestone (2026-08-11)
+
+The beets-managed library was ingested for the first time: **469 songs**
+(exactly the beets count — nothing silently dropped) plus every beets
+smartplaylist, all with correct track counts, via a single folder drop.
+Four fixes from that same evening were load-bearing for it: extension-based
+audio detection (`.flac`/`.m4a` report no MIME type on Windows), audio
+ingested before playlists (or the playlists arrive empty), the Firefox
+folder-drop path (App had been reimplementing a Chromium-only subset of
+`ingestDataTransferItems`), and linked playlists. Startup with the full
+library is instant — the long-deferred lazy-materialization work is
+**measured as unnecessary** at this scale, and cover-dedupe-by-album is
+moot (the library is all singletons).
+
+Also fixed that evening: a **data-loss bug** where a permission-gated cold
+start persisted an empty library over the stored one — see CLAUDE.md
+"Persistence → Save-effect race guard".

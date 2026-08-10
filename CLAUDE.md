@@ -260,10 +260,23 @@ Facts other tools (e.g. a beets-managed library feeding Vibes) must know:
   Click to restore your library." banner; one click and it's back. The
   banner is FS-Access-specific — blob-only Firefox/Safari users never
   see it because there's no permission to re-grant.
-- **Save-effect race guard**: `App.tsx` uses a `loadedRef` to suppress
-  the first `useEffect([playlists])` write that would otherwise overwrite
-  stored data with the initial empty `playlists` state before mount-load
-  completes. If you touch the load-or-save lifecycle, keep this guard.
+- **Save-effect race guard — this one has already caused real data loss.**
+  `loadedRef` gates the `useEffect([playlists])` write. Its meaning is
+  precise: **"the in-memory library mirrors storage, so saving is safe."**
+  It is therefore set ONLY when a load actually populated state from storage:
+  `loadedRef.current = !needsPrompt` on the mount path, and `true` again after
+  a successful `restoreLibrary()`. It is NOT set in a `finally`, and NOT on
+  the load-failure path (which instead notifies the user that changes aren't
+  being saved — silent non-saving is how "my library reset itself" happens).
+  **Why it matters**: Chromium forgets FS Access grants across browser
+  restarts, so a permission-gated boot renders an EMPTY placeholder library.
+  An unconditional guard let the 500ms debounce persist that emptiness over
+  the real stored data — destroying playlists/hearts before the "Welcome
+  back, click to restore" banner could read them back. Regression-tested in
+  `App.test.tsx` ("never overwrites the stored library while a folder
+  permission is pending"). **Preferences use a separate `prefsLoadedRef`**:
+  `eqPreset`/`volume` are read from storage unconditionally, so they mirror it
+  even during a permission prompt and stay saveable.
 
 ## Dynamic background tint
 
