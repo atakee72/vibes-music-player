@@ -45,9 +45,10 @@ import { HeaderMenu, type HeaderAction } from './components/HeaderMenu';
 import * as storage from './lib/storage';
 import { ingestDirectoryHandle } from './lib/ingest';
 import { filterSongs } from './lib/filter';
-// Eager (tiny, no music-metadata dependency): the file-routing predicate and
-// the Refresh walk need it synchronously. The parse/match functions stay lazy.
-import { isPlaylistFileName, type ImportEntry } from './lib/playlist-import';
+// Tiny sync-needed predicate only (file routing + the Refresh walk); the
+// parse/match half of playlist-import stays dynamically imported.
+import { isPlaylistFileName } from './lib/playlist-file';
+import type { ImportEntry } from './lib/playlist-import';
 import { sortSongs, SORT_LABELS, type SortKey } from './lib/sort';
 import { extractLyrics } from './lib/lyrics';
 import { downscaleCover } from './lib/cover';
@@ -291,12 +292,21 @@ export default function App() {
         setEqPreset(storedEq);
         setVolume(storedVolume);
         setLibraryStatus(needsPrompt ? 'needs-prompt' : 'ready');
+        // ONLY now may saving begin — and only when the in-memory library
+        // actually mirrors storage. Under `needsPrompt` it is an empty
+        // placeholder (Chromium forgets FS Access grants across restarts),
+        // and the debounced save would overwrite the real stored library
+        // before the restore banner can read it back. restoreLibrary() flips
+        // this once the user grants permission and the real data is loaded.
+        loadedRef.current = !needsPrompt;
       } catch (err) {
         console.error('Library load failed:', err);
         setPlaylists(ensureLibrary([]));
         setLibraryStatus('ready');
-      } finally {
-        loadedRef.current = true;
+        // loadedRef stays false: we don't know what's in storage, so we must
+        // not overwrite it with this empty placeholder. Say so out loud —
+        // silent non-saving is how "my library reset itself" happens.
+        setNotification("Couldn't read your library. Reload to retry — changes aren't being saved.");
       }
     })();
   }, []);
@@ -486,15 +496,37 @@ export default function App() {
       let working = playlists;
 
       for (const file of files) {
-        const text = await file.text();
+        let text: string;
+        try {
+          text = await file.text();
+        } catch (err) {
+          // One unreadable file must not discard the whole batch (mirrors
+          // refreshLibrary's per-file tolerance).
+          console.warn('playlist import: could not read', file.name, err);
+          messages.push(`Could not read "${file.name}"`);
+          continue;
+        }
         const ext = file.name.toLowerCase().replace(/^.*(\.[^.]+)$/, '$1');
         const entries = ext === '.pls' ? parsePLS(text) : parseM3U(text);
-        if (entries.length === 0) continue;
+        if (entries.length === 0) {
+          messages.push(`No tracks found in "${file.name}"`);
+          continue;
+        }
 
         const { matched, unmatched } = matchImportEntries(entries, librarySongs);
         const existing = findLinkedPlaylist(working, file.name);
 
         if (existing) {
+          // Never annihilate a populated linked playlist on a total miss:
+          // that's a library that isn't loaded yet / a file pointing at another
+          // root, not "the user emptied this playlist". Replace semantics are
+          // for real content, not for an all-miss accident.
+          if (matched.length === 0 && existing.songs.length > 0) {
+            messages.push(
+              `Nothing matched — "${existing.name}" left unchanged (0 of ${entries.length} found)`,
+            );
+            continue;
+          }
           const { added, removed } = diffSongSets(existing.songs, matched);
           ops.push({ kind: 'update', id: existing.id, songs: matched, source: file.name });
           working = working.map((p) =>
@@ -535,8 +567,9 @@ export default function App() {
             prev,
           ),
         );
-        setNotification(messages.join(' · '));
       }
+      // Always report — a drop that changed nothing must not look ignored.
+      if (messages.length > 0) setNotification(messages.join(' · '));
       setShowUpload(false);
     },
     [playlists],
@@ -733,7 +766,14 @@ export default function App() {
       const root = await storage.addLibraryRoot(handle.name, handle);
       if (!root) return; // dedupe — already added
 
-      const ingested = await ingestDirectoryHandle(handle);
+      // Exclude playlist files explicitly: Chromium reports `.m3u` as
+      // `audio/x-mpegurl`, so the default audio filter would ingest them as
+      // unplayable junk "songs" — which Refresh would then mass-delete.
+      const ingested = await ingestDirectoryHandle(
+        handle,
+        '',
+        (f) => f.type.startsWith('audio/') && !isPlaylistFileName(f.name),
+      );
       // Parallel extraction (worker pool bounds concurrency); `map` preserves
       // the walk order so path-based ids line up with stable playlist order.
       const songs: Song[] = await Promise.all(
@@ -765,6 +805,8 @@ export default function App() {
     const loaded = await storage.getPlaylists();
     setPlaylists(ensureLibrary(loaded));
     setLibraryStatus('ready');
+    // The in-memory library now mirrors storage — saving is safe again.
+    loadedRef.current = true;
   }, [libraryRoots]);
 
   const playNext = () => {
@@ -1028,11 +1070,17 @@ export default function App() {
         // must never spontaneously create playlists the user didn't import.
         const linked = findLinkedPlaylist(playlists, file.name);
         if (!linked) continue;
+        // Same name in two roots/folders: first found wins, and the toast
+        // must not count the playlist twice.
+        if (resyncs.some((r) => r.playlistId === linked.id)) continue;
         try {
           const text = await file.text();
           const entries = file.name.toLowerCase().endsWith('.pls')
             ? parsePLS(text)
             : parseM3U(text);
+          // A file that parses to zero entries is treated as truncated/corrupt
+          // rather than "the user emptied this playlist" — the two are
+          // indistinguishable here, and refusing to wipe is the safe reading.
           if (entries.length > 0) resyncs.push({ playlistId: linked.id, entries });
         } catch (err) {
           console.warn('refresh: could not read playlist', file.name, err);
@@ -1073,7 +1121,13 @@ export default function App() {
         // (matched against the POST-refresh library, so orphans can't survive).
         const entries = resyncById.get(p.id);
         if (entries) {
-          return { ...p, songs: matchImportEntries(entries, libraryAfter).matched };
+          const { matched } = matchImportEntries(entries, libraryAfter);
+          // Same all-miss guard as the import path (see handlePlaylistImport):
+          // keep the existing songs rather than wiping a populated playlist.
+          if (matched.length === 0 && p.songs.length > 0) {
+            return { ...p, songs: p.songs.filter((s) => !removedIds.has(s.id)) };
+          }
+          return { ...p, songs: matched };
         }
         // Everything else: just drop orphans
         return {

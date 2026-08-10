@@ -63,15 +63,10 @@ export function parsePLS(text: string): ImportEntry[] {
   return entries;
 }
 
-const PLAYLIST_EXTS = ['.m3u', '.m3u8', '.pls'];
-
-/** True for playlist file names (`.m3u`, `.m3u8`, `.pls`), case-insensitive.
- *  Single source of truth for the extension list — used by App's file
- *  routing and by the Refresh directory walk. */
-export function isPlaylistFileName(name: string): boolean {
-  const lower = name.toLowerCase();
-  return PLAYLIST_EXTS.some((ext) => lower.endsWith(ext));
-}
+// Re-exported for convenience (tests + callers already inside this module's
+// dynamic chunk). App imports it from './playlist-file' directly so the
+// parser below stays out of the startup bundle.
+export { isPlaylistFileName } from './playlist-file';
 
 /**
  * The playlist a given import file should UPDATE, or undefined for "create

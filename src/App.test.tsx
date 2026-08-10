@@ -41,6 +41,7 @@ vi.mock('music-metadata', () => ({
 
 const store = vi.hoisted(() => ({
   playlists: [] as unknown[],
+  roots: [] as unknown[],
   estimate: null as null | { usage: number; quota: number; percent: number },
 }));
 
@@ -50,7 +51,7 @@ vi.mock('./lib/storage', async () => {
   const actual = await vi.importActual<typeof import('./lib/storage')>('./lib/storage');
   return {
     getPlaylists: vi.fn(async () => store.playlists),
-    getLibraryRoots: vi.fn(async () => []),
+      getLibraryRoots: vi.fn(async () => store.roots),
     savePlaylists: vi.fn(async () => {}),
     getEqPreset: vi.fn(async () => 'Off'),
     saveEqPreset: vi.fn(async () => {}),
@@ -67,6 +68,7 @@ vi.mock('./lib/storage', async () => {
 
 async function renderApp(seed?: { playlists?: Playlist[] }) {
   store.playlists = seed?.playlists ?? [];
+  store.roots = [];
   store.estimate = null;
   const utils = render(<App />);
   // Mount-load settled once the Library playlist row is in the sidebar.
@@ -432,6 +434,23 @@ describe('App', () => {
     // Old behavior would stop (C is last under repeat=none); Spotify-style
     // resumes after the bookmark (A) → TrackB.
     await waitFor(() => expect(activeRowTitle()).toBe('TrackB'));
+  });
+
+  it('never overwrites the stored library while a folder permission is pending', async () => {
+    // Data-loss guard: on a Chromium restart FS Access grants are forgotten,
+    // so the app boots into 'needs-prompt' with an EMPTY in-memory library.
+    // The debounced save must NOT persist that emptiness over the real data —
+    // the restore banner reads it back moments later.
+    store.playlists = [
+      makePlaylist({ id: 'library', name: 'Library', songs: [makeSong({ title: 'Precious' })] }),
+    ];
+    store.roots = [
+      { id: 'root-1', name: 'Music', handle: { queryPermission: async () => 'prompt' } },
+    ];
+    render(<App />);
+    await screen.findByText(/Welcome back/);
+    await new Promise((r) => setTimeout(r, 700)); // past the 500ms debounce
+    expect(vi.mocked(storage.savePlaylists)).not.toHaveBeenCalled();
   });
 
   it('EQ preset and mute changes persist via storage', async () => {
