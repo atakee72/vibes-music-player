@@ -353,10 +353,15 @@ Facts other tools (e.g. a beets-managed library feeding Vibes) must know:
 - **Header actions** use `flex flex-wrap … gap-2` (not `space-x`) so the button
   row wraps instead of clipping "Add Music" on narrow screens.
 - **Mobile player bar** is a slim "mini bar": the `PlayerBar` right cluster
-  (visualizer + PiP + EQ + volume) is `hidden lg:flex`, leaving cover+title
-  (left) + transport (right). The **cover+title is a `role="button"`** (not a
-  `<button>` — it wraps `<p>`s) that opens the mobile now-playing view; its
-  handler is gated with `matchMedia('(min-width: 1024px)')` so desktop taps no-op.
+  (visualizer + PiP + EQ + volume) is `hidden lg:flex`, leaving cover (left) +
+  transport (right). The **cover/title block is a `role="button"`** (not a
+  `<button>` — it wraps `<p>`s) that opens the mobile now-playing view.
+  **The title is NOT in that block on mobile** — beside the transport controls
+  it had ~60px and was unreadable even while marqueeing, so mobile renders
+  `title · artist` as a full-width `ScrollingText` line ABOVE the progress bar
+  (`lg:hidden`), and the in-cluster text block is `hidden lg:block`. The bar is
+  `h-24` at every size — matching the empty state keeps it from jumping when
+  playback starts.
 - **`MobileNowPlaying`** (`src/components/MobileNowPlaying.tsx`) is the
   full-screen (`fixed inset-0 z-[60]`) frame-D view — the orb wrapped by
   `OrbVisualizerRing`, title, scrubbable progress, full transport, and the

@@ -108,7 +108,7 @@ export function PlayerBar({
   }, [eqOpen]);
   if (!song) {
     return (
-      <div className="h-20 lg:h-24 bg-surface/95 backdrop-blur-xl border-t border-white/10 flex items-center justify-center">
+      <div className="h-24 bg-surface/95 backdrop-blur-xl border-t border-white/10 flex items-center justify-center">
         <p className="text-white/50 text-sm">No song playing</p>
       </div>
     );
@@ -122,7 +122,9 @@ export function PlayerBar({
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
-    <div className="relative h-20 lg:h-24 bg-surface/95 backdrop-blur-xl border-t border-white/10 flex flex-col">
+    // h-24 on mobile too (was h-20): the full-width title line adds a row, and
+    // matching the empty-state height keeps the bar from jumping on play.
+    <div className="relative h-24 bg-surface/95 backdrop-blur-xl border-t border-white/10 flex flex-col">
       {/* Floating pull-up handle: opens the full-screen now-playing view.
           Visible on both mobile and desktop; amber on hover. */}
       {onExpand && (
@@ -135,7 +137,16 @@ export function PlayerBar({
           <ChevronUp className="h-3.5 w-3.5 lg:h-5 lg:w-5" />
         </button>
       )}
-      <div className="px-4 pt-2">
+      {/* Mobile: the title gets its own full-width line. Squeezed beside the
+          transport controls it had ~60px to work with — the marquee scrolled,
+          but nothing was readable. Desktop keeps it inline next to the cover. */}
+      <div className="lg:hidden px-4 pt-1.5">
+        <ScrollingText
+          text={song.artist ? `${song.title} · ${song.artist}` : song.title}
+          className="text-xs font-medium font-display text-cream"
+        />
+      </div>
+      <div className="px-4 pt-1 lg:pt-2">
         <div className="flex items-center space-x-3 text-xs text-white/60">
           <span className="w-10 text-right font-mono">{formatTime(currentTime)}</span>
           <div
@@ -183,7 +194,8 @@ export function PlayerBar({
               <Music className="h-6 w-6 lg:h-7 lg:w-7 text-white/40" />
             </div>
           )}
-          <div className="min-w-0 flex-1">
+          {/* Desktop only — mobile shows this full-width above the progress bar */}
+          <div className="hidden lg:block min-w-0 flex-1">
             <ScrollingText
               text={song.title}
               className="text-sm lg:text-base font-medium font-display text-white"
