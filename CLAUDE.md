@@ -452,6 +452,15 @@ Facts other tools (e.g. a beets-managed library feeding Vibes) must know:
   extracted songs are threaded into `handlePlaylistImport(files, justIngested)`
   — React state isn't committed yet, so without this a combined songs+`.m3u`
   drop would match against an empty library and create empty playlists.
+- **`src/lib/file-types.ts` owns all file-type predicates** (`isAudioFile`,
+  `isPlaylistFileName`, `isLrcFileName`) — a tiny sync-loadable module, so the
+  playlist parser can stay dynamically imported. **`isAudioFile` matches MIME
+  `audio/*` OR a known extension**: browsers derive `File.type` from an OS
+  registry lookup that on Windows routinely returns `""` for `.flac`, `.m4a`,
+  `.opus`, `.aiff`, `.wma` — MIME-only detection silently dropped those files
+  from every ingest path (drop, picker, folder walk) and produced a
+  "no audio files" dead end. It also excludes `.m3u`/`.lrc` by name, since
+  Chromium types `.m3u` as `audio/x-mpegurl`.
 - File routing in `handleFiles`: playlist files (`.m3u`, `.m3u8`, `.pls`)
   and LRC files (`.lrc`) are separated from audio files and processed
   after audio ingest completes. **The audio filter must exclude playlist
@@ -635,7 +644,9 @@ Facts other tools (e.g. a beets-managed library feeding Vibes) must know:
   open so typing replaces it). Same shape as ConfirmModal:
   `promptState: { title, placeholder?, defaultValue?, confirmLabel?,
   onConfirm: (value) => void } | null` in App.tsx.
-- **Never use native `window.prompt()`, `alert()`, or `confirm()`** —
+- **Never use native `window.prompt()`, `alert()`, or `confirm()`** (the last
+  native `alert()` — the "Please select audio files" dead end — was removed
+  2026-08-11 in favour of a toast) —
   they block the main thread, and **the audio engine pauses while
   blocked**. The "music stops when creating a playlist" bug was caused
   by `prompt()` blocking — PromptModal is the fix.

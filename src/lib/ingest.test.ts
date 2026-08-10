@@ -79,14 +79,16 @@ describe('ingestDirectoryHandle', () => {
     expect(result.map((r) => r.relativePath)).toEqual(['Playlists/80s.m3u']);
   });
 
-  it('defaults to audio-only when no accept predicate is given', async () => {
+  it('the default filter takes audio by MIME *or* extension, and excludes playlists', async () => {
     const root = fakeDirHandle('Music', [
       fakeFileHandle('a.mp3', audioFile('a.mp3')),
+      // Windows often reports no MIME type for these — extension must win.
+      fakeFileHandle('b.flac', new File([], 'b.flac')),
+      // Chromium types .m3u as audio/x-mpegurl; it must NOT become a song.
       fakeFileHandle('80s.m3u', new File([], '80s.m3u', { type: 'audio/x-mpegurl' })),
+      fakeFileHandle('notes.txt', new File([], 'notes.txt', { type: 'text/plain' })),
     ]);
-    // .m3u reports as audio/x-mpegurl in Chromium, so the default filter
-    // DOES include it — the caller (App) excludes playlist files explicitly.
     const result = await ingestDirectoryHandle(root);
-    expect(result.map((r) => r.relativePath).sort()).toEqual(['80s.m3u', 'a.mp3']);
+    expect(result.map((r) => r.relativePath).sort()).toEqual(['a.mp3', 'b.flac']);
   });
 });

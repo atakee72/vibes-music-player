@@ -47,7 +47,7 @@ import { ingestDirectoryHandle } from './lib/ingest';
 import { filterSongs } from './lib/filter';
 // Tiny sync-needed predicate only (file routing + the Refresh walk); the
 // parse/match half of playlist-import stays dynamically imported.
-import { isPlaylistFileName } from './lib/playlist-file';
+import { isAudioFile, isPlaylistFileName, isLrcFileName } from './lib/file-types';
 import type { ImportEntry } from './lib/playlist-import';
 import { sortSongs, SORT_LABELS, type SortKey } from './lib/sort';
 import { extractLyrics } from './lib/lyrics';
@@ -473,7 +473,7 @@ export default function App() {
   }, []);
 
   const isPlaylistFile = (f: File) => isPlaylistFileName(f.name);
-  const isLrcFile = (f: File) => f.name.toLowerCase().endsWith('.lrc');
+  const isLrcFile = (f: File) => isLrcFileName(f.name);
 
   const handlePlaylistImport = useCallback(
     /**
@@ -714,10 +714,14 @@ export default function App() {
       // `audio/x-mpegurl`, which passes the audio/ prefix check and would
       // double-process the file as both a playlist and a bogus "song".
       const arr = allFiles.filter(
-        (f) => f.type.startsWith('audio/') && !isPlaylistFile(f) && !isLrcFile(f),
+        isAudioFile, // MIME *or* known extension; excludes playlist/lrc files
       );
       if (arr.length === 0 && playlistFiles.length === 0 && lrcFiles.length === 0) {
-        alert('Please select audio files (MP3, WAV, FLAC, etc.)');
+        // No native alert(): it blocks the main thread and pauses the audio
+        // engine (CLAUDE.md "Prompt modal").
+        setNotification(
+          `Nothing to add — ${allFiles.length === 1 ? 'that file is' : 'those files are'} not audio, playlist (.m3u/.pls) or lyric (.lrc) files.`,
+        );
         return;
       }
       // Audio FIRST, playlists after: a combined drop (songs + .m3u) must
@@ -779,7 +783,7 @@ export default function App() {
       const ingested = await ingestDirectoryHandle(
         handle,
         '',
-        (f) => f.type.startsWith('audio/') && !isPlaylistFileName(f.name),
+        isAudioFile,
       );
       // Parallel extraction (worker pool bounds concurrency); `map` preserves
       // the walk order so path-based ids line up with stable playlist order.
@@ -1068,7 +1072,7 @@ export default function App() {
       const walked = await ingestDirectoryHandle(
         root.handle,
         '',
-        (f) => f.type.startsWith('audio/') || isPlaylistFileName(f.name),
+        (f) => isAudioFile(f) || isPlaylistFileName(f.name),
       );
       const ingested = walked.filter((w) => !isPlaylistFileName(w.file.name));
 

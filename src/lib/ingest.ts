@@ -1,10 +1,10 @@
+import { isAudioFile } from './file-types';
 export interface IngestedFile {
   file: File;
   fileHandle?: FileSystemFileHandle;
   relativePath: string;
 }
 
-const isAudio = (file: File) => file.type.startsWith('audio/');
 
 /**
  * Walk a FileSystemDirectoryHandle recursively, yielding matching files with
@@ -22,7 +22,7 @@ const isAudio = (file: File) => file.type.startsWith('audio/');
 export async function ingestDirectoryHandle(
   handle: FileSystemDirectoryHandle,
   prefix = '',
-  accept: (file: File) => boolean = isAudio,
+  accept: (file: File) => boolean = isAudioFile,
 ): Promise<IngestedFile[]> {
   const out: IngestedFile[] = [];
   for await (const entry of handle.values()) {
@@ -68,7 +68,7 @@ export async function ingestDataTransferItems(
         if (handle?.kind === 'file') {
           const fileHandle = handle as FileSystemFileHandle;
           const file = await fileHandle.getFile();
-          if (isAudio(file)) out.push({ file, fileHandle, relativePath: file.name });
+          if (isAudioFile(file)) out.push({ file, fileHandle, relativePath: file.name });
           continue;
         }
       } catch (err) {
@@ -85,7 +85,7 @@ export async function ingestDataTransferItems(
 
     // Final fallback — single plain file
     const file = item.getAsFile();
-    if (file && isAudio(file)) out.push({ file, relativePath: file.name });
+    if (file && isAudioFile(file)) out.push({ file, relativePath: file.name });
   }
 
   return out;
@@ -99,7 +99,7 @@ async function collectFromEntry(entry: FileSystemEntry, prefix = ''): Promise<In
       const file = await new Promise<File>((resolve, reject) =>
         (entry as FileSystemFileEntry).file(resolve, reject),
       );
-      return isAudio(file) ? [{ file, relativePath: path }] : [];
+      return isAudioFile(file) ? [{ file, relativePath: path }] : [];
     } catch (err) {
       console.warn('ingest: webkit entry file() failed', path, err);
       return [];

@@ -326,6 +326,32 @@ describe('App', () => {
     expect(screen.getByText('No songs in this playlist')).toBeInTheDocument();
   });
 
+  it('ingests audio files whose browser MIME type is empty (Windows .flac/.m4a)', async () => {
+    await renderApp({ playlists: [makePlaylist({ id: 'library', name: 'Library' })] });
+    fireEvent.click(screen.getByRole('button', { name: 'Add Music' }));
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, {
+      target: { files: [new File([], 'nomime.flac'), new File([], 'nomime2.m4a')] },
+    });
+    // Both land in the Library instead of the old "Please select audio files" dead end
+    expect(await screen.findByText('nomime')).toBeInTheDocument();
+    expect(screen.getByText('nomime2')).toBeInTheDocument();
+    expect(screen.queryByText(/Nothing to add/)).not.toBeInTheDocument();
+  });
+
+  it('reports a non-audio drop with a toast, never a blocking alert()', async () => {
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    await renderApp({ playlists: [makePlaylist({ id: 'library', name: 'Library' })] });
+    fireEvent.click(screen.getByRole('button', { name: 'Add Music' }));
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, {
+      target: { files: [new File([], 'notes.txt', { type: 'text/plain' })] },
+    });
+    expect(await screen.findByText(/Nothing to add/)).toBeInTheDocument();
+    expect(alertSpy).not.toHaveBeenCalled();
+    alertSpy.mockRestore();
+  });
+
   it('re-importing the same .m3u UPDATES the linked playlist instead of duplicating', async () => {
     const song = makeSong({ title: 'Alpha', file: new File([], 'alpha.mp3', { type: 'audio/mpeg' }) });
     const other = makeSong({ title: 'Bravo', file: new File([], 'bravo.mp3', { type: 'audio/mpeg' }) });

@@ -64,9 +64,9 @@ export function parsePLS(text: string): ImportEntry[] {
 }
 
 // Re-exported for convenience (tests + callers already inside this module's
-// dynamic chunk). App imports it from './playlist-file' directly so the
-// parser below stays out of the startup bundle.
-export { isPlaylistFileName } from './playlist-file';
+// dynamic chunk). App imports it from './file-types' directly so the parser
+// below stays out of the startup bundle.
+export { isPlaylistFileName } from './file-types';
 
 /**
  * The playlist a given import file should UPDATE, or undefined for "create
