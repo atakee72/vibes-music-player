@@ -1,5 +1,12 @@
-import { parseM3U, parsePLS, matchImportEntries } from './playlist-import';
-import { makeSong } from '../test-utils';
+import {
+  parseM3U,
+  parsePLS,
+  matchImportEntries,
+  isPlaylistFileName,
+  findLinkedPlaylist,
+  diffSongSets,
+} from './playlist-import';
+import { makeSong, makePlaylist } from '../test-utils';
 
 describe('parseM3U', () => {
   it('parses simple paths', () => {
@@ -92,5 +99,55 @@ describe('matchImportEntries', () => {
     expect(matched).toHaveLength(1);
     expect(unmatched).toHaveLength(1);
     expect(unmatched[0].filename).toBe('lost.mp3');
+  });
+});
+
+describe('isPlaylistFileName', () => {
+  it('accepts m3u/m3u8/pls case-insensitively and rejects everything else', () => {
+    expect(isPlaylistFileName('80s.m3u')).toBe(true);
+    expect(isPlaylistFileName('Rock.M3U8')).toBe(true);
+    expect(isPlaylistFileName('mix.PLS')).toBe(true);
+    expect(isPlaylistFileName('song.mp3')).toBe(false);
+    expect(isPlaylistFileName('lyrics.lrc')).toBe(false);
+    expect(isPlaylistFileName('m3u')).toBe(false);
+  });
+});
+
+describe('findLinkedPlaylist', () => {
+  const linked = makePlaylist({ name: 'Eighties', importSource: '80s.m3u' });
+  const unlinked = makePlaylist({ name: '90s' });
+
+  it('matches on importSource, case-insensitively', () => {
+    expect(findLinkedPlaylist([unlinked, linked], '80s.m3u')).toBe(linked);
+    expect(findLinkedPlaylist([unlinked, linked], '80S.M3U')).toBe(linked);
+  });
+
+  it('does NOT adopt a same-named but unlinked playlist', () => {
+    // Importing 90s.m3u must not silently overwrite a hand-made "90s".
+    expect(findLinkedPlaylist([unlinked], '90s.m3u')).toBeUndefined();
+  });
+
+  it('never returns the library or favorites views', () => {
+    const library = makePlaylist({ id: 'library', name: 'Library', importSource: 'library.m3u' });
+    const favorites = makePlaylist({ id: 'favorites', name: 'Favorites', importSource: 'favorites.m3u' });
+    expect(findLinkedPlaylist([library, favorites], 'library.m3u')).toBeUndefined();
+    expect(findLinkedPlaylist([library, favorites], 'favorites.m3u')).toBeUndefined();
+  });
+
+  it('returns undefined when nothing is linked to that file', () => {
+    expect(findLinkedPlaylist([unlinked, linked], 'Jazz.m3u')).toBeUndefined();
+  });
+});
+
+describe('diffSongSets', () => {
+  const a = makeSong({ title: 'A' });
+  const b = makeSong({ title: 'B' });
+  const c = makeSong({ title: 'C' });
+
+  it('counts added and removed by song id', () => {
+    expect(diffSongSets([a, b], [b, c])).toEqual({ added: 1, removed: 1 });
+    expect(diffSongSets([], [a, b])).toEqual({ added: 2, removed: 0 });
+    expect(diffSongSets([a, b], [])).toEqual({ added: 0, removed: 2 });
+    expect(diffSongSets([a, b], [a, b])).toEqual({ added: 0, removed: 0 });
   });
 });

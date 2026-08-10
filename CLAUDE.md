@@ -428,6 +428,30 @@ Facts other tools (e.g. a beets-managed library feeding Vibes) must know:
   by filename (case-insensitive) against the Library playlist's songs.
 - Imported playlists appear in the sidebar with a notification showing
   how many tracks were matched.
+- **Linked playlists**: an import records `Playlist.importSource` (the source
+  file name). Re-importing that file **updates the same playlist** —
+  `findLinkedPlaylist` matches on `importSource` only, so re-import never
+  duplicates, and the update **replaces** the song list (the file is the
+  source of truth; the toast reports `(+A, -B)`). It deliberately does NOT
+  adopt a same-named unlinked playlist (importing `Rock.m3u` must never
+  silently overwrite a hand-made "Rock"), and never targets
+  `library`/`favorites`. Renaming a linked playlist in Vibes is safe — the
+  link is the file name, not the display name.
+- **Refresh re-syncs linked playlists too**: `refreshLibrary` walks each root
+  ONCE with a widened `accept` (audio + playlist files), and for every found
+  file that matches some playlist's `importSource` it re-parses and re-matches
+  against the POST-refresh library — inside the same `setPlaylists` updater,
+  because that's where the new library song list exists (parsing is async, so
+  it happens before). Unlinked playlist files on disk are ignored: Refresh
+  must never spontaneously create playlists the user didn't import.
+  Toast gains `· N playlists re-synced`.
+- `ingestDirectoryHandle(handle, prefix, accept)` — **the recursive call must
+  forward `accept`**, or files that only exist in a subfolder (the beets
+  `Music/Playlists/*.m3u` case) become invisible with no error. Unit-tested.
+- **Audio is ingested BEFORE playlists** in `handleFiles`, and the freshly
+  extracted songs are threaded into `handlePlaylistImport(files, justIngested)`
+  — React state isn't committed yet, so without this a combined songs+`.m3u`
+  drop would match against an empty library and create empty playlists.
 - File routing in `handleFiles`: playlist files (`.m3u`, `.m3u8`, `.pls`)
   and LRC files (`.lrc`) are separated from audio files and processed
   after audio ingest completes. **The audio filter must exclude playlist

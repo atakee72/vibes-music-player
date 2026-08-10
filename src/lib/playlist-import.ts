@@ -1,4 +1,4 @@
-import type { Song } from '../types';
+import type { Playlist, Song } from '../types';
 
 export interface ImportEntry {
   path: string;
@@ -61,6 +61,52 @@ export function parsePLS(text: string): ImportEntry[] {
     entries.push({ path, filename: basename(path), title: titles.get(num) });
   }
   return entries;
+}
+
+const PLAYLIST_EXTS = ['.m3u', '.m3u8', '.pls'];
+
+/** True for playlist file names (`.m3u`, `.m3u8`, `.pls`), case-insensitive.
+ *  Single source of truth for the extension list — used by App's file
+ *  routing and by the Refresh directory walk. */
+export function isPlaylistFileName(name: string): boolean {
+  const lower = name.toLowerCase();
+  return PLAYLIST_EXTS.some((ext) => lower.endsWith(ext));
+}
+
+/**
+ * The playlist a given import file should UPDATE, or undefined for "create
+ * a new one". Matches only on `importSource` (case-insensitive) — the link
+ * established when the file was first imported.
+ *
+ * Deliberately does NOT adopt a same-named unlinked playlist: importing
+ * `Rock.m3u` must never silently overwrite a hand-made "Rock". The Library
+ * and Favorites views can never be targets either (a file literally named
+ * `library.m3u` just creates an ordinary playlist).
+ */
+export function findLinkedPlaylist(
+  playlists: Playlist[],
+  fileName: string,
+): Playlist | undefined {
+  const key = fileName.toLowerCase();
+  return playlists.find(
+    (p) =>
+      p.id !== 'library' &&
+      p.id !== 'favorites' &&
+      p.importSource?.toLowerCase() === key,
+  );
+}
+
+/** Song-id delta between two lists — drives the "(+3, −1)" re-sync toast. */
+export function diffSongSets(
+  prev: Song[],
+  next: Song[],
+): { added: number; removed: number } {
+  const prevIds = new Set(prev.map((s) => s.id));
+  const nextIds = new Set(next.map((s) => s.id));
+  return {
+    added: next.filter((s) => !prevIds.has(s.id)).length,
+    removed: prev.filter((s) => !nextIds.has(s.id)).length,
+  };
 }
 
 export function matchImportEntries(

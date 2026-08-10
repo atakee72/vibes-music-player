@@ -7,25 +7,35 @@ export interface IngestedFile {
 const isAudio = (file: File) => file.type.startsWith('audio/');
 
 /**
- * Walk a FileSystemDirectoryHandle recursively, yielding audio files with their
- * relative paths and the matching FileSystemFileHandle (so callers can persist
- * them later). Tolerates errors per entry — a single broken file does not
- * abort the rest of the walk.
+ * Walk a FileSystemDirectoryHandle recursively, yielding matching files with
+ * their relative paths and the matching FileSystemFileHandle (so callers can
+ * persist them later). Tolerates errors per entry — a single broken file does
+ * not abort the rest of the walk.
+ *
+ * `accept` defaults to audio-only. Refresh passes a wider predicate so one
+ * walk collects songs AND playlist files (`getFile()` runs before the filter
+ * either way, so a wider predicate costs no extra round-trips).
+ * **The recursive call MUST forward `accept`** — otherwise subdirectories
+ * silently fall back to audio-only, and files that only live in a subfolder
+ * (e.g. `Music/Playlists/*.m3u`) become invisible with no error.
  */
 export async function ingestDirectoryHandle(
   handle: FileSystemDirectoryHandle,
   prefix = '',
+  accept: (file: File) => boolean = isAudio,
 ): Promise<IngestedFile[]> {
   const out: IngestedFile[] = [];
   for await (const entry of handle.values()) {
     const path = prefix ? `${prefix}/${entry.name}` : entry.name;
     try {
       if (entry.kind === 'directory') {
-        out.push(...(await ingestDirectoryHandle(entry as FileSystemDirectoryHandle, path)));
+        out.push(
+          ...(await ingestDirectoryHandle(entry as FileSystemDirectoryHandle, path, accept)),
+        );
       } else {
         const fileHandle = entry as FileSystemFileHandle;
         const file = await fileHandle.getFile();
-        if (isAudio(file)) out.push({ file, fileHandle, relativePath: path });
+        if (accept(file)) out.push({ file, fileHandle, relativePath: path });
       }
     } catch (err) {
       console.warn('ingest: skipping entry', path, err);

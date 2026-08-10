@@ -324,6 +324,99 @@ describe('App', () => {
     expect(screen.getByText('No songs in this playlist')).toBeInTheDocument();
   });
 
+  it('re-importing the same .m3u UPDATES the linked playlist instead of duplicating', async () => {
+    const song = makeSong({ title: 'Alpha', file: new File([], 'alpha.mp3', { type: 'audio/mpeg' }) });
+    const other = makeSong({ title: 'Bravo', file: new File([], 'bravo.mp3', { type: 'audio/mpeg' }) });
+    await renderApp({
+      playlists: [makePlaylist({ id: 'library', name: 'Library', songs: [song, other] })],
+    });
+    const importM3u = async (body: string) => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add Music' }));
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+      fireEvent.change(input, {
+        target: { files: [new File([body], 'roadtrip.m3u', { type: 'audio/x-mpegurl' })] },
+      });
+    };
+
+    await importM3u('#EXTM3U\nalpha.mp3\nbravo.mp3\n');
+    expect(await screen.findByText(/Created "roadtrip"/)).toBeInTheDocument();
+
+    // Same file name, one track dropped → update, not a second playlist
+    await importM3u('#EXTM3U\nalpha.mp3\n');
+    expect(await screen.findByText(/Updated "roadtrip" — 1 track \(\+0, -1\)/)).toBeInTheDocument();
+    expect(screen.getAllByText('roadtrip')).toHaveLength(1);
+
+    fireEvent.click(screen.getByText('roadtrip'));
+    expect(await screen.findByText('Alpha')).toBeInTheDocument();
+    expect(screen.queryByText('Bravo')).not.toBeInTheDocument();
+  });
+
+  it('a linked playlist renamed inside Vibes still updates under its new name', async () => {
+    const song = makeSong({ title: 'Alpha', file: new File([], 'alpha.mp3', { type: 'audio/mpeg' }) });
+    await renderApp({
+      playlists: [makePlaylist({ id: 'library', name: 'Library', songs: [song] })],
+    });
+    const importM3u = async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add Music' }));
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+      fireEvent.change(input, {
+        target: {
+          files: [new File(['#EXTM3U\nalpha.mp3\n'], 'roadtrip.m3u', { type: 'audio/x-mpegurl' })],
+        },
+      });
+    };
+
+    await importM3u();
+    await screen.findByText(/Created "roadtrip"/);
+    fireEvent.click(screen.getByRole('button', { name: 'Rename roadtrip' }));
+    fireEvent.change(await screen.findByPlaceholderText('Playlist name'), {
+      target: { value: 'Trip Mix' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
+    await screen.findByText('Trip Mix');
+
+    await importM3u();
+    expect(await screen.findByText(/Updated "Trip Mix"/)).toBeInTheDocument();
+    expect(screen.queryByText('roadtrip')).not.toBeInTheDocument();
+  });
+
+  it('a file named library.m3u creates a normal playlist and never hijacks Library', async () => {
+    const song = makeSong({ title: 'Alpha', file: new File([], 'alpha.mp3', { type: 'audio/mpeg' }) });
+    await renderApp({
+      playlists: [makePlaylist({ id: 'library', name: 'Library', songs: [song] })],
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add Music' }));
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, {
+      target: {
+        files: [new File(['#EXTM3U\nalpha.mp3\n'], 'library.m3u', { type: 'audio/x-mpegurl' })],
+      },
+    });
+    expect(await screen.findByText(/Created "library"/)).toBeInTheDocument();
+    // The real Library is untouched and still selectable
+    fireEvent.click(screen.getAllByText('Library')[0]);
+    expect(await screen.findByText('Alpha')).toBeInTheDocument();
+  });
+
+  it('songs and an .m3u dropped TOGETHER produce a populated playlist', async () => {
+    // Regression guard: playlist import used to run before audio ingest, so a
+    // combined drop matched against an empty library and created empty playlists.
+    await renderApp({ playlists: [makePlaylist({ id: 'library', name: 'Library' })] });
+    fireEvent.click(screen.getByRole('button', { name: 'Add Music' }));
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, {
+      target: {
+        files: [
+          new File([], 'alpha.mp3', { type: 'audio/mpeg' }),
+          new File(['#EXTM3U\nalpha.mp3\n'], 'roadtrip.m3u', { type: 'audio/x-mpegurl' }),
+        ],
+      },
+    });
+    expect(await screen.findByText(/Created "roadtrip" with 1 of 1 tracks/)).toBeInTheDocument();
+    fireEvent.click(screen.getByText('roadtrip'));
+    expect(await screen.findByText('alpha')).toBeInTheDocument();
+  });
+
   it('drain-back is Spotify-style: after a queued detour, the walk resumes from the bookmark', async () => {
     const a = makeSong({ title: 'TrackA' });
     const b = makeSong({ title: 'TrackB' });

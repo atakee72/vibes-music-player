@@ -28,6 +28,11 @@ export interface Playlist {
   name: string;
   songs: Song[];
   createdAt: Date;
+  /** Source file name (e.g. "80s.m3u") when this playlist came from an
+   *  import. Its presence marks the playlist LINKED: re-importing that file
+   *  — or hitting Refresh — replaces this playlist's songs from it.
+   *  Persists for free via storage's `Omit<Playlist,'songs'>` spread. */
+  importSource?: string;
 }
 
 export type RepeatMode = 'none' | 'all' | 'one';

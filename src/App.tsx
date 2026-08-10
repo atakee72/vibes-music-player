@@ -45,6 +45,9 @@ import { HeaderMenu, type HeaderAction } from './components/HeaderMenu';
 import * as storage from './lib/storage';
 import { ingestDirectoryHandle } from './lib/ingest';
 import { filterSongs } from './lib/filter';
+// Eager (tiny, no music-metadata dependency): the file-routing predicate and
+// the Refresh walk need it synchronously. The parse/match functions stay lazy.
+import { isPlaylistFileName, type ImportEntry } from './lib/playlist-import';
 import { sortSongs, SORT_LABELS, type SortKey } from './lib/sort';
 import { extractLyrics } from './lib/lyrics';
 import { downscaleCover } from './lib/cover';
@@ -452,16 +455,35 @@ export default function App() {
     });
   }, []);
 
-  const PLAYLIST_EXTS = new Set(['.m3u', '.m3u8', '.pls']);
-  const isPlaylistFile = (f: File) =>
-    PLAYLIST_EXTS.has(f.name.toLowerCase().replace(/^.*(\.[^.]+)$/, '$1'));
+  const isPlaylistFile = (f: File) => isPlaylistFileName(f.name);
   const isLrcFile = (f: File) => f.name.toLowerCase().endsWith('.lrc');
 
   const handlePlaylistImport = useCallback(
-    async (files: File[]) => {
+    /**
+     * Import playlist files. A playlist remembers the file it came from
+     * (`importSource`), so re-importing that file UPDATES the same playlist
+     * (replace semantics — the file is the source of truth) instead of
+     * creating a duplicate.
+     *
+     * `justIngested` carries songs extracted moments ago in the same drop:
+     * React state isn't committed yet, so the `playlists` closure can't see
+     * them, and without this a combined songs+.m3u drop yields empty playlists.
+     */
+    async (files: File[], justIngested: Song[] = []) => {
       const libraryPlaylist = playlists.find((p) => p.id === 'library');
-      const librarySongs = libraryPlaylist?.songs ?? [];
-      const { parseM3U, parsePLS, matchImportEntries } = await import('./lib/playlist-import');
+      const librarySongs = [...(libraryPlaylist?.songs ?? []), ...justIngested];
+      const { parseM3U, parsePLS, matchImportEntries, findLinkedPlaylist, diffSongSets } =
+        await import('./lib/playlist-import');
+
+      // Plan first, apply once: state updaters don't run synchronously, so the
+      // toast text has to be computed out here. `working` walks forward across
+      // files so two files in one drop can't both target the same playlist.
+      type Op =
+        | { kind: 'update'; id: string; songs: Song[]; source: string }
+        | { kind: 'create'; playlist: Playlist };
+      const ops: Op[] = [];
+      const messages: string[] = [];
+      let working = playlists;
 
       for (const file of files) {
         const text = await file.text();
@@ -470,19 +492,50 @@ export default function App() {
         if (entries.length === 0) continue;
 
         const { matched, unmatched } = matchImportEntries(entries, librarySongs);
-        const name = file.name.replace(/\.[^.]+$/, '');
-        const playlist = {
-          id: crypto.randomUUID(),
-          name,
-          songs: matched,
-          createdAt: new Date(),
-        };
+        const existing = findLinkedPlaylist(working, file.name);
 
-        setPlaylists((prev) => [...prev, playlist]);
-        setNotification(
-          `Created "${name}" with ${matched.length} of ${entries.length} tracks` +
-            (unmatched.length > 0 ? ` (${unmatched.length} not found)` : ''),
+        if (existing) {
+          const { added, removed } = diffSongSets(existing.songs, matched);
+          ops.push({ kind: 'update', id: existing.id, songs: matched, source: file.name });
+          working = working.map((p) =>
+            p.id === existing.id ? { ...p, songs: matched, importSource: file.name } : p,
+          );
+          messages.push(
+            `Updated "${existing.name}" — ${matched.length} ${
+              matched.length === 1 ? 'track' : 'tracks'
+            }` + (added || removed ? ` (+${added}, -${removed})` : ' (no change)'),
+          );
+        } else {
+          const name = file.name.replace(/\.[^.]+$/, '');
+          const playlist: Playlist = {
+            id: crypto.randomUUID(),
+            name,
+            songs: matched,
+            createdAt: new Date(),
+            importSource: file.name,
+          };
+          ops.push({ kind: 'create', playlist });
+          working = [...working, playlist];
+          messages.push(
+            `Created "${name}" with ${matched.length} of ${entries.length} tracks` +
+              (unmatched.length > 0 ? ` (${unmatched.length} not found)` : ''),
+          );
+        }
+      }
+
+      if (ops.length > 0) {
+        setPlaylists((prev) =>
+          ops.reduce(
+            (acc, op) =>
+              op.kind === 'update'
+                ? acc.map((p) =>
+                    p.id === op.id ? { ...p, songs: op.songs, importSource: op.source } : p,
+                  )
+                : [...acc, op.playlist],
+            prev,
+          ),
         );
+        setNotification(messages.join(' · '));
       }
       setShowUpload(false);
     },
@@ -627,7 +680,10 @@ export default function App() {
         alert('Please select audio files (MP3, WAV, FLAC, etc.)');
         return;
       }
-      if (playlistFiles.length > 0) await handlePlaylistImport(playlistFiles);
+      // Audio FIRST, playlists after: a combined drop (songs + .m3u) must
+      // match the playlist entries against the songs from this very drop,
+      // which is why the ingested list is threaded into the import below.
+      const ingestedNow: Song[] = [];
       if (arr.length > 0) {
         // Parallel extraction (the metadata client's pool bounds concurrency)
         // with ORDER-STABLE PROGRESSIVE flushes: results land in an
@@ -662,8 +718,10 @@ export default function App() {
           }),
         );
         flushReadyPrefix();
+        ingestedNow.push(...(results.filter(Boolean) as Song[]));
         requestPersistOnce();
       }
+      if (playlistFiles.length > 0) await handlePlaylistImport(playlistFiles, ingestedNow);
       if (lrcFiles.length > 0) await handleLrcImport(lrcFiles);
       setShowUpload(false);
     },
@@ -947,9 +1005,40 @@ export default function App() {
     );
     const seenIds = new Set<string>();
     const newSongs: Song[] = [];
+    // Linked playlists whose source file was found on disk this sweep:
+    // { playlistId → parsed entries }. Parsing is async so it happens here;
+    // MATCHING happens inside the state updater below, where the
+    // post-refresh Library song list is known.
+    const { parseM3U, parsePLS, findLinkedPlaylist, matchImportEntries } =
+      await import('./lib/playlist-import');
+    const resyncs: { playlistId: string; entries: ImportEntry[] }[] = [];
 
     for (const root of libraryRoots) {
-      const ingested = await ingestDirectoryHandle(root.handle);
+      // ONE walk collecting songs AND playlist files (getFile runs before the
+      // filter either way, so the wider predicate is free).
+      const walked = await ingestDirectoryHandle(
+        root.handle,
+        '',
+        (f) => f.type.startsWith('audio/') || isPlaylistFileName(f.name),
+      );
+      const ingested = walked.filter((w) => !isPlaylistFileName(w.file.name));
+
+      for (const { file } of walked.filter((w) => isPlaylistFileName(w.file.name))) {
+        // Only files already LINKED to a playlist are re-synced — Refresh
+        // must never spontaneously create playlists the user didn't import.
+        const linked = findLinkedPlaylist(playlists, file.name);
+        if (!linked) continue;
+        try {
+          const text = await file.text();
+          const entries = file.name.toLowerCase().endsWith('.pls')
+            ? parsePLS(text)
+            : parseM3U(text);
+          if (entries.length > 0) resyncs.push({ playlistId: linked.id, entries });
+        } catch (err) {
+          console.warn('refresh: could not read playlist', file.name, err);
+        }
+      }
+
       const fresh = ingested.filter(({ relativePath }) => {
         const id = `${root.id}/${relativePath}`;
         seenIds.add(id);
@@ -970,27 +1059,41 @@ export default function App() {
       Array.from(existingIds).filter((id) => !seenIds.has(id)),
     );
 
-    setPlaylists((prev) =>
-      prev.map((p) => {
-        if (p.id === 'library') {
-          const kept = p.songs.filter((s) => !removedIds.has(s.id));
-          return { ...p, songs: [...kept, ...newSongs] };
+    const resyncById = new Map(resyncs.map((r) => [r.playlistId, r.entries]));
+
+    setPlaylists((prev) => {
+      const libraryAfter = [
+        ...(prev.find((p) => p.id === 'library')?.songs.filter((s) => !removedIds.has(s.id)) ??
+          []),
+        ...newSongs,
+      ];
+      return prev.map((p) => {
+        if (p.id === 'library') return { ...p, songs: libraryAfter };
+        // Linked playlist with a source file on disk: replace from the file
+        // (matched against the POST-refresh library, so orphans can't survive).
+        const entries = resyncById.get(p.id);
+        if (entries) {
+          return { ...p, songs: matchImportEntries(entries, libraryAfter).matched };
         }
-        // Also drop orphans from user playlists
+        // Everything else: just drop orphans
         return {
           ...p,
           songs: p.songs.filter((s) => !removedIds.has(s.id)),
         };
-      }),
-    );
+      });
+    });
     setCurrentSong((prev) => (prev && removedIds.has(prev.id) ? null : prev));
     setQueue((q) => q.filter((s) => !removedIds.has(s.id)));
 
+    const resyncNote =
+      resyncs.length > 0
+        ? ` · ${resyncs.length} ${resyncs.length === 1 ? 'playlist' : 'playlists'} re-synced`
+        : '';
     if (newSongs.length === 0 && removedIds.size === 0) {
-      setNotification('Library is up to date');
+      setNotification(`Library is up to date${resyncNote}`);
     } else {
       setNotification(
-        `Refreshed: +${newSongs.length} ${newSongs.length === 1 ? 'song' : 'songs'}, -${removedIds.size} removed`,
+        `Refreshed: +${newSongs.length} ${newSongs.length === 1 ? 'song' : 'songs'}, -${removedIds.size} removed${resyncNote}`,
       );
     }
   }, [libraryRoots, playlists, extractMetadata]);
