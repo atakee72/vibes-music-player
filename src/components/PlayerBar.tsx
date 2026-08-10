@@ -108,7 +108,7 @@ export function PlayerBar({
   }, [eqOpen]);
   if (!song) {
     return (
-      <div className="h-24 bg-surface/95 backdrop-blur-xl border-t border-white/10 flex items-center justify-center">
+      <div className="h-[104px] lg:h-24 bg-surface/95 backdrop-blur-xl border-t border-white/10 flex items-center justify-center">
         <p className="text-white/50 text-sm">No song playing</p>
       </div>
     );
@@ -122,9 +122,10 @@ export function PlayerBar({
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
-    // h-24 on mobile too (was h-20): the full-width title line adds a row, and
-    // matching the empty-state height keeps the bar from jumping on play.
-    <div className="relative h-24 bg-surface/95 backdrop-blur-xl border-t border-white/10 flex flex-col">
+    // Mobile is taller than desktop here: the full-width title line adds a row
+    // and the control row carries bottom padding so it doesn't sit on the screen
+    // edge. The empty state matches this height so the bar can't jump on play.
+    <div className="relative h-[104px] lg:h-24 bg-surface/95 backdrop-blur-xl border-t border-white/10 flex flex-col">
       {/* Floating pull-up handle: opens the full-screen now-playing view.
           Visible on both mobile and desktop; amber on hover. */}
       {onExpand && (
@@ -170,7 +171,7 @@ export function PlayerBar({
         </div>
       </div>
 
-      <div className="flex items-center px-3 lg:px-4 flex-1">
+      <div className="flex items-center px-3 lg:px-4 flex-1 pb-2 lg:pb-0">
         <div
           role="button"
           tabIndex={0}
