@@ -716,8 +716,9 @@ lyrics (CORS works at runtime) + graceful no-match.
 | Mobile touch | `e8f811b` — `feat: always-visible sidebar pencils on mobile; mobile-affordance docs` (final of 3) |
 | Tech-debt triple | `769562d` — a11y focus traps (`useDialogFocus`), the first `App.test.tsx` suite, Web-Worker ingest + 512px cover downscale (OPFS deferred) |
 | beets integration | `97a1a59` — linked playlists (re-import updates, Refresh re-syncs), extension-based audio detection, Firefox folder drops, mobile title line |
+| Re-scan tags | `af49e20` — `fix: merge re-scan patches against live state; skip no-op cover swaps` (Refresh's counterpart for in-place tag edits — beets — that leave paths unchanged) |
 
-Total: 340 tests, all green; `pnpm build` clean; production live.
+Total: 366 tests, all green; `pnpm build` clean; production live.
 
 ## Real-library milestone (2026-08-11)
 

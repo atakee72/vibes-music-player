@@ -709,6 +709,79 @@ Facts other tools (e.g. a beets-managed library feeding Vibes) must know:
   re-walks each `libraryRoot.handle` via `ingestDirectoryHandle`, diffs
   by stable id (`${root.id}/${relativePath}`). Adds new files, removes
   orphans from Library AND from any user playlist that referenced them.
+- **Re-scan tags** (Library only, handle-backed songs only): Refresh diffs
+  PATHS, so an external tagger rewriting tags in place (beets BPM/genre pass,
+  `embedart`) is invisible to it. Re-scan is the counterpart — it re-reads
+  every song that has a `fileHandle` via `fileHandle.getFile()` (NOT the
+  cached `song.file`, a load-time snapshot that throws once the bytes change)
+  and merges through `src/lib/rescan.ts`. **Merge policy**: the file wins for
+  scalar tags (including clearing them), `duration` only when `> 0`, and
+  **cover art + lyrics are merge-not-replace** — those can come from inside
+  Vibes (LRCLIB "Find lyrics", the cover self-heal) and blind replacement
+  would destroy them. Ids, hearts, playlist membership and the queue survive
+  because the patch is applied by id.
+  **The batch write merges onto the LIVE song, not a pre-sweep snapshot —
+  this is load-bearing, don't "simplify" it back.** `rescanTags` stores only
+  the raw fetch inputs per song (`{ meta, replacements }`), not a pre-merged
+  Song built from the song object captured when the sweep started. A 469-song
+  sweep is a minute-plus with a progress toast actively inviting the user to
+  sit and watch; if the batch write applied pre-merged snapshots wholesale,
+  any live-state mutation that happened mid-sweep — a heart toggled, lyrics
+  just fetched via LRCLIB — would be silently reverted AND then persisted by
+  the debounced save. Instead, `apply(s)` runs `mergeRescan(s, ...)` against
+  whatever `s` the state updater hands it at COMMIT time, so mid-sweep
+  mutations survive because they're already reflected in `s`.
+  **The currently-playing song keeps its `url`/`file`, and this is enforced
+  at APPLY time, not fetch time — the only checkpoint that exists.**
+  `useAudioEngine`'s song effect early-returns only while
+  `active.src === song.url`, so swapping the url would restart the track
+  from 0 mid-play. `currentSongIdRef.current` is read ONCE, right before the
+  three state writes (`playingId`), and `apply` omits `file`/`url` from that
+  one song's replacements (letting `RescanReplacements`' "omit to keep
+  current" semantics take over) — never at fetch time, because a fetch-time
+  check goes stale on a long sweep: the user can start playing a song
+  *after* its own tag fetch already ran, and the sweep won't finish for
+  another minute. A prior version of this fix DID check at fetch time and
+  had exactly this bug (fixed, then superseded by the current apply-time-only
+  design — same class of staleness, this time affecting every field instead
+  of just url/file).
+  Old object URLs (audio + cover) are collected keyed by id and revoked on a
+  deferred timeout — the playlists-diff revoke effect only fires for
+  REMOVED ids, so an in-place swap must revoke its own predecessors. The
+  playing song's original url is pulled back out of that collection before
+  revoking (same `playingId` checkpoint); cover art has no such exception,
+  since swapping it never restarts playback.
+  **A fresh url is still built for the playing song at fetch time — it's
+  the playing-vs-not decision that moved to apply time, not the url
+  creation** (`replacements` is built unconditionally per candidate, before
+  `playingId` is known). `apply` then discards that fresh url for the
+  playing song, but `apply` is a state-updater callback — it must stay
+  pure, so it can't be the thing that revokes it. The discarded url is
+  captured once, at the SAME `playingId` checkpoint, into its own
+  `discardedUrls` list (not folded into the cover list — the name would
+  lie) and revoked alongside everything else. Skipping this capture is a
+  leak, not a correctness bug — the URL silently outlives its Blob with no
+  code path left to free it, one per re-scan-while-playing.
+  **Cover art is only replaced when its size actually differs**
+  (`blob.size !== song.coverBlob?.size`): every song with embedded art gets
+  a FRESH downscaled Blob built from the file, so comparing by reference
+  (what `hasMetaChanged` used to do) always looks "changed" — including
+  when a tagger re-embeds the exact same artwork, which is the common case
+  on an `embedart`-managed library. That silently made the completion toast
+  permanently over-report and churned an object URL create+revoke per song
+  for nothing. `hasMetaChanged` now also compares `coverBlob` by size, not
+  reference, as a second line of defense. Size isn't a content hash, but
+  it's a large improvement over reference identity for this case.
+  Blob-persisted (Firefox/Safari) songs are skipped by design: their bytes
+  were copied at ingest and can never reflect a later edit.
+  **Scope boundary**: Re-scan never adds or removes songs. A file the tagger
+  RENAMED or MOVED fails its `getFile()` and is reported "unreadable", not
+  removed — path changes are Refresh's job. When every file fails, the toast
+  says so and points at Refresh, because that is nearly always the cause.
+  **Known cosmetic edge**: re-scanning during the last ~5s of a track swaps the
+  url of the already-preloaded next song, so that one transition loses its
+  gapless flip (the engine's `inactive.src === nextUrl` test misses and it
+  falls back to the normal load path). Not worth engineering around.
 - **Export**: `src/lib/playlist-export.ts` serializes a playlist to M3U
   (with `#EXTINF`). Triggered by a `<a download>` programmatic click.
   Round-trips through Phase 5's `parseM3U` import on the same machine.
