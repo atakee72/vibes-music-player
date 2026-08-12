@@ -709,6 +709,33 @@ Facts other tools (e.g. a beets-managed library feeding Vibes) must know:
   re-walks each `libraryRoot.handle` via `ingestDirectoryHandle`, diffs
   by stable id (`${root.id}/${relativePath}`). Adds new files, removes
   orphans from Library AND from any user playlist that referenced them.
+- **Re-scan tags** (Library only, handle-backed songs only): Refresh diffs
+  PATHS, so an external tagger rewriting tags in place (beets BPM/genre pass,
+  `embedart`) is invisible to it. Re-scan is the counterpart — it re-reads
+  every song that has a `fileHandle` via `fileHandle.getFile()` (NOT the
+  cached `song.file`, a load-time snapshot that throws once the bytes change)
+  and merges through `src/lib/rescan.ts`. **Merge policy**: the file wins for
+  scalar tags (including clearing them), `duration` only when `> 0`, and
+  **cover art + lyrics are merge-not-replace** — those can come from inside
+  Vibes (LRCLIB "Find lyrics", the cover self-heal) and blind replacement
+  would destroy them. Ids, hearts, playlist membership and the queue survive
+  because the patch is applied by id.
+  **Two traps it works around**: (1) the playlists-diff revoke effect only
+  fires for REMOVED ids, so an in-place url swap must revoke its own old URLs
+  — `rescanTags` collects them and revokes on a deferred timeout; (2) the
+  **currently-playing song keeps its `url`/`file`** — `useAudioEngine`'s song
+  effect early-returns only while `active.src === song.url`, so swapping it
+  would restart the track from 0 mid-play. Blob-persisted (Firefox/Safari)
+  songs are skipped by design: their bytes were copied at ingest and can
+  never reflect a later edit.
+  **Scope boundary**: Re-scan never adds or removes songs. A file the tagger
+  RENAMED or MOVED fails its `getFile()` and is reported "unreadable", not
+  removed — path changes are Refresh's job. When every file fails, the toast
+  says so and points at Refresh, because that is nearly always the cause.
+  **Known cosmetic edge**: re-scanning during the last ~5s of a track swaps the
+  url of the already-preloaded next song, so that one transition loses its
+  gapless flip (the engine's `inactive.src === nextUrl` test misses and it
+  falls back to the normal load path). Not worth engineering around.
 - **Export**: `src/lib/playlist-export.ts` serializes a playlist to M3U
   (with `#EXTINF`). Triggered by a `<a download>` programmatic click.
   Round-trips through Phase 5's `parseM3U` import on the same machine.

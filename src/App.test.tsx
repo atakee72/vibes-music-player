@@ -4,6 +4,7 @@ import { makeSong, makePlaylist } from './test-utils';
 import * as storage from './lib/storage';
 import { encodeSharePayload } from './lib/share';
 import type { Playlist } from './types';
+import { parseBlob } from 'music-metadata';
 
 // ---------------------------------------------------------------------------
 // Harness mocks. The audio engine is the only real coupling App has to
@@ -66,9 +67,9 @@ vi.mock('./lib/storage', async () => {
   };
 });
 
-async function renderApp(seed?: { playlists?: Playlist[] }) {
+async function renderApp(seed?: { playlists?: Playlist[]; roots?: unknown[] }) {
   store.playlists = seed?.playlists ?? [];
-  store.roots = [];
+  store.roots = seed?.roots ?? [];
   store.estimate = null;
   const utils = render(<App />);
   // Mount-load settled once the Library playlist row is in the sidebar.
@@ -492,5 +493,120 @@ describe('App', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Mute' }));
     await waitFor(() => expect(vi.mocked(storage.saveVolume)).toHaveBeenCalledWith(0));
+  });
+});
+
+describe('re-scan tags', () => {
+  const grantedRoot = () => ({
+    id: 'root1',
+    name: 'Music',
+    handle: {
+      requestPermission: async () => 'granted',
+      queryPermission: async () => 'granted',
+    },
+    addedAt: new Date('2026-01-01T00:00:00Z'),
+  });
+
+  const handleFor = (name: string) =>
+    ({
+      getFile: async () => new File([], name, { type: 'audio/mpeg' }),
+    }) as unknown as FileSystemFileHandle;
+
+  // The harness's `vi.mock('music-metadata')` supplies parseBlob as a vi.fn;
+  // overriding its return IS "the file on disk changed" in this suite.
+  // Reset it so later tests keep the harness default.
+  afterEach(() => {
+    // `as never` satisfies the mock's narrowly-inferred return type — tsc
+    // typechecks test files (tsconfig `include: ["src"]`), so this cast is
+    // load-bearing, not decoration.
+    vi.mocked(parseBlob).mockResolvedValue({ common: {}, format: {} } as never);
+  });
+
+  const clickRescan = async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Re-scan tags' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Re-scan' }));
+  };
+
+  it('offers no re-scan button without a folder-based library', async () => {
+    await renderApp({
+      playlists: [makePlaylist({ id: 'library', name: 'Library', songs: [makeSong()] })],
+    });
+    expect(screen.queryByRole('button', { name: 'Re-scan tags' })).toBeNull();
+  });
+
+  it('re-reads tags from disk while keeping the id and the heart', async () => {
+    const song = makeSong({
+      id: 'root1/a.mp3',
+      title: 'Stale Title',
+      favorite: true,
+      fileHandle: handleFor('a.mp3'),
+    });
+    await renderApp({
+      playlists: [makePlaylist({ id: 'library', name: 'Library', songs: [song] })],
+      roots: [grantedRoot()],
+    });
+
+    vi.mocked(parseBlob).mockResolvedValue({
+      common: { title: 'Beets Title', artist: 'Beets Artist', bpm: 128 },
+      format: { duration: 300 },
+    } as never);
+
+    await clickRescan();
+
+    expect(await screen.findByText('Beets Title')).toBeInTheDocument();
+    expect(screen.queryByText('Stale Title')).toBeNull();
+    // The row heart's accessible name is built from the CURRENT title, so this
+    // one assertion proves both halves: the tag landed AND the favorite flag
+    // rode through the patch on the same song id.
+    expect(
+      screen.getByRole('button', { name: 'Remove Beets Title from Favorites' }),
+    ).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('reports how many tracks changed', async () => {
+    await renderApp({
+      playlists: [
+        makePlaylist({
+          id: 'library',
+          name: 'Library',
+          songs: [makeSong({ id: 'root1/a.mp3', fileHandle: handleFor('a.mp3') })],
+        }),
+      ],
+      roots: [grantedRoot()],
+    });
+
+    vi.mocked(parseBlob).mockResolvedValue({
+      common: { title: 'Beets Title', artist: 'Beets Artist' },
+      format: { duration: 300 },
+    } as never);
+
+    await clickRescan();
+
+    expect(await screen.findByText(/Re-scan complete: 1 of 1 tracks updated/)).toBeInTheDocument();
+  });
+
+  it('skips songs that have no file handle', async () => {
+    const blobSong = makeSong({ id: 'blob-only', title: 'Blob Song' });
+    await renderApp({
+      playlists: [
+        makePlaylist({
+          id: 'library',
+          name: 'Library',
+          songs: [makeSong({ id: 'root1/a.mp3', fileHandle: handleFor('a.mp3') }), blobSong],
+        }),
+      ],
+      roots: [grantedRoot()],
+    });
+
+    vi.mocked(parseBlob).mockResolvedValue({
+      common: { title: 'Beets Title', artist: 'Beets Artist' },
+      format: { duration: 300 },
+    } as never);
+
+    await clickRescan();
+
+    expect(await screen.findByText('Beets Title')).toBeInTheDocument();
+    // The blob-backed song was never re-read, so its title is untouched.
+    expect(screen.getByText('Blob Song')).toBeInTheDocument();
   });
 });
