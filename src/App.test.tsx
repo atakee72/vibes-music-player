@@ -784,8 +784,25 @@ describe('re-scan tags', () => {
     ).toHaveAttribute('aria-pressed', 'true');
   });
 
-  it('revokes replaced object urls for changed songs, and never for the playing song', async () => {
-    const playing = makeSong({ id: 'root1/a.mp3', fileHandle: handleFor('a.mp3') });
+  it('revokes replaced object urls for changed songs, and never for the playing song — including the freshly-created one it discards', async () => {
+    // The playing-vs-not decision moved to APPLY time: every candidate,
+    // including the playing song, gets a fresh url built at fetch time
+    // (`{ file, url: URL.createObjectURL(file) }`, unconditional). `apply`
+    // then DISCARDS that fresh url for the playing song (keeps the live
+    // one instead) — so unlike `otherUrl` below (an OLD url, tracked in
+    // `staleUrls`), this discarded url is never assigned to any song and
+    // nothing else will ever revoke it. Captures the File `getFile()`
+    // returns for the playing song so the corresponding `createObjectURL`
+    // call (and its result, the leaked url) can be found afterward.
+    let playingFile: File | undefined;
+    const playingHandle = {
+      getFile: async () => {
+        const f = new File([], 'a.mp3', { type: 'audio/mpeg' });
+        playingFile = f;
+        return f;
+      },
+    } as unknown as FileSystemFileHandle;
+    const playing = makeSong({ id: 'root1/a.mp3', fileHandle: playingHandle });
     const other = makeSong({ id: 'root1/b.mp3', fileHandle: handleFor('b.mp3') });
     await renderApp({
       playlists: [makePlaylist({ id: 'library', name: 'Library', songs: [playing, other] })],
@@ -802,13 +819,25 @@ describe('re-scan tags', () => {
     } as never);
 
     const revokeSpy = vi.spyOn(URL, 'revokeObjectURL');
+    const createSpy = vi.spyOn(URL, 'createObjectURL');
 
     await clickRescan();
     await screen.findByText(/Re-scan complete/);
 
     // The deferred revoke (setTimeout(0)) has had time to fire by now.
     await waitFor(() => expect(revokeSpy).toHaveBeenCalledWith(otherUrl));
+    // The playing song's ORIGINAL (still in use) url must never be revoked.
     expect(revokeSpy).not.toHaveBeenCalledWith(playingUrl);
+
+    // ...but the fresh url built for it and then discarded by `apply` must
+    // be — otherwise every re-scan performed while a song is playing leaks
+    // one blob url pinning a whole audio file.
+    expect(playingFile).toBeDefined();
+    const discardedCallIndex = createSpy.mock.calls.findIndex(([blob]) => blob === playingFile);
+    expect(discardedCallIndex).toBeGreaterThanOrEqual(0);
+    const discardedUrl = createSpy.mock.results[discardedCallIndex]?.value as string;
+    expect(discardedUrl).not.toBe(playingUrl);
+    expect(revokeSpy).toHaveBeenCalledWith(discardedUrl);
   });
 
   it('treats re-embedded art of the SAME size as a no-op — no revoke, honest "0 updated"', async () => {

@@ -751,6 +751,17 @@ Facts other tools (e.g. a beets-managed library feeding Vibes) must know:
   playing song's original url is pulled back out of that collection before
   revoking (same `playingId` checkpoint); cover art has no such exception,
   since swapping it never restarts playback.
+  **A fresh url is still built for the playing song at fetch time — it's
+  the playing-vs-not decision that moved to apply time, not the url
+  creation** (`replacements` is built unconditionally per candidate, before
+  `playingId` is known). `apply` then discards that fresh url for the
+  playing song, but `apply` is a state-updater callback — it must stay
+  pure, so it can't be the thing that revokes it. The discarded url is
+  captured once, at the SAME `playingId` checkpoint, into its own
+  `discardedUrls` list (not folded into the cover list — the name would
+  lie) and revoked alongside everything else. Skipping this capture is a
+  leak, not a correctness bug — the URL silently outlives its Blob with no
+  code path left to free it, one per re-scan-while-playing.
   **Cover art is only replaced when its size actually differs**
   (`blob.size !== song.coverBlob?.size`): every song with embedded art gets
   a FRESH downscaled Blob built from the file, so comparing by reference

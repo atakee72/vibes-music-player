@@ -1320,7 +1320,16 @@ export default function App() {
         // <audio> element's src untouched — swapping it would restart the
         // track from 0.
         const playingId = currentSongIdRef.current;
-        if (playingId) staleUrls.delete(playingId);
+        // Urls `apply` will DISCARD (never assigned to any song) — nobody
+        // else revokes these, since `staleUrls` holds only OLD urls, so
+        // they have to be captured here or they leak: one fresh blob URL
+        // pinning a whole audio file, per re-scan-while-playing.
+        const discardedUrls: string[] = [];
+        if (playingId) {
+          staleUrls.delete(playingId);
+          const discarded = patches.get(playingId)?.replacements.url;
+          if (discarded) discardedUrls.push(discarded);
+        }
 
         const apply = (s: Song): Song => {
           const p = patches.get(s.id);
@@ -1336,7 +1345,7 @@ export default function App() {
           setQueue((q) => q.map(apply));
         }
 
-        const stale = [...staleUrls.values(), ...staleCovers];
+        const stale = [...staleUrls.values(), ...staleCovers, ...discardedUrls];
         if (stale.length > 0) {
           // Deferred past React's commit, same reason as the revoke effect.
           setTimeout(() => {
