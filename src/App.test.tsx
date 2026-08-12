@@ -582,7 +582,7 @@ describe('re-scan tags', () => {
 
     await clickRescan();
 
-    expect(await screen.findByText(/Re-scan complete: 1 of 1 tracks updated/)).toBeInTheDocument();
+    expect(await screen.findByText(/Re-scan complete: 1 of 1 track updated/)).toBeInTheDocument();
   });
 
   it('skips songs that have no file handle', async () => {

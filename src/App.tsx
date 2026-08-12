@@ -1302,13 +1302,13 @@ export default function App() {
         // Every file unreadable almost always means they MOVED — an external
         // tagger re-organised paths, which is Refresh's job, not this one's.
         setNotification(
-          `Re-scan failed for all ${songs.length} tracks — the files may have moved. Try Refresh.`,
+          `Re-scan failed for all ${songs.length} ${songs.length === 1 ? 'track' : 'tracks'} — the files may have moved. Try Refresh.`,
         );
         return;
       }
       const failedNote = failed > 0 ? ` · ${failed} unreadable` : '';
       setNotification(
-        `Re-scan complete: ${changed} of ${songs.length} tracks updated${failedNote}`,
+        `Re-scan complete: ${changed} of ${songs.length} ${songs.length === 1 ? 'track' : 'tracks'} updated${failedNote}`,
       );
     }
   }, [libraryStatus, libraryRoots, playlists, requestConfirm]);
