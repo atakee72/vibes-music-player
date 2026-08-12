@@ -1225,6 +1225,10 @@ export default function App() {
       setNotification(`Re-scanning tags… 0/${songs.length}`);
 
       const patches = new Map<string, Song>();
+      // Pre-scan originals by id — needed to UNDO a url/file swap for the
+      // second checkpoint below (the per-song check happens at fetch time;
+      // this is the apply-time re-check).
+      const originals = new Map(songs.map((s) => [s.id, s]));
       // Old object URLs whose song we replaced — the playlists-diff revoke
       // effect only fires for REMOVED ids, so an in-place swap must revoke
       // its own predecessors or the blobs stay pinned forever.
@@ -1275,6 +1279,29 @@ export default function App() {
           }
         }),
       );
+
+      // Second checkpoint, apply time (not fetch time): the per-song check
+      // above (`song.id !== currentSongIdRef.current`) is evaluated as soon
+      // as THAT song's own awaits resolve, but the batch write below happens
+      // once for the WHOLE sweep — on a large library that's a minute-plus
+      // later. A song that was safe to swap when its own check ran can have
+      // become the now-playing song by the time we get here (user browsed
+      // and hit play mid-scan). Re-check against the CURRENT
+      // currentSongIdRef right before the writes and, if it now IS the
+      // playing song, undo the url/file swap in its patch (the tag fields
+      // still land — that's the whole point of keeping this a "correction",
+      // not a skip) and pull its original url back out of `stale` so the
+      // element playing it doesn't get its url revoked out from under it.
+      const playingId = currentSongIdRef.current;
+      if (playingId) {
+        const patch = patches.get(playingId);
+        const original = originals.get(playingId);
+        if (patch && original && patch.url !== original.url) {
+          patches.set(playingId, { ...patch, url: original.url, file: original.file });
+          const staleIdx = stale.indexOf(original.url);
+          if (staleIdx !== -1) stale.splice(staleIdx, 1);
+        }
+      }
 
       if (patches.size > 0) {
         setPlaylists((prev) =>

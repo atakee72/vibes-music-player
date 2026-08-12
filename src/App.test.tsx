@@ -3,7 +3,7 @@ import App from './App';
 import { makeSong, makePlaylist } from './test-utils';
 import * as storage from './lib/storage';
 import { encodeSharePayload } from './lib/share';
-import type { Playlist } from './types';
+import type { Playlist, Song } from './types';
 import { parseBlob } from 'music-metadata';
 
 // ---------------------------------------------------------------------------
@@ -15,11 +15,16 @@ const engine = vi.hoisted(() => ({
   onEnded: undefined as (() => void) | undefined,
   togglePlayPause: vi.fn(),
   seek: vi.fn(),
+  // Captures the `song` arg passed to useAudioEngine on the latest render —
+  // lets re-scan tests assert on the exact Song object (url/file) the real
+  // engine would have received, without needing a live AudioContext.
+  song: undefined as Song | null | undefined,
 }));
 
 vi.mock('./hooks/useAudioEngine', () => ({
-  useAudioEngine: (args: { onEnded?: () => void }) => {
+  useAudioEngine: (args: { onEnded?: () => void; song: Song | null }) => {
     engine.onEnded = args.onEnded;
+    engine.song = args.song;
     return {
       audioRefA: { current: null },
       audioRefB: { current: null },
@@ -93,6 +98,7 @@ const activeRowTitle = () =>
 
 afterEach(() => {
   engine.onEnded = undefined;
+  engine.song = undefined;
   vi.clearAllMocks();
   window.location.hash = '';
 });
@@ -608,5 +614,128 @@ describe('re-scan tags', () => {
     expect(await screen.findByText('Beets Title')).toBeInTheDocument();
     // The blob-backed song was never re-read, so its title is untouched.
     expect(screen.getByText('Blob Song')).toBeInTheDocument();
+  });
+
+  it('keeps the playing song on its original url and file across a re-scan', async () => {
+    const song = makeSong({
+      id: 'root1/a.mp3',
+      title: 'Stale Title',
+      fileHandle: handleFor('a.mp3'),
+    });
+    await renderApp({
+      playlists: [makePlaylist({ id: 'library', name: 'Library', songs: [song] })],
+      roots: [grantedRoot()],
+    });
+
+    playRow(0);
+    const originalUrl = song.url;
+    const originalFile = song.file;
+    expect(engine.song?.url).toBe(originalUrl);
+
+    vi.mocked(parseBlob).mockResolvedValue({
+      common: { title: 'Beets Title', artist: 'Beets Artist' },
+      format: { duration: 300 },
+    } as never);
+
+    await clickRescan();
+
+    // Tags landed — a playing song renders its title in multiple surfaces
+    // (row, hero, player bar), hence findAllByText.
+    expect((await screen.findAllByText('Beets Title')).length).toBeGreaterThan(0);
+    // ...but the url/file the engine is holding must not move: swapping
+    // either would reload the <audio> element and restart the track from 0.
+    expect(engine.song?.url).toBe(originalUrl);
+    expect(engine.song?.file).toBe(originalFile);
+  });
+
+  it('protects a song that starts playing mid-sweep, after its own tag check already ran', async () => {
+    // Regression for the apply-time race: the per-song "is this playing?"
+    // check runs as soon as THAT song's own file read/parse resolves, but
+    // the batch write happens once for the WHOLE sweep. A song checked
+    // early (while not playing) can become the playing song before the
+    // sweep finishes. Reproduced here with two songs: A resolves fast (so
+    // its check runs and — wrongly, absent the apply-time re-check — marks
+    // it swap-eligible) while B is held open on a gate (at its OWN file
+    // read, not shared mock state, so there's no race with A's concurrent
+    // parseBlob call), keeping the batch write from happening until we
+    // choose to release it.
+    const songA = makeSong({ id: 'root1/a.mp3', title: 'A Title', fileHandle: handleFor('a.mp3') });
+
+    let resolveGate: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      resolveGate = resolve;
+    });
+    const gatedHandleB = {
+      getFile: async () => {
+        await gate;
+        return new File([], 'b.mp3', { type: 'audio/mpeg' });
+      },
+    } as unknown as FileSystemFileHandle;
+    const songB = makeSong({ id: 'root1/b.mp3', title: 'B Title', fileHandle: gatedHandleB });
+
+    await renderApp({
+      playlists: [makePlaylist({ id: 'library', name: 'Library', songs: [songA, songB] })],
+      roots: [grantedRoot()],
+    });
+
+    const originalUrlA = songA.url;
+
+    vi.mocked(parseBlob).mockResolvedValue({
+      common: { title: 'A Rescanned' },
+      format: { duration: 300 },
+    } as never);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Re-scan tags' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Re-scan' }));
+
+    // Let songA's own per-song check run to completion — it isn't playing
+    // yet, so (absent the fix) it gets recorded as swap-eligible — while
+    // songB stays gated at its own getFile(), holding the whole sweep open
+    // past that point. A bare macrotask tick is enough: songA's chain
+    // (getFile → dynamic import → parseBlob → the check) is all microtasks
+    // with no gate.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    // NOW start playing songA — mid-sweep, after its own check already ran.
+    playRow(0);
+    expect(engine.song?.id).toBe(songA.id);
+
+    // Let songB (and therefore the whole sweep) finish.
+    resolveGate();
+
+    await screen.findByText(/Re-scan complete/);
+
+    // The apply-time re-check must have caught this and restored songA's
+    // original url/file — the fetch-time check alone is stale by now.
+    expect(engine.song?.url).toBe(originalUrlA);
+  });
+
+  it('revokes replaced object urls for changed songs, and never for the playing song', async () => {
+    const playing = makeSong({ id: 'root1/a.mp3', fileHandle: handleFor('a.mp3') });
+    const other = makeSong({ id: 'root1/b.mp3', fileHandle: handleFor('b.mp3') });
+    await renderApp({
+      playlists: [makePlaylist({ id: 'library', name: 'Library', songs: [playing, other] })],
+      roots: [grantedRoot()],
+    });
+
+    playRow(0);
+    const playingUrl = playing.url;
+    const otherUrl = other.url;
+
+    vi.mocked(parseBlob).mockResolvedValue({
+      common: { title: 'Beets Title', artist: 'Beets Artist' },
+      format: { duration: 300 },
+    } as never);
+
+    const revokeSpy = vi.spyOn(URL, 'revokeObjectURL');
+
+    await clickRescan();
+    await screen.findByText(/Re-scan complete/);
+
+    // The deferred revoke (setTimeout(0)) has had time to fire by now.
+    await waitFor(() => expect(revokeSpy).toHaveBeenCalledWith(otherUrl));
+    expect(revokeSpy).not.toHaveBeenCalledWith(playingUrl);
   });
 });
