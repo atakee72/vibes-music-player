@@ -55,6 +55,7 @@ import { extractLyrics } from './lib/lyrics';
 import { downscaleCover } from './lib/cover';
 import { mergeRescan, hasMetaChanged, type RescanReplacements } from './lib/rescan';
 import { extractMeta } from './lib/metadata-client';
+import type { ExtractedMeta } from './lib/metadata-core';
 import { resolveNextSong, safeQueueMove, upNextPreview } from './lib/queue';
 import type { EqPreset } from './lib/eq';
 import { useDominantColor } from './hooks/useDominantColor';
@@ -1177,9 +1178,15 @@ export default function App() {
   const rescanningRef = useRef(false);
 
   const rescanTags = useCallback(async () => {
-    // The button is only rendered when these hold; the guard is belt-and-braces
-    // for the `⋯` menu entry, which has no disabled state.
-    if (rescanningRef.current) return;
+    // libraryStatus/libraryRoots below are belt-and-braces: the button is
+    // only rendered when they hold, and the `⋯` menu entry carries the same
+    // `libraryStatus === 'ready'` gate (see headerActions below). The
+    // IN-PROGRESS case is different — neither surface disables itself while
+    // a scan is running, so tell the user instead of swallowing the click.
+    if (rescanningRef.current) {
+      setNotification('Re-scan already running…');
+      return;
+    }
     if (libraryStatus !== 'ready' || libraryRoots.length === 0) return;
 
     // Deduped across playlists by id: ingest adds songs only to the active
@@ -1205,7 +1212,15 @@ export default function App() {
       'Re-scan tags',
       `Re-read embedded tags for ${total} ${total === 1 ? 'track' : 'tracks'}? Hearts, playlists and the queue are kept.`,
       () => {
-        void runRescan(candidates);
+        void runRescan(candidates).catch((err) => {
+          // requestPermission can throw (e.g. SecurityError) before the
+          // rescanning flag is even set — without this catch that surfaces
+          // as an unhandled rejection instead of a toast. The try/finally
+          // inside runRescan already guarantees the flag itself can't get
+          // stuck; this is purely about giving the user SOME feedback.
+          console.warn('re-scan: unexpected failure', err);
+          setNotification('Re-scan failed unexpectedly.');
+        });
       },
       'Re-scan',
       false, // not destructive — keep the confirm button off the `danger` token
@@ -1222,121 +1237,132 @@ export default function App() {
 
       rescanningRef.current = true;
       setRescanning(true);
-      setNotification(`Re-scanning tags… 0/${songs.length}`);
+      try {
+        setNotification(`Re-scanning tags… 0/${songs.length}`);
 
-      const patches = new Map<string, Song>();
-      // Pre-scan originals by id — needed to UNDO a url/file swap for the
-      // second checkpoint below (the per-song check happens at fetch time;
-      // this is the apply-time re-check).
-      const originals = new Map(songs.map((s) => [s.id, s]));
-      // Old object URLs whose song we replaced — the playlists-diff revoke
-      // effect only fires for REMOVED ids, so an in-place swap must revoke
-      // its own predecessors or the blobs stay pinned forever.
-      const stale: string[] = [];
-      let changed = 0;
-      let failed = 0;
-      let done = 0;
+        // Store the RAW inputs, not a merged Song. Merging here against the
+        // pre-sweep SNAPSHOT (`song`, captured when the sweep started) and
+        // writing that wholesale at apply time would silently REVERT any
+        // live-state mutation that happened mid-sweep — a heart toggled, or
+        // lyrics just fetched via LRCLIB — because every field not sourced
+        // from the file would revert to its snapshot value. The merge must
+        // happen against the LIVE song, at apply time, inside `apply` below.
+        const patches = new Map<string, { meta: ExtractedMeta; replacements: RescanReplacements }>();
+        // Original url per id, for songs whose url/file get swapped — keyed
+        // by id (not a flat array) so the playing song's entry can be
+        // pulled back out by id at apply time instead of by value.
+        const staleUrls = new Map<string, string>();
+        // Old cover-art urls to revoke — no playing-song exception needed
+        // here, swapping cover art never restarts playback.
+        const staleCovers: string[] = [];
+        let changed = 0;
+        let failed = 0;
+        let done = 0;
 
-      await Promise.all(
-        songs.map(async (song) => {
-          try {
-            // Fresh read: song.file is a snapshot from load time and throws
-            // NotReadableError once the bytes on disk have changed.
-            const file = await song.fileHandle!.getFile();
-            const meta = await extractMeta(file);
-            if (!meta) throw new Error('unparseable');
+        await Promise.all(
+          songs.map(async (song) => {
+            try {
+              // Fresh read: song.file is a snapshot from load time and
+              // throws NotReadableError once the bytes on disk have changed.
+              const file = await song.fileHandle!.getFile();
+              const meta = await extractMeta(file);
+              if (!meta) throw new Error('unparseable');
 
-            const replacements: RescanReplacements = {};
-            if (meta.picData && meta.picFormat) {
-              const raw = new Blob([meta.picData as BlobPart], { type: meta.picFormat });
-              const blob = await downscaleCover(raw);
-              replacements.cover = { coverArt: URL.createObjectURL(blob), coverBlob: blob };
+              // Always build the file/url replacement here — whether it
+              // actually gets USED depends on which song is playing at
+              // APPLY time (see the single playingId checkpoint below), not
+              // on this fetch-time snapshot, which can be stale by the time
+              // the whole sweep's batch write happens (a minute-plus later
+              // on a large library).
+              const replacements: RescanReplacements = { file, url: URL.createObjectURL(file) };
+              staleUrls.set(song.id, song.url);
+
+              if (meta.picData && meta.picFormat) {
+                const raw = new Blob([meta.picData as BlobPart], { type: meta.picFormat });
+                const blob = await downscaleCover(raw);
+                // Same bytes re-embedded (the common beets `embedart`
+                // case): skip the swap so a no-op scan stays a no-op — no
+                // fresh object URL, nothing to revoke, and the completion
+                // toast's "changed" count stays honest.
+                if (blob.size !== song.coverBlob?.size) {
+                  replacements.cover = { coverArt: URL.createObjectURL(blob), coverBlob: blob };
+                  if (song.coverArt) staleCovers.push(song.coverArt);
+                }
+              }
+
+              patches.set(song.id, { meta, replacements });
+              // Computed against the pre-sweep SNAPSHOT, purely for the
+              // toast's "changed" count — deliberately not moved to apply
+              // time (that would need re-running this for every song right
+              // before the writes, for a count that's already an
+              // approximation of "how much did the file change").
+              if (hasMetaChanged(song, mergeRescan(song, meta, replacements))) changed += 1;
+            } catch (err) {
+              // One unreadable file must never abort the sweep.
+              console.warn('re-scan: could not read', song.title, err);
+              failed += 1;
+            } finally {
+              done += 1;
+              // Every 10 keeps the toast alive (its 5s timer resets on each
+              // set) without re-rendering App once per file.
+              if (done % 10 === 0) setNotification(`Re-scanning tags… ${done}/${songs.length}`);
             }
-            // The playing element holds this url; swapping it would reload the
-            // track from 0 (useAudioEngine early-returns only while the url is
-            // unchanged). Tags still update — just not the bytes behind them.
-            if (song.id !== currentSongIdRef.current) {
-              replacements.file = file;
-              replacements.url = URL.createObjectURL(file);
-              if (song.url) stale.push(song.url);
-              if (replacements.cover && song.coverArt) stale.push(song.coverArt);
-            } else if (replacements.cover && song.coverArt) {
-              stale.push(song.coverArt);
-            }
+          }),
+        );
 
-            const next = mergeRescan(song, meta, replacements);
-            patches.set(song.id, next);
-            if (hasMetaChanged(song, next)) changed += 1;
-          } catch (err) {
-            // One unreadable file must never abort the sweep.
-            console.warn('re-scan: could not read', song.title, err);
-            failed += 1;
-          } finally {
-            done += 1;
-            // Every 10 keeps the toast alive (its 5s timer resets on each
-            // set) without re-rendering App once per file.
-            if (done % 10 === 0) setNotification(`Re-scanning tags… ${done}/${songs.length}`);
-          }
-        }),
-      );
+        // The ONE playing-song checkpoint, read once, right here, right
+        // before the writes — NOT at fetch time above. A fetch-time check
+        // would go stale on a long sweep: a song can start playing between
+        // its OWN tag fetch and this point. `apply` below merges each patch
+        // onto the LIVE song (not the pre-sweep snapshot), so mid-sweep
+        // mutations survive, and it omits file/url for the playing song so
+        // RescanReplacements' "omit to keep current" semantics leave the
+        // <audio> element's src untouched — swapping it would restart the
+        // track from 0.
+        const playingId = currentSongIdRef.current;
+        if (playingId) staleUrls.delete(playingId);
 
-      // Second checkpoint, apply time (not fetch time): the per-song check
-      // above (`song.id !== currentSongIdRef.current`) is evaluated as soon
-      // as THAT song's own awaits resolve, but the batch write below happens
-      // once for the WHOLE sweep — on a large library that's a minute-plus
-      // later. A song that was safe to swap when its own check ran can have
-      // become the now-playing song by the time we get here (user browsed
-      // and hit play mid-scan). Re-check against the CURRENT
-      // currentSongIdRef right before the writes and, if it now IS the
-      // playing song, undo the url/file swap in its patch (the tag fields
-      // still land — that's the whole point of keeping this a "correction",
-      // not a skip) and pull its original url back out of `stale` so the
-      // element playing it doesn't get its url revoked out from under it.
-      const playingId = currentSongIdRef.current;
-      if (playingId) {
-        const patch = patches.get(playingId);
-        const original = originals.get(playingId);
-        if (patch && original && patch.url !== original.url) {
-          patches.set(playingId, { ...patch, url: original.url, file: original.file });
-          const staleIdx = stale.indexOf(original.url);
-          if (staleIdx !== -1) stale.splice(staleIdx, 1);
+        const apply = (s: Song): Song => {
+          const p = patches.get(s.id);
+          if (!p) return s;
+          const r: RescanReplacements =
+            s.id === playingId ? { ...p.replacements, file: undefined, url: undefined } : p.replacements;
+          return mergeRescan(s, p.meta, r);
+        };
+
+        if (patches.size > 0) {
+          setPlaylists((prev) => prev.map((p) => ({ ...p, songs: p.songs.map(apply) })));
+          setCurrentSong((prev) => (prev ? apply(prev) : prev));
+          setQueue((q) => q.map(apply));
         }
-      }
 
-      if (patches.size > 0) {
-        setPlaylists((prev) =>
-          prev.map((p) => ({
-            ...p,
-            songs: p.songs.map((s) => patches.get(s.id) ?? s),
-          })),
-        );
-        // currentSong is separate state; its patch keeps the same url, so the
-        // engine's song effect early-returns and playback is undisturbed.
-        setCurrentSong((prev) => (prev ? (patches.get(prev.id) ?? prev) : prev));
-        setQueue((q) => q.map((s) => patches.get(s.id) ?? s));
-      }
+        const stale = [...staleUrls.values(), ...staleCovers];
+        if (stale.length > 0) {
+          // Deferred past React's commit, same reason as the revoke effect.
+          setTimeout(() => {
+            for (const url of stale) URL.revokeObjectURL(url);
+          }, 0);
+        }
 
-      if (stale.length > 0) {
-        // Deferred past React's commit, same reason as the revoke effect.
-        setTimeout(() => {
-          for (const url of stale) URL.revokeObjectURL(url);
-        }, 0);
-      }
-
-      rescanningRef.current = false;
-      setRescanning(false);
-      if (failed === songs.length) {
-        // Every file unreadable almost always means they MOVED — an external
-        // tagger re-organised paths, which is Refresh's job, not this one's.
+        if (failed === songs.length) {
+          // Every file unreadable almost always means they MOVED — an
+          // external tagger re-organised paths, which is Refresh's job.
+          setNotification(
+            `Re-scan failed for all ${songs.length} ${songs.length === 1 ? 'track' : 'tracks'} — the files may have moved. Try Refresh.`,
+          );
+          return;
+        }
+        const failedNote = failed > 0 ? ` · ${failed} unreadable` : '';
         setNotification(
-          `Re-scan failed for all ${songs.length} ${songs.length === 1 ? 'track' : 'tracks'} — the files may have moved. Try Refresh.`,
+          `Re-scan complete: ${changed} of ${songs.length} ${songs.length === 1 ? 'track' : 'tracks'} updated${failedNote}`,
         );
-        return;
+      } finally {
+        // Always runs, even on an unexpected throw mid-sweep — otherwise
+        // re-scan would be permanently "running" (dead button, silent `⋯`
+        // guard above) for the rest of the session with no way to recover.
+        rescanningRef.current = false;
+        setRescanning(false);
       }
-      const failedNote = failed > 0 ? ` · ${failed} unreadable` : '';
-      setNotification(
-        `Re-scan complete: ${changed} of ${songs.length} ${songs.length === 1 ? 'track' : 'tracks'} updated${failedNote}`,
-      );
     }
   }, [libraryStatus, libraryRoots, playlists, requestConfirm]);
 
@@ -1889,16 +1915,16 @@ export default function App() {
                   {activePlaylistId === 'library' &&
                     libraryRoots.length > 0 &&
                     libraryStatus === 'ready' && (
-                    <button
-                      onClick={rescanTags}
-                      disabled={rescanning}
-                      className="p-2 rounded-lg bg-white/5 text-white/60 hover:bg-white/10 transition-all disabled:opacity-40"
-                      title="Re-read embedded tags from disk"
-                      aria-label="Re-scan tags"
-                    >
-                      <ScanLine className="h-4 w-4" />
-                    </button>
-                  )}
+                      <button
+                        onClick={rescanTags}
+                        disabled={rescanning}
+                        className="p-2 rounded-lg bg-white/5 text-white/60 hover:bg-white/10 transition-all disabled:opacity-40"
+                        title="Re-read embedded tags from disk"
+                        aria-label="Re-scan tags"
+                      >
+                        <ScanLine className="h-4 w-4" />
+                      </button>
+                    )}
                   {activePlaylist && activePlaylist.songs.length > 0 && (
                     <button
                       onClick={() => exportPlaylist(activePlaylistId)}

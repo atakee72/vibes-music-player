@@ -73,6 +73,12 @@ export function hasMetaChanged(before: Song, after: Song): boolean {
   ) {
     return true;
   }
-  if (before.coverBlob !== after.coverBlob) return true;
+  // Compared by SIZE, not reference: the caller builds a fresh Blob for
+  // every song with embedded art, so reference identity would always
+  // differ — including when a tagger re-embeds the exact same artwork
+  // (the common `embedart` case), which would permanently report every
+  // such track as "changed". Size isn't a content hash, but it's a large
+  // improvement over reference identity for that common case.
+  if ((before.coverBlob?.size ?? 0) !== (after.coverBlob?.size ?? 0)) return true;
   return (before.lyrics?.length ?? 0) !== (after.lyrics?.length ?? 0);
 }

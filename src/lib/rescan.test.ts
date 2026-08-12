@@ -120,4 +120,17 @@ describe('hasMetaChanged', () => {
     expect(hasMetaChanged(song, { ...song, coverBlob: new Blob(['art']) })).toBe(true);
     expect(hasMetaChanged(song, { ...song, lyrics: [{ time: 0, text: 'hi' }] })).toBe(true);
   });
+
+  it('ignores a cover swap to a different Blob of the SAME size', () => {
+    // The caller builds a fresh Blob for every song with embedded art, so
+    // reference identity always differs — this is the re-embedded-same-art
+    // case (beets `embedart`) that must NOT count as "changed".
+    const song = makeSong({ coverBlob: new Blob(['aaa']) });
+    expect(hasMetaChanged(song, { ...song, coverBlob: new Blob(['bbb']) })).toBe(false);
+  });
+
+  it('detects a cover swap to a Blob of a DIFFERENT size', () => {
+    const song = makeSong({ coverBlob: new Blob(['aaa']) });
+    expect(hasMetaChanged(song, { ...song, coverBlob: new Blob(['bigger-art']) })).toBe(true);
+  });
 });

@@ -45,6 +45,15 @@ vi.mock('music-metadata', () => ({
   parseBlob: vi.fn(async () => ({ common: {}, format: {} })),
 }));
 
+// Identity passthrough: the real downscaleCover decodes via an <img>, which
+// never fires load/error under happy-dom — it would otherwise hang every
+// cover-bearing re-scan test on its 3s decode-timeout fallback. Identity
+// also keeps the re-scan cover-size tests in control of the exact byte size
+// (the input Uint8Array's length), since real downscaling could change it.
+vi.mock('./lib/cover', () => ({
+  downscaleCover: vi.fn(async (blob: Blob) => blob),
+}));
+
 const store = vi.hoisted(() => ({
   playlists: [] as unknown[],
   roots: [] as unknown[],
@@ -712,6 +721,69 @@ describe('re-scan tags', () => {
     expect(engine.song?.url).toBe(originalUrlA);
   });
 
+  it('keeps a heart toggled mid-sweep after the batch write lands', async () => {
+    // Regression for the batch-write-clobbers-live-mutations bug: patches
+    // built from the pre-sweep SNAPSHOT and written wholesale would revert
+    // any live-state change that happened while the sweep was still
+    // running — a heart toggled, lyrics fetched via LRCLIB, etc. Same
+    // two-song gating technique as the url/file mid-sweep test above: A
+    // resolves fast and gets patched, B stays gated (at its own getFile(),
+    // not shared mock state) so the batch write doesn't land until we
+    // release it — giving a real window to mutate A's live state in
+    // between.
+    const songA = makeSong({ id: 'root1/a.mp3', title: 'A Title', fileHandle: handleFor('a.mp3') });
+
+    let resolveGate: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      resolveGate = resolve;
+    });
+    const gatedHandleB = {
+      getFile: async () => {
+        await gate;
+        return new File([], 'b.mp3', { type: 'audio/mpeg' });
+      },
+    } as unknown as FileSystemFileHandle;
+    const songB = makeSong({ id: 'root1/b.mp3', title: 'B Title', fileHandle: gatedHandleB });
+
+    await renderApp({
+      playlists: [makePlaylist({ id: 'library', name: 'Library', songs: [songA, songB] })],
+      roots: [grantedRoot()],
+    });
+
+    vi.mocked(parseBlob).mockResolvedValue({
+      common: { title: 'A Rescanned' },
+      format: { duration: 300 },
+    } as never);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Re-scan tags' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Re-scan' }));
+
+    // Let songA's own fetch/patch complete while songB stays gated, holding
+    // the whole sweep's batch write open.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    // Heart songA MID-SWEEP, after its patch was already built from the
+    // pre-sweep snapshot.
+    fireEvent.click(screen.getByRole('button', { name: 'Add A Title to Favorites' }));
+
+    // Let songB (and therefore the whole sweep's batch write) finish.
+    resolveGate();
+
+    await screen.findByText(/Re-scan complete/);
+
+    // The tag landed (proves the merge ran) — a row's title can render in
+    // more than one place (desktop/mobile variants both in the DOM under
+    // happy-dom, toggled by CSS the test environment doesn't evaluate).
+    expect((await screen.findAllByText('A Rescanned')).length).toBeGreaterThan(0);
+    // ...and the heart survived it (proves the merge was against the LIVE
+    // song, not the pre-sweep snapshot that predates the heart).
+    expect(
+      screen.getByRole('button', { name: 'Remove A Rescanned from Favorites' }),
+    ).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('revokes replaced object urls for changed songs, and never for the playing song', async () => {
     const playing = makeSong({ id: 'root1/a.mp3', fileHandle: handleFor('a.mp3') });
     const other = makeSong({ id: 'root1/b.mp3', fileHandle: handleFor('b.mp3') });
@@ -737,5 +809,87 @@ describe('re-scan tags', () => {
     // The deferred revoke (setTimeout(0)) has had time to fire by now.
     await waitFor(() => expect(revokeSpy).toHaveBeenCalledWith(otherUrl));
     expect(revokeSpy).not.toHaveBeenCalledWith(playingUrl);
+  });
+
+  it('treats re-embedded art of the SAME size as a no-op — no revoke, honest "0 updated"', async () => {
+    // Regression: hasMetaChanged used to compare coverBlob BY REFERENCE, and
+    // the app always built a FRESH Blob for any song with embedded art —
+    // so the reference always differed, even when the tagger re-embedded
+    // the exact same artwork (the common beets `embedart` case). That
+    // permanently reported every such track as "changed". The fix is two
+    // parts: the app only creates a cover replacement when the downscaled
+    // blob's size differs from the existing one, and hasMetaChanged
+    // compares by size. This test exercises the APP-LEVEL trigger (the
+    // size-gated replacement decision); rescan.test.ts covers
+    // hasMetaChanged's own size comparison in isolation.
+    const existingCoverBlob = new Blob([new Uint8Array(10)], { type: 'image/jpeg' });
+    const song = makeSong({
+      id: 'root1/a.mp3',
+      fileHandle: handleFor('a.mp3'),
+      coverArt: 'blob:old-cover',
+      coverBlob: existingCoverBlob,
+    });
+    await renderApp({
+      playlists: [makePlaylist({ id: 'library', name: 'Library', songs: [song] })],
+      roots: [grantedRoot()],
+    });
+
+    // Same title/artist/album/duration as the existing song, and the SAME
+    // picture byte length (downscaleCover is mocked to identity, so the
+    // Uint8Array length IS the resulting Blob size) — the only thing that
+    // could flip "changed" is the cover, isolating the bug.
+    vi.mocked(parseBlob).mockResolvedValue({
+      common: {
+        title: song.title,
+        artist: song.artist,
+        album: song.album,
+        picture: [{ data: new Uint8Array(10), format: 'image/jpeg' }],
+      },
+      format: { duration: song.duration },
+    } as never);
+
+    const revokeSpy = vi.spyOn(URL, 'revokeObjectURL');
+
+    await clickRescan();
+
+    expect(
+      await screen.findByText(/Re-scan complete: 0 of 1 track updated/),
+    ).toBeInTheDocument();
+    // No fresh cover replacement means nothing to revoke — this is the
+    // signal that the swap was skipped, not just that the count read 0.
+    expect(revokeSpy).not.toHaveBeenCalledWith('blob:old-cover');
+  });
+
+  it('swaps re-embedded art of a DIFFERENT size, revokes the old cover url, and counts as changed', async () => {
+    const existingCoverBlob = new Blob([new Uint8Array(10)], { type: 'image/jpeg' });
+    const song = makeSong({
+      id: 'root1/a.mp3',
+      fileHandle: handleFor('a.mp3'),
+      coverArt: 'blob:old-cover',
+      coverBlob: existingCoverBlob,
+    });
+    await renderApp({
+      playlists: [makePlaylist({ id: 'library', name: 'Library', songs: [song] })],
+      roots: [grantedRoot()],
+    });
+
+    vi.mocked(parseBlob).mockResolvedValue({
+      common: {
+        title: song.title,
+        artist: song.artist,
+        album: song.album,
+        picture: [{ data: new Uint8Array(999), format: 'image/jpeg' }],
+      },
+      format: { duration: song.duration },
+    } as never);
+
+    const revokeSpy = vi.spyOn(URL, 'revokeObjectURL');
+
+    await clickRescan();
+
+    expect(
+      await screen.findByText(/Re-scan complete: 1 of 1 track updated/),
+    ).toBeInTheDocument();
+    await waitFor(() => expect(revokeSpy).toHaveBeenCalledWith('blob:old-cover'));
   });
 });

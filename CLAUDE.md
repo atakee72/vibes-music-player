@@ -720,14 +720,49 @@ Facts other tools (e.g. a beets-managed library feeding Vibes) must know:
   Vibes (LRCLIB "Find lyrics", the cover self-heal) and blind replacement
   would destroy them. Ids, hearts, playlist membership and the queue survive
   because the patch is applied by id.
-  **Two traps it works around**: (1) the playlists-diff revoke effect only
-  fires for REMOVED ids, so an in-place url swap must revoke its own old URLs
-  — `rescanTags` collects them and revokes on a deferred timeout; (2) the
-  **currently-playing song keeps its `url`/`file`** — `useAudioEngine`'s song
-  effect early-returns only while `active.src === song.url`, so swapping it
-  would restart the track from 0 mid-play. Blob-persisted (Firefox/Safari)
-  songs are skipped by design: their bytes were copied at ingest and can
-  never reflect a later edit.
+  **The batch write merges onto the LIVE song, not a pre-sweep snapshot —
+  this is load-bearing, don't "simplify" it back.** `rescanTags` stores only
+  the raw fetch inputs per song (`{ meta, replacements }`), not a pre-merged
+  Song built from the song object captured when the sweep started. A 469-song
+  sweep is a minute-plus with a progress toast actively inviting the user to
+  sit and watch; if the batch write applied pre-merged snapshots wholesale,
+  any live-state mutation that happened mid-sweep — a heart toggled, lyrics
+  just fetched via LRCLIB — would be silently reverted AND then persisted by
+  the debounced save. Instead, `apply(s)` runs `mergeRescan(s, ...)` against
+  whatever `s` the state updater hands it at COMMIT time, so mid-sweep
+  mutations survive because they're already reflected in `s`.
+  **The currently-playing song keeps its `url`/`file`, and this is enforced
+  at APPLY time, not fetch time — the only checkpoint that exists.**
+  `useAudioEngine`'s song effect early-returns only while
+  `active.src === song.url`, so swapping the url would restart the track
+  from 0 mid-play. `currentSongIdRef.current` is read ONCE, right before the
+  three state writes (`playingId`), and `apply` omits `file`/`url` from that
+  one song's replacements (letting `RescanReplacements`' "omit to keep
+  current" semantics take over) — never at fetch time, because a fetch-time
+  check goes stale on a long sweep: the user can start playing a song
+  *after* its own tag fetch already ran, and the sweep won't finish for
+  another minute. A prior version of this fix DID check at fetch time and
+  had exactly this bug (fixed, then superseded by the current apply-time-only
+  design — same class of staleness, this time affecting every field instead
+  of just url/file).
+  Old object URLs (audio + cover) are collected keyed by id and revoked on a
+  deferred timeout — the playlists-diff revoke effect only fires for
+  REMOVED ids, so an in-place swap must revoke its own predecessors. The
+  playing song's original url is pulled back out of that collection before
+  revoking (same `playingId` checkpoint); cover art has no such exception,
+  since swapping it never restarts playback.
+  **Cover art is only replaced when its size actually differs**
+  (`blob.size !== song.coverBlob?.size`): every song with embedded art gets
+  a FRESH downscaled Blob built from the file, so comparing by reference
+  (what `hasMetaChanged` used to do) always looks "changed" — including
+  when a tagger re-embeds the exact same artwork, which is the common case
+  on an `embedart`-managed library. That silently made the completion toast
+  permanently over-report and churned an object URL create+revoke per song
+  for nothing. `hasMetaChanged` now also compares `coverBlob` by size, not
+  reference, as a second line of defense. Size isn't a content hash, but
+  it's a large improvement over reference identity for this case.
+  Blob-persisted (Firefox/Safari) songs are skipped by design: their bytes
+  were copied at ingest and can never reflect a later edit.
   **Scope boundary**: Re-scan never adds or removes songs. A file the tagger
   RENAMED or MOVED fails its `getFile()` and is reported "unreadable", not
   removed — path changes are Refresh's job. When every file fails, the toast
