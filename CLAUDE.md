@@ -888,6 +888,19 @@ Facts other tools (e.g. a beets-managed library feeding Vibes) must know:
   hand-maintain them. The generator needs `sharp`, which is why
   `pnpm.onlyBuiltDependencies` includes `"sharp"`; the committed PNGs mean a
   plain `pnpm install` / `pnpm build` never needs it.
+- **`maskable` and `apple` override the preset with `padding: 0` + a brand
+  background — don't drop back to bare `minimal2023Preset`.** Its defaults are
+  `padding: 0.3` on a **white** canvas, which is wrong for both: Android only
+  guarantees the centre 80% of a maskable icon, so 30% padding spent the whole
+  safe zone on a white border and shipped a small badge floating on white,
+  and iOS (which applies its own squircle) rendered the home-screen icon small
+  and boxed. The source SVG is a *rounded* square, so the generator composites
+  it over a canvas painted `#FF8464` (the amber→coral midpoint) to fill the
+  transparent corners and bleed to the edge; the flat corner seam is cropped by
+  both OS masks. The `transparent` ("any") set keeps the preset defaults on
+  purpose — nothing masks desktop shortcuts, so those stay rounded.
+  Verify a regeneration by checking the corners: `maskable-*`/`apple-*` must
+  come out 3-channel (no alpha) and opaque, `pwa-*` 4-channel with alpha 0.
 - `.gitignore` has a blanket `*.png` (Playwright screenshots) with a
   `!public/*.png` exception so the icons are tracked. Keep that exception.
 - **Install UI**: `useInstallPrompt` (`src/hooks/useInstallPrompt.ts`) captures
