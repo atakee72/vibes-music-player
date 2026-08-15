@@ -682,6 +682,40 @@ lyrics (CORS works at runtime) + graceful no-match.
 - Full design/audit trail for the queue: `docs/superpowers/specs/`
   `2026-08-07-queue-panel-design.md` (with amendments).
 
+## Backlog — noted 2026-08-15, not scheduled
+
+Four ideas lifted from `Momotz4G/simple-music-player-2` (a Flutter native
+player). Everything below is **pure client, no backend, no API keys** — the
+filter that ruled out most of that app's feature list, since its headline
+features run on `yt-dlp`, a Spotify client *secret*, and its own PocketBase
+server. See "Out of scope (forever)" — none of these cross those lines.
+
+1. **Sleep timer** — stop playback after N minutes / after the current
+   track. No new machinery; smallest of the four.
+2. **Crossfade** — an extension of the existing gapless flip, not a new
+   audio graph: `useAudioEngine` already runs two `<audio>` elements with a
+   `GainNode` each. Overlap the flip and ramp the two gains instead of
+   switching at `ended`. Note it interacts with ReplayGain (both write the
+   same gain node) and with the repeat-one replay-in-place branch.
+3. **Local listening stats** — play counts, history, top artists, total
+   minutes. Their version needs PocketBase only because it syncs across
+   devices; the personal version is `storage.ts` + a new IDB key. Skip
+   leaderboards and profiles (accounts are out of scope forever).
+4. **Cover art fetch for songs missing embedded art** — same shape as the
+   LRCLIB "Find lyrics" button: manual, metadata-only request, merged onto
+   the song and persisted. Use the **iTunes Search API** (free, no key,
+   CORS-open) — *not* Spotify, whose client-credentials flow needs a secret
+   and therefore a server. Respect the read-only-on-files contract: the art
+   goes into Vibes' `coverBlob`, never back into the file (beets owns tags).
+
+Also considered and rejected: metadata editor (breaks the beets read-only
+contract), lyrics translation (needs a hosted service), Discord Rich
+Presence (local IPC), album browse pages (the library is all singletons),
+USB bit-perfect / DSD (impossible in a browser). Lyrics **romanization**
+is the one deferred idea that stays viable — `kuroshiro`/`wanakana`,
+`pinyin-pro`, and an algorithmic Hangul→RR are all client-side JS, so it
+would need no service at all, unlike the source app's Vercel function.
+
 ## Out of scope (forever)
 
 - **Cloud sync / accounts** — would break the "nothing leaves your device"
