@@ -684,7 +684,7 @@ lyrics (CORS works at runtime) + graceful no-match.
 
 ## Backlog — noted 2026-08-15, not scheduled
 
-Four ideas lifted from `Momotz4G/simple-music-player-2` (a Flutter native
+Five ideas lifted from `Momotz4G/simple-music-player-2` (a Flutter native
 player). Everything below is **pure client, no backend, no API keys** — the
 filter that ruled out most of that app's feature list, since its headline
 features run on `yt-dlp`, a Spotify client *secret*, and its own PocketBase
@@ -707,14 +707,14 @@ server. See "Out of scope (forever)" — none of these cross those lines.
    CORS-open) — *not* Spotify, whose client-credentials flow needs a secret
    and therefore a server. Respect the read-only-on-files contract: the art
    goes into Vibes' `coverBlob`, never back into the file (beets owns tags).
-
-Also considered and rejected: metadata editor (breaks the beets read-only
-contract), lyrics translation (needs a hosted service), Discord Rich
-Presence (local IPC), album browse pages (the library is all singletons),
-USB bit-perfect / DSD (impossible in a browser). Lyrics **romanization**
-is the one deferred idea that stays viable — `kuroshiro`/`wanakana`,
-`pinyin-pro`, and an algorithmic Hangul→RR are all client-side JS, so it
-would need no service at all, unlike the source app's Vercel function.
+5. **Lyrics romanization** — Japanese (Kanji/Kana→Romaji), Chinese
+   (Hanzi→Pinyin), Korean (Hangul→Revised Romanization) for the lyrics
+   panel. The source app routes this through its own Vercel function;
+   **Vibes needs no service at all** — `kuroshiro`/`wanakana`, `pinyin-pro`,
+   and an algorithmic Hangul→RR are client-side JS. Weigh bundle cost:
+   `kuroshiro`'s dictionary is heavy, so load it dynamically like the
+   other on-demand libs. Lyrics *translation* is the sibling that does
+   need a hosted service — not this.
 
 ## Out of scope (forever)
 
