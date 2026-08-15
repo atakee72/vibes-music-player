@@ -690,13 +690,8 @@ filter that ruled out most of that app's feature list, since its headline
 features run on `yt-dlp`, a Spotify client *secret*, and its own PocketBase
 server. See "Out of scope (forever)" — none of these cross those lines.
 
-1. **Sleep timer** — stop playback after N minutes / after the current
-   track. No new machinery; smallest of the four.
-2. **Crossfade** — an extension of the existing gapless flip, not a new
-   audio graph: `useAudioEngine` already runs two `<audio>` elements with a
-   `GainNode` each. Overlap the flip and ramp the two gains instead of
-   switching at `ended`. Note it interacts with ReplayGain (both write the
-   same gain node) and with the repeat-one replay-in-place branch.
+**Items 1 and 2 shipped 2026-08-16** — see the section below. The rest stand.
+
 3. **Local listening stats** — play counts, history, top artists, total
    minutes. Their version needs PocketBase only because it syncs across
    devices; the personal version is `storage.ts` + a new IDB key. Skip
@@ -741,6 +736,34 @@ Explicitly NOT taking: their full-bleed artwork background. It's a Spotify
 Canvas *video* (undocumented endpoint, out of scope), and without the video
 it's a 512px cover upscaled to a phone screen — and it would cost the
 VibeOrb its largest appearance.
+
+## Crossfade + sleep timer (shipped, 2026-08-16)
+
+Backlog items 1 and 2, on branch `sleep-timer-crossfade`. 395 tests green.
+
+- **Crossfade** (Off / 2 / 4 / 6 / 8 / 12s, persisted): a **second gain node
+  per chain**, downstream of the ReplayGain node — the constraint that shaped
+  the whole design, since ReplayGain writes an absolute ratio to the node a
+  naive implementation would have ramped. Triggered from `timeupdate` rather
+  than `ended`, with an **equal-power (cos/sin) curve**: a linear pair dips
+  ~-6 dB at the midpoint, an audible hole. `activeRef` flips at the START of
+  the fade, which removes the cancellable half-state entirely.
+- **Sleep timer** (Off / 15 / 30 / 45 / 60 min, session-only): ramps the
+  master mixer to silence over 10s, then pauses. Not the `volume` state —
+  that's persisted, and fading it would have written silence to storage.
+- **Three defects caught by plan audits before they were written**, all in the
+  window where two elements sound at once: the inactive-chain ReplayGain
+  effect firing onto the still-fading chain (an audible level jump every
+  transition, via `onEnded` → `playNext` → the `nextSong` memo); preload
+  overwriting the fading element's `src`; and a re-entry guard keyed on src
+  that would have broken A → B → A. All three are regression-tested.
+- Also: `forceGain` for the cancel paths (`setValueCurveAtTime` locks its
+  param, so a bare `setValueAtTime` mid-fade throws), and the mobile EQ
+  `<select>` became a popover — incidentally delivering the third bullet of
+  backlog item 8.
+- **Not verified with real audio yet** — the unit tests cover the state
+  machine, but overlap quality, the ReplayGain-after-crossfade level and the
+  repeat-one loop need ears on the real library.
 
 ## Out of scope (forever)
 

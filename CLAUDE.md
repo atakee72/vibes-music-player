@@ -99,6 +99,51 @@
 - **ReplayGain**: per-song dB value comes from `Song.replayGainDb`. Captured
   from `meta.common.replaygain_track_gain?.dB` (note: it's an `IRatio` object,
   not a plain number). Applied via the active element's `GainNode`.
+- **Two gain nodes per chain, and the split is load-bearing**:
+  `filters → gain (ReplayGain) → fade (crossfade) → mixer`. ReplayGain writes
+  an ABSOLUTE per-track ratio via `setValueAtTime`; a crossfade ramps 0..1.
+  Sharing one node would make them overwrite each other and silently break
+  loudness normalisation. **Never ramp the `gain` node, never `setValueAtTime`
+  an absolute level onto `fade`.** `volume` is separate again — it's set on
+  `audio.volume`, not in the graph.
+- **Crossfade** (`crossfadeSeconds`, 0 = off → the old gapless path runs
+  byte-for-byte). Fires from `timeupdate`, NOT `ended` — by the time `ended`
+  arrives there is nothing left to fade. Guards, all necessary:
+  finite `duration`; `remaining <= xfade`; `duration > xfade * 2`;
+  `nextSong.url !== active.src` (**repeat-one replays the same element in
+  place — one element cannot crossfade with itself**); the inactive element
+  actually holds `nextSong.url`; and no fade already in flight.
+  `PRELOAD_LEAD_SECONDS` is widened to `max(5, xfade + 1)` or the incoming
+  track wouldn't be loaded when the fade is due.
+- **The crossfade flips `activeRef` at the START of the fade**, then plays the
+  incoming element and calls `onEnded` immediately. This is what keeps it
+  safe: no cancellable half-state, `seek`/`togglePlayPause` address the new
+  track, and the outgoing element's later `ended`/`pause` events are swallowed
+  by the existing `!== activeAudio()` guards. The UI advancing when the fade
+  begins is intended.
+- **`fadingOutRef` is the invariant keeper.** A crossfade is the only window
+  where TWO elements sound at once, and every other code path assumes one.
+  While it's set: `togglePlayPause`/`seek`/a song change cut the tail (else a
+  pause leaves the outgoing track audible alone); the **inactive-chain
+  ReplayGain effect is deferred** (that chain is the one still fading — writing
+  the next-next track's gain onto it makes the outgoing track jump level
+  mid-transition); and **preload is skipped** (it would overwrite the fading
+  element's `src`). It doubles as the re-entry guard — don't replace it with a
+  flag keyed on src, which breaks A → B → A.
+- **`forceGain` exists because `setValueCurveAtTime` LOCKS its param** for the
+  curve's duration: a bare `setValueAtTime` inside that window throws
+  `NotSupportedError`, and `cancelScheduledValues` does not remove a curve
+  that already started. Every cancel path (pause mid-fade is the common one)
+  must go through it — it tries `cancelAndHoldAtTime`, falls back, and
+  swallows, so a cancel can never throw out of a click handler.
+- **Sleep timer**: `fadeOutAndPause(seconds)` ramps the **master mixer** to
+  silence, then pauses and restores the level. Deliberately not the `volume`
+  state — that is persisted, so fading it would write the faded value to
+  storage and destroy the user's setting. The analyser hangs off the mixer, so
+  the visualizer fades along with the audio (intended). The deadline lives in
+  `App.tsx` as `sleepDeadline` (epoch ms) and is **session-only, never
+  persisted**; one effect owns both the firing `setTimeout` and a 1s
+  `setInterval` that exists only to re-render the countdown label.
 - **EQ band map**: 5 `BiquadFilterNode`s per element, `type='peaking'`, `Q=1`,
   frequencies `[60, 230, 910, 3600, 14000] Hz`. Presets and `applyPreset`
   live in `src/lib/eq.ts`. The preset name persists via `storage.getEqPreset`/
