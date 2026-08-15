@@ -499,6 +499,13 @@ Last phase before the player feels "done." Two additions, both keeping the
   playlist sharing left out of scope (URL-size + complexity).
 - **`pwaAssets: { config: true }`** auto-injects the manifest icons + HTML
   head links, so they're never hand-maintained.
+- **Corrected 2026-08-15 (`e66b8c8`)**: the stock preset had been shipping a
+  broken maskable icon — its defaults are `padding: 0.3` on a **white**
+  canvas, so Android got a small badge floating on white (the padding spent
+  the whole 80% safe zone) and iOS a boxed home-screen icon. `maskable` and
+  `apple` now override with `padding: 0` + a brand-coloured canvas, which the
+  generator composites the rounded source over, so they bleed to the edge
+  while the `transparent` ("any") set stays rounded for desktop shortcuts.
 
 ---
 
