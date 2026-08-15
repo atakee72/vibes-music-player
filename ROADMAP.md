@@ -684,7 +684,7 @@ lyrics (CORS works at runtime) + graceful no-match.
 
 ## Backlog — noted 2026-08-15, not scheduled
 
-Five ideas lifted from `Momotz4G/simple-music-player-2` (a Flutter native
+Eight ideas lifted from `Momotz4G/simple-music-player-2` (a Flutter native
 player). Everything below is **pure client, no backend, no API keys** — the
 filter that ruled out most of that app's feature list, since its headline
 features run on `yt-dlp`, a Spotify client *secret*, and its own PocketBase
@@ -715,6 +715,32 @@ server. See "Out of scope (forever)" — none of these cross those lines.
    `kuroshiro`'s dictionary is heavy, so load it dynamically like the
    other on-demand libs. Lyrics *translation* is the sibling that does
    need a hosted service — not this.
+6. **Format/quality badge** in the now-playing views — `FLAC · 44.1 kHz ·
+   16-bit · 1066 kbps`. `bitrate` is already captured; sample rate, bit
+   depth and codec come off the same `music-metadata` `format` object, so
+   it's a few more fields at ingest. **Catch**: new fields don't backfill
+   onto already-ingested songs — existing libraries need a Re-scan.
+7. **Swipe-up-for-lyrics** from `MobileNowPlaying`. Not just polish: today
+   toggling lyrics there has to CLOSE the view, because `LyricsPanel` is
+   `z-40` and the view is `z-[60]`. A swipe-up sheet is the better model
+   for that relationship and removes the workaround.
+8. **Mobile control-row layout** — three small fixes, all inside
+   `MobileNowPlaying`, no new surfaces:
+   - Transport order is mirrored vs. every other player: it's currently
+     repeat · prev · play · next · shuffle. Convention (Spotify, Apple) is
+     **shuffle left, repeat right**. Free muscle-memory win.
+   - The secondary row is a centered `gap-3` huddle; spreading it edge to
+     edge (`justify-between`) reads better and matches the transport row's
+     width.
+   - The EQ `<select>` pill breaks the rhythm of an otherwise uniform row
+     of round icon buttons. Make it a round trigger + popover — the exact
+     precedent already sitting next to it, since volume was converted for
+     the same reason (the inline slider was unusable there).
+
+Explicitly NOT taking: their full-bleed artwork background. It's a Spotify
+Canvas *video* (undocumented endpoint, out of scope), and without the video
+it's a 512px cover upscaled to a phone screen — and it would cost the
+VibeOrb its largest appearance.
 
 ## Out of scope (forever)
 
