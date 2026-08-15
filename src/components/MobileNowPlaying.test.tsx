@@ -12,6 +12,8 @@ function renderView(overrides = {}) {
     onCycleRepeat: vi.fn(),
     onToggleShuffle: vi.fn(),
     onEqPresetChange: vi.fn(),
+    onCrossfadeChange: vi.fn(),
+    onSetSleepTimer: vi.fn(),
     onVolumeChange: vi.fn(),
     onToggleLyrics: vi.fn(),
     onToggleQueue: vi.fn(),
@@ -70,10 +72,19 @@ describe('MobileNowPlaying', () => {
     expect(view.onToggleLyrics).toHaveBeenCalledOnce();
     fireEvent.click(screen.getByRole('button', { name: 'Share current track' }));
     expect(view.onShare).toHaveBeenCalledOnce();
-    fireEvent.change(screen.getByLabelText('Equalizer preset'), {
-      target: { value: 'Bass Boost' },
-    });
+    // EQ is a popover now (was a <select>) — same treatment volume already had,
+    // so the utility row is a uniform set of round icon buttons.
+    fireEvent.click(screen.getByRole('button', { name: 'Audio settings' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Bass Boost' }));
     expect(view.onEqPresetChange).toHaveBeenCalledWith('Bass Boost');
+  });
+
+  it('audio settings popover also sets crossfade', () => {
+    const view = renderView();
+    expect(screen.queryByRole('menu', { name: 'Audio settings' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Audio settings' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '6s' }));
+    expect(view.onCrossfadeChange).toHaveBeenCalledWith(6);
   });
 
   it('queue button fires onToggleQueue', () => {

@@ -3,6 +3,7 @@ import App from './App';
 import { makeSong, makePlaylist } from './test-utils';
 import * as storage from './lib/storage';
 import { encodeSharePayload } from './lib/share';
+import { SLEEP_FADE_SECONDS } from './lib/sleep';
 import type { Playlist, Song } from './types';
 import { parseBlob } from 'music-metadata';
 
@@ -15,25 +16,38 @@ const engine = vi.hoisted(() => ({
   onEnded: undefined as (() => void) | undefined,
   togglePlayPause: vi.fn(),
   seek: vi.fn(),
+  fadeOutAndPause: vi.fn(),
+  cancelSleepFade: vi.fn(),
+  // Settable: the sleep timer skips the fade when playback is already
+  // paused, so tests covering it must be able to report "playing".
+  isPlaying: false,
   // Captures the `song` arg passed to useAudioEngine on the latest render —
   // lets re-scan tests assert on the exact Song object (url/file) the real
   // engine would have received, without needing a live AudioContext.
   song: undefined as Song | null | undefined,
+  crossfadeSeconds: undefined as number | undefined,
 }));
 
 vi.mock('./hooks/useAudioEngine', () => ({
-  useAudioEngine: (args: { onEnded?: () => void; song: Song | null }) => {
+  useAudioEngine: (args: {
+    onEnded?: () => void;
+    song: Song | null;
+    crossfadeSeconds?: number;
+  }) => {
     engine.onEnded = args.onEnded;
     engine.song = args.song;
+    engine.crossfadeSeconds = args.crossfadeSeconds;
     return {
       audioRefA: { current: null },
       audioRefB: { current: null },
       currentTime: 0,
       duration: 0,
-      isPlaying: false,
+      isPlaying: engine.isPlaying,
       visualizerData: [] as number[],
       togglePlayPause: engine.togglePlayPause,
       seek: engine.seek,
+      fadeOutAndPause: engine.fadeOutAndPause,
+      cancelSleepFade: engine.cancelSleepFade,
     };
   },
 }));
@@ -72,6 +86,8 @@ vi.mock('./lib/storage', async () => {
     saveEqPreset: vi.fn(async () => {}),
     getVolume: vi.fn(async () => 1),
     saveVolume: vi.fn(async () => {}),
+    getCrossfade: vi.fn(async () => 0),
+    saveCrossfade: vi.fn(async () => {}),
     addLibraryRoot: vi.fn(async () => null),
     ensurePersisted: vi.fn(async () => {}),
     getStorageEstimate: vi.fn(async () => store.estimate),
@@ -109,6 +125,7 @@ afterEach(() => {
   engine.onEnded = undefined;
   engine.song = undefined;
   vi.clearAllMocks();
+  engine.isPlaying = false;
   window.location.hash = '';
 });
 
@@ -501,13 +518,82 @@ describe('App', () => {
       playlists: [makePlaylist({ id: 'library', name: 'Library', songs: [song] })],
     });
     playRow(0);
-    fireEvent.click(screen.getByRole('button', { name: 'Equalizer' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Audio settings' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Bass Boost' }));
     await waitFor(() =>
       expect(vi.mocked(storage.saveEqPreset)).toHaveBeenCalledWith('Bass Boost'),
     );
     fireEvent.click(screen.getByRole('button', { name: 'Mute' }));
     await waitFor(() => expect(vi.mocked(storage.saveVolume)).toHaveBeenCalledWith(0));
+  });
+
+  it('crossfade persists and reaches the audio engine', async () => {
+    const song = makeSong({ title: 'Audible' });
+    await renderApp({
+      playlists: [makePlaylist({ id: 'library', name: 'Library', songs: [song] })],
+    });
+    playRow(0);
+    expect(engine.crossfadeSeconds).toBe(0);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Audio settings' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '6s' }));
+
+    await waitFor(() => expect(vi.mocked(storage.saveCrossfade)).toHaveBeenCalledWith(6));
+    expect(engine.crossfadeSeconds).toBe(6);
+  });
+});
+
+describe('sleep timer', () => {
+  // Timers are faked only AFTER renderApp: the helper awaits findAllByText,
+  // whose polling is itself timer-driven and would hang under fake timers.
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const renderPlayingApp = async () => {
+    await renderApp({
+      playlists: [
+        makePlaylist({
+          id: 'library',
+          name: 'Library',
+          songs: [makeSong({ title: 'Nocturne' })],
+        }),
+      ],
+    });
+    engine.isPlaying = true;
+    playRow(0);
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'],
+    });
+  };
+
+  const armTimer = (label: string) => {
+    // Once armed the label carries the countdown ("Sleep timer, 14:59 remaining").
+    fireEvent.click(screen.getByRole('button', { name: /Sleep timer/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: label }));
+  };
+
+  it('fades out and pauses when the deadline passes', async () => {
+    await renderPlayingApp();
+    armTimer('15 minutes');
+
+    expect(engine.fadeOutAndPause).not.toHaveBeenCalled();
+    await act(async () => {
+      vi.advanceTimersByTime(15 * 60_000);
+    });
+    expect(engine.fadeOutAndPause).toHaveBeenCalledWith(SLEEP_FADE_SECONDS);
+  });
+
+  it('selecting Off disarms — the deadline never fires', async () => {
+    await renderPlayingApp();
+    armTimer('15 minutes');
+    armTimer('Off');
+
+    await act(async () => {
+      vi.advanceTimersByTime(60 * 60_000);
+    });
+    expect(engine.fadeOutAndPause).not.toHaveBeenCalled();
+    expect(engine.cancelSleepFade).toHaveBeenCalled();
   });
 });
 

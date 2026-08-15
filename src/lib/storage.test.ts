@@ -1,10 +1,12 @@
 import {
   addLibraryRoot,
   formatStorageWarning,
+  getCrossfade,
   getEqPreset,
   getLibraryRoots,
   getPlaylists,
   getVolume,
+  saveCrossfade,
   saveEqPreset,
   savePlaylists,
   saveVolume,
@@ -221,6 +223,21 @@ describe('storage — playlists', () => {
   it('getVolume rejects out-of-range stored values', async () => {
     await saveVolume(99 as number);
     expect(await getVolume()).toBe(1);
+  });
+
+  it('getCrossfade defaults to 0 (off) when key absent', async () => {
+    expect(await getCrossfade()).toBe(0);
+  });
+
+  it('round-trips crossfade', async () => {
+    await saveCrossfade(6);
+    expect(await getCrossfade()).toBe(6);
+  });
+
+  it('getCrossfade rejects values outside the offered options', async () => {
+    // A hand-edited or stale key must not become an unbounded fade duration.
+    await saveCrossfade(999);
+    expect(await getCrossfade()).toBe(0);
   });
 
   it('drops songs whose handle getFile() throws (file moved/deleted)', async () => {

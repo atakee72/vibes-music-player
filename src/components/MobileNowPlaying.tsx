@@ -19,6 +19,8 @@ import {
 } from 'lucide-react';
 import type { RepeatMode, Song } from '../types';
 import { EQ_PRESET_NAMES, type EqPreset } from '../lib/eq';
+import { CROSSFADE_OPTIONS, formatCrossfade } from '../lib/crossfade';
+import { SleepTimerMenu } from './SleepTimerMenu';
 import { VibeOrb } from './VibeOrb';
 import { OrbVisualizerRing } from './OrbVisualizerRing';
 import { ScrollingText } from './ScrollingText';
@@ -37,6 +39,12 @@ interface MobileNowPlayingProps {
   repeatMode: RepeatMode;
   shuffle: boolean;
   eqPreset: EqPreset;
+  /** Crossfade duration in seconds; 0 = off. */
+  crossfade?: number;
+  onCrossfadeChange?: (seconds: number) => void;
+  /** Sleep-timer deadline (epoch ms) or null when disarmed. */
+  sleepDeadline?: number | null;
+  onSetSleepTimer?: (minutes: number | null) => void;
   volume: number;
   onPlayPause: () => void;
   onPrev: () => void;
@@ -76,6 +84,10 @@ export function MobileNowPlaying({
   repeatMode,
   shuffle,
   eqPreset,
+  crossfade = 0,
+  onCrossfadeChange,
+  sleepDeadline = null,
+  onSetSleepTimer,
   volume,
   onPlayPause,
   onPrev,
@@ -111,6 +123,22 @@ export function MobileNowPlaying({
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
   }, [volOpen]);
+
+  // Audio settings (EQ + crossfade). Was a bare <select>, which broke the
+  // rhythm of an otherwise uniform row of round icon buttons — and two
+  // side-by-side selects would have been worse. Same popover treatment volume
+  // already got, for the same reason.
+  const [audioOpen, setAudioOpen] = useState(false);
+  const audioWrapRef = useRef<HTMLDivElement>(null);
+  const audioTriggerRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!audioOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (!audioWrapRef.current?.contains(e.target as Node)) setAudioOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [audioOpen]);
   const VolumeIcon =
     volume === 0 ? VolumeX : volume < 0.34 ? Volume : volume < 0.67 ? Volume1 : Volume2;
   if (!mounted || !song) return null;
@@ -237,21 +265,86 @@ export function MobileNowPlaying({
             <ListMusic className="h-5 w-5" />
           </button>
 
-          <div className="relative flex items-center">
-            <Sliders className="pointer-events-none absolute left-2 h-4 w-4 text-white/60" />
-            <select
-              value={eqPreset}
-              onChange={(e) => onEqPresetChange(e.target.value as EqPreset)}
-              className="appearance-none rounded-full border border-white/10 bg-white/5 py-2 pl-8 pr-3 text-sm text-white/80 focus:border-amber focus:outline-none"
-              aria-label="Equalizer preset"
+          <div
+            ref={audioWrapRef}
+            className="relative"
+            onKeyDown={(e) => {
+              if (audioOpen && e.key === 'Escape') {
+                e.stopPropagation(); // own the Escape before App's chain
+                setAudioOpen(false);
+                audioTriggerRef.current?.focus();
+              }
+            }}
+          >
+            {audioOpen && (
+              <div
+                role="menu"
+                aria-label="Audio settings"
+                className="absolute bottom-full right-0 z-10 mb-2 min-w-[160px] rounded-xl border border-white/10 bg-surface/95 py-1 shadow-xl backdrop-blur-xl"
+              >
+                <p className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-faint">
+                  Equalizer
+                </p>
+                {EQ_PRESET_NAMES.map((name) => (
+                  <button
+                    key={name}
+                    role="menuitem"
+                    onClick={() => {
+                      onEqPresetChange(name);
+                      setAudioOpen(false);
+                    }}
+                    className={`w-full px-3 py-1.5 text-left text-sm transition-colors ${
+                      name === eqPreset
+                        ? 'bg-gradient-to-r from-amber/30 to-coral/30 text-cream'
+                        : 'text-white/80 hover:bg-white/5'
+                    }`}
+                  >
+                    {name}
+                  </button>
+                ))}
+                <p className="mt-1 border-t border-white/10 px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-faint">
+                  Crossfade
+                </p>
+                {CROSSFADE_OPTIONS.map((seconds) => (
+                  <button
+                    key={seconds}
+                    role="menuitem"
+                    onClick={() => {
+                      onCrossfadeChange?.(seconds);
+                      setAudioOpen(false);
+                    }}
+                    className={`w-full px-3 py-1.5 text-left text-sm transition-colors ${
+                      seconds === crossfade
+                        ? 'bg-gradient-to-r from-amber/30 to-coral/30 text-cream'
+                        : 'text-white/80 hover:bg-white/5'
+                    }`}
+                  >
+                    {formatCrossfade(seconds)}
+                  </button>
+                ))}
+              </div>
+            )}
+            <button
+              ref={audioTriggerRef}
+              onClick={() => setAudioOpen((v) => !v)}
+              className={`rounded-full bg-white/5 p-2 transition-colors hover:bg-white/10 ${
+                eqPreset !== 'Off' || crossfade > 0 ? 'text-amber' : 'text-white/70'
+              }`}
+              aria-label="Audio settings"
+              aria-haspopup="menu"
+              aria-expanded={audioOpen}
             >
-              {EQ_PRESET_NAMES.map((name) => (
-                <option key={name} value={name} className="bg-surface text-white">
-                  {name}
-                </option>
-              ))}
-            </select>
+              <Sliders className="h-5 w-5" />
+            </button>
           </div>
+
+          {onSetSleepTimer && (
+            <SleepTimerMenu
+              deadline={sleepDeadline}
+              onSet={onSetSleepTimer}
+              className="[&>button]:bg-white/5 [&>button]:hover:bg-white/10"
+            />
+          )}
 
           <div
             ref={volWrapRef}

@@ -142,11 +142,11 @@ describe('PlayerBar', () => {
     const song = makeSong();
     const { onEqPresetChange } = renderPlayerBar({ song });
 
-    const eqButton = screen.getByRole('button', { name: 'Equalizer' });
+    const eqButton = screen.getByRole('button', { name: 'Audio settings' });
     fireEvent.click(eqButton);
 
-    // Popover is a proper menu listing all five presets
-    expect(screen.getAllByRole('menuitem')).toHaveLength(5);
+    // The popover now carries two groups: 5 EQ presets + 6 crossfade options.
+    expect(screen.getAllByRole('menuitem')).toHaveLength(11);
 
     fireEvent.click(screen.getByRole('menuitem', { name: 'Bass Boost' }));
     expect(onEqPresetChange).toHaveBeenCalledWith('Bass Boost');
@@ -155,7 +155,7 @@ describe('PlayerBar', () => {
   it('EQ button has the amber tint when a non-Off preset is active', () => {
     const song = makeSong();
     renderPlayerBar({ song, eqPreset: 'Bass Boost' });
-    const eqButton = screen.getByRole('button', { name: 'Equalizer' });
+    const eqButton = screen.getByRole('button', { name: 'Audio settings' });
     expect(eqButton).toHaveClass('text-amber');
   });
 
@@ -240,11 +240,11 @@ describe('PlayerBar', () => {
 
   it('Escape closes the EQ popover and refocuses its trigger', () => {
     renderPlayerBar({ song: makeSong() });
-    const trigger = screen.getByRole('button', { name: 'Equalizer' });
+    const trigger = screen.getByRole('button', { name: 'Audio settings' });
     fireEvent.click(trigger);
-    const popover = screen.getByRole('menu', { name: 'Equalizer presets' });
+    const popover = screen.getByRole('menu', { name: 'Audio settings' });
     fireEvent.keyDown(popover, { key: 'Escape' });
-    expect(screen.queryByRole('menu', { name: 'Equalizer presets' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menu', { name: 'Audio settings' })).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
   });
 });

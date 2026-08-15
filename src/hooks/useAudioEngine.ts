@@ -1,11 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Song } from '../types';
 import { EQ_FREQS, applyPreset, type EqPreset } from '../lib/eq';
+import { fadeCurve } from '../lib/crossfade';
 
 interface Chain {
   source: MediaElementAudioSourceNode;
   filters: BiquadFilterNode[];
+  /** ReplayGain — an ABSOLUTE per-track ratio. Never ramp this for fades. */
   gain: GainNode;
+  /** Crossfade envelope, 0..1. Separate node so it can't fight ReplayGain. */
+  fade: GainNode;
+}
+
+/** A crossfade in flight: the element still sounding after the flip. */
+interface FadingOut {
+  audio: HTMLAudioElement;
+  chain: Chain;
+  timeoutId: number;
 }
 
 interface UseAudioEngineArgs {
@@ -13,6 +24,8 @@ interface UseAudioEngineArgs {
   nextSong?: Song | null;
   eqPreset?: EqPreset;
   volume?: number;
+  /** Crossfade duration in seconds; 0 disables it (plain gapless). */
+  crossfadeSeconds?: number;
   onEnded?: () => void;
 }
 
@@ -27,6 +40,10 @@ interface UseAudioEngineResult {
   visualizerData: number[];
   togglePlayPause: () => void;
   seek: (t: number) => void;
+  /** Ramp the master mixer to silence over `seconds`, then pause. */
+  fadeOutAndPause: (seconds: number) => void;
+  /** Abort a sleep fade in progress and restore full level. */
+  cancelSleepFade: () => void;
 }
 
 /**
@@ -48,6 +65,7 @@ export function useAudioEngine({
   nextSong,
   eqPreset = 'Off',
   volume = 1,
+  crossfadeSeconds = 0,
   onEnded,
 }: UseAudioEngineArgs): UseAudioEngineResult {
   const audioRefA = useRef<HTMLAudioElement>(null);
@@ -56,22 +74,96 @@ export function useAudioEngine({
   const ctxRef = useRef<AudioContext | null>(null);
   const chainARef = useRef<Chain | null>(null);
   const chainBRef = useRef<Chain | null>(null);
+  const mixerRef = useRef<GainNode | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const activeRef = useRef<'A' | 'B'>('A');
   const rafRef = useRef<number | null>(null);
   const onEndedRef = useRef(onEnded);
   const nextSongRef = useRef<Song | null>(nextSong ?? null);
+  const crossfadeRef = useRef(crossfadeSeconds);
+  /**
+   * Non-null exactly while a crossfade is sounding. Doubles as the re-entry
+   * guard for the trigger: no second "already faded this track" flag is
+   * needed, and unlike one keyed on src it survives A → B → A.
+   */
+  const fadingOutRef = useRef<FadingOut | null>(null);
+  const sleepFadeRef = useRef<number | null>(null);
 
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [visualizerData, setVisualizerData] = useState<number[]>([]);
 
-  // Keep onEnded + nextSong refs fresh without re-running setup
+  // Keep onEnded + nextSong + crossfade refs fresh without re-running setup
   useEffect(() => {
     onEndedRef.current = onEnded;
     nextSongRef.current = nextSong ?? null;
+    crossfadeRef.current = crossfadeSeconds;
   });
+
+  /** ReplayGain ratio for a song (1 when the tag is absent). */
+  const gainRatio = (s: Song | null | undefined) =>
+    s?.replayGainDb !== undefined ? Math.pow(10, s.replayGainDb / 20) : 1;
+
+  /**
+   * Force an AudioParam to `value` immediately, even mid-fade.
+   *
+   * `setValueCurveAtTime` LOCKS the param for the curve's whole duration: a
+   * bare `setValueAtTime` inside that window throws NotSupportedError, and
+   * `cancelScheduledValues` does not remove a curve that has already started.
+   * `cancelAndHoldAtTime` is the sanctioned escape but isn't universally
+   * implemented — so try it, then fall back, and never let a cancel path throw
+   * out of a click handler. Worst case the fade finishes on its own.
+   */
+  const forceGain = (param: AudioParam, ctx: AudioContext, value: number) => {
+    const now = ctx.currentTime;
+    try {
+      (
+        param as AudioParam & { cancelAndHoldAtTime?: (t: number) => void }
+      ).cancelAndHoldAtTime?.(now);
+    } catch {
+      // Not supported here — the cancelScheduledValues path below still tries.
+    }
+    try {
+      param.cancelScheduledValues(now);
+      param.setValueAtTime(value, now);
+    } catch {
+      param.value = value;
+    }
+  };
+
+  /**
+   * End a crossfade immediately: silence + pause the outgoing element, reset
+   * its fade envelope, and apply the ReplayGain write that was deferred while
+   * that chain was still audible (see the `nextSong` effect).
+   *
+   * Idempotent — safe to call when no crossfade is in flight.
+   */
+  const endCrossfade = useCallback(() => {
+    const fading = fadingOutRef.current;
+    if (!fading) return;
+    fadingOutRef.current = null;
+    clearTimeout(fading.timeoutId);
+    fading.audio.pause();
+
+    const ctx = ctxRef.current;
+    if (!ctx) return;
+    // Usually called mid-curve (the user paused during the fade), so this must
+    // go through forceGain rather than a bare setValueAtTime.
+    forceGain(fading.chain.fade.gain, ctx, 1);
+    // This chain is now the inactive one, and silent — safe to prime it.
+    fading.chain.gain.gain.setValueAtTime(gainRatio(nextSongRef.current), ctx.currentTime);
+  }, []);
+
+  const cancelSleepFade = useCallback(() => {
+    if (sleepFadeRef.current === null) return;
+    clearTimeout(sleepFadeRef.current);
+    sleepFadeRef.current = null;
+    const ctx = ctxRef.current;
+    const mixer = mixerRef.current;
+    if (!ctx || !mixer) return;
+    forceGain(mixer.gain, ctx, 1);
+  }, []);
 
   // ---- Mount: build the entire graph exactly once ----
   // Skip re-init via ctxRef guard: React 18 StrictMode runs effects twice in dev,
@@ -108,12 +200,15 @@ export function useAudioEngine({
       });
       const gain = ctx.createGain();
       gain.gain.value = 1;
+      const fade = ctx.createGain();
+      fade.gain.value = 1;
 
       source.connect(filters[0]);
       for (let i = 0; i < filters.length - 1; i += 1) filters[i].connect(filters[i + 1]);
       filters[filters.length - 1].connect(gain);
+      gain.connect(fade);
 
-      return { source, filters, gain };
+      return { source, filters, gain, fade };
     };
 
     const chainA = buildChain(audioA);
@@ -123,12 +218,13 @@ export function useAudioEngine({
 
     const mixer = ctx.createGain();
     mixer.gain.value = 1;
+    mixerRef.current = mixer;
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 256;
     analyserRef.current = analyser;
 
-    chainA.gain.connect(mixer);
-    chainB.gain.connect(mixer);
+    chainA.fade.connect(mixer);
+    chainB.fade.connect(mixer);
     mixer.connect(analyser);
     analyser.connect(ctx.destination);
 
@@ -188,20 +284,82 @@ export function useAudioEngine({
       if (e.target !== activeAudio()) return;
       setCurrentTime((e.target as HTMLAudioElement).currentTime);
 
-      // Preload next song on the inactive element when we're near the end
       const target = e.target as HTMLAudioElement;
       const nextSong = nextSongRef.current;
-      if (
-        nextSong &&
-        target.duration > 0 &&
-        target.duration - target.currentTime < PRELOAD_LEAD_SECONDS
-      ) {
-        const inactive = activeRef.current === 'A' ? audioB : audioA;
-        if (inactive.src !== nextSong.url) {
-          inactive.src = nextSong.url;
-          inactive.load();
-        }
+      if (!nextSong || !(target.duration > 0) || !Number.isFinite(target.duration)) return;
+
+      const xfade = crossfadeRef.current;
+      const inactive = activeRef.current === 'A' ? audioB : audioA;
+      const remaining = target.duration - target.currentTime;
+
+      // Preload next song on the inactive element when we're near the end. The
+      // lead must cover the crossfade, or the incoming track wouldn't be
+      // loaded yet when the fade is due to start.
+      //
+      // Skipped entirely while a crossfade is sounding: "inactive" is then the
+      // element still fading out, and writing its src would cut the tail dead.
+      // (Reachable when the incoming track is shorter than the lead.)
+      const preloadLead = Math.max(PRELOAD_LEAD_SECONDS, xfade + 1);
+      if (!fadingOutRef.current && remaining < preloadLead && inactive.src !== nextSong.url) {
+        inactive.src = nextSong.url;
+        inactive.load();
       }
+
+      if (
+        xfade > 0 &&
+        !fadingOutRef.current &&
+        remaining <= xfade &&
+        // Don't fade a track shorter than twice the fade — there'd be no
+        // steady-state left in the middle.
+        target.duration > xfade * 2 &&
+        // Repeat-one replays the SAME element in place (see the ended
+        // handler); one element cannot crossfade with itself.
+        nextSong.url !== target.src &&
+        inactive.src === nextSong.url
+      ) {
+        startCrossfade(target, inactive, xfade);
+      }
+    };
+
+    /**
+     * Overlap the outgoing and incoming tracks, flipping `activeRef` at the
+     * START of the fade rather than the end.
+     *
+     * Flipping up front means there is no cancellable half-state: `seek` and
+     * `togglePlayPause` address the incoming track immediately, the outgoing
+     * element's eventual `ended`/`pause` events are swallowed by the
+     * `!== activeAudio()` guards, and the UI advances when the fade begins —
+     * which is what listeners expect.
+     */
+    const startCrossfade = (
+      outgoing: HTMLAudioElement,
+      incoming: HTMLAudioElement,
+      seconds: number,
+    ) => {
+      const outChain = activeRef.current === 'A' ? chainARef.current : chainBRef.current;
+      const inChain = activeRef.current === 'A' ? chainBRef.current : chainARef.current;
+      if (!outChain || !inChain) return;
+
+      const now = ctx.currentTime;
+      inChain.fade.gain.cancelScheduledValues(now);
+      inChain.fade.gain.setValueAtTime(0, now);
+      inChain.fade.gain.setValueCurveAtTime(fadeCurve('in'), now, seconds);
+      outChain.fade.gain.cancelScheduledValues(now);
+      outChain.fade.gain.setValueCurveAtTime(fadeCurve('out'), now, seconds);
+
+      activeRef.current = activeRef.current === 'A' ? 'B' : 'A';
+      incoming.play().catch(console.error);
+
+      // Set BEFORE onEnded: that call synchronously schedules React state
+      // updates whose effects consult this ref to know the outgoing chain is
+      // still audible.
+      fadingOutRef.current = {
+        audio: outgoing,
+        chain: outChain,
+        timeoutId: window.setTimeout(endCrossfade, seconds * 1000),
+      };
+
+      onEndedRef.current?.();
     };
     const onLoaded = (e: Event) => {
       if (e.target !== activeAudio()) return;
@@ -225,6 +383,7 @@ export function useAudioEngine({
     if (!ctx) return;
 
     if (!song) {
+      endCrossfade();
       audioRefA.current?.pause();
       audioRefB.current?.pause();
       return;
@@ -234,9 +393,16 @@ export function useAudioEngine({
     const inactive = activeRef.current === 'A' ? audioRefB.current : audioRefA.current;
     if (!active || !inactive) return;
 
-    // Already playing this song on the active element (e.g. ended-handler
-    // already did the gapless swap before this effect ran)
+    // Already playing this song on the active element (e.g. the ended handler
+    // or a crossfade already flipped before this effect ran). Must return
+    // BEFORE endCrossfade below — this is the natural-advance path, where the
+    // outgoing tail is supposed to keep fading.
     if (active.src === song.url) return;
+
+    // Anything else is a jump away from the crossfade's incoming track (row
+    // click, prev/next): cut the tail rather than leaving it audible under
+    // the new song.
+    endCrossfade();
 
     const resumeAndPlay = async (audio: HTMLAudioElement) => {
       if (ctx.state === 'suspended') {
@@ -269,20 +435,22 @@ export function useAudioEngine({
     if (!ctx) return;
     const chain = activeRef.current === 'A' ? chainARef.current : chainBRef.current;
     if (!chain) return;
-    const ratio =
-      song?.replayGainDb !== undefined ? Math.pow(10, song.replayGainDb / 20) : 1;
-    chain.gain.gain.setValueAtTime(ratio, ctx.currentTime);
+    chain.gain.gain.setValueAtTime(gainRatio(song), ctx.currentTime);
   }, [song]);
 
   // Same for the inactive element when nextSong is set (so gapless swap has correct gain)
   useEffect(() => {
     const ctx = ctxRef.current;
     if (!ctx) return;
+    // During a crossfade the "inactive" chain is the one still FADING OUT and
+    // audible. Writing the next-next track's gain onto it here would make the
+    // outgoing track jump in level partway through the transition — by the dB
+    // difference between two unrelated songs. Defer: endCrossfade() applies
+    // this exact write once the chain is silent.
+    if (fadingOutRef.current) return;
     const chain = activeRef.current === 'A' ? chainBRef.current : chainARef.current;
     if (!chain) return;
-    const ratio =
-      nextSong?.replayGainDb !== undefined ? Math.pow(10, nextSong.replayGainDb / 20) : 1;
-    chain.gain.gain.setValueAtTime(ratio, ctx.currentTime);
+    chain.gain.gain.setValueAtTime(gainRatio(nextSong), ctx.currentTime);
   }, [nextSong]);
 
   // ---- EQ preset: apply to both chains ----
@@ -294,6 +462,12 @@ export function useAudioEngine({
   }, [eqPreset]);
 
   const togglePlayPause = useCallback(() => {
+    // Any manual transport ends both fades. A crossfade has TWO elements
+    // sounding — pausing only the active one would leave the outgoing track
+    // audible on its own. A sleep fade must not survive the user pressing
+    // play, or playback would resume into silence.
+    cancelSleepFade();
+    endCrossfade();
     const activeAudio =
       activeRef.current === 'A' ? audioRefA.current : audioRefB.current;
     if (!activeAudio) return;
@@ -307,18 +481,62 @@ export function useAudioEngine({
     } else {
       activeAudio.pause();
     }
-  }, []);
+  }, [cancelSleepFade, endCrossfade]);
 
   useEffect(() => {
     if (audioRefA.current) audioRefA.current.volume = volume;
     if (audioRefB.current) audioRefB.current.volume = volume;
   }, [volume]);
 
-  const seek = useCallback((t: number) => {
-    const activeAudio =
-      activeRef.current === 'A' ? audioRefA.current : audioRefB.current;
-    if (activeAudio) activeAudio.currentTime = t;
-  }, []);
+  const seek = useCallback(
+    (t: number) => {
+      // Scrubbing the incoming track while the previous one is still fading
+      // would leave two unrelated positions sounding at once.
+      endCrossfade();
+      const activeAudio =
+        activeRef.current === 'A' ? audioRefA.current : audioRefB.current;
+      if (activeAudio) activeAudio.currentTime = t;
+    },
+    [endCrossfade],
+  );
+
+  /**
+   * Sleep timer: ramp the MASTER mixer to silence, then pause.
+   *
+   * Deliberately not the `volume` state — that is persisted, so fading it
+   * would write the faded value to storage and destroy the user's setting.
+   * The analyser hangs off the mixer, so the visualizer fades along with the
+   * audio; that's honest, not a bug.
+   */
+  const fadeOutAndPause = useCallback(
+    (seconds: number) => {
+      const ctx = ctxRef.current;
+      const mixer = mixerRef.current;
+      const activeAudio =
+        activeRef.current === 'A' ? audioRefA.current : audioRefB.current;
+      if (!activeAudio) return;
+      if (!ctx || !mixer) {
+        activeAudio.pause();
+        return;
+      }
+
+      cancelSleepFade();
+      const now = ctx.currentTime;
+      forceGain(mixer.gain, ctx, 1);
+      mixer.gain.setValueCurveAtTime(fadeCurve('out'), now, seconds);
+
+      sleepFadeRef.current = window.setTimeout(() => {
+        sleepFadeRef.current = null;
+        endCrossfade();
+        const current =
+          activeRef.current === 'A' ? audioRefA.current : audioRefB.current;
+        current?.pause();
+        // Restore level so the next play isn't silent.
+        forceGain(mixer.gain, ctx, 1);
+      }, seconds * 1000);
+    },
+    [cancelSleepFade, endCrossfade],
+  );
 
   return {
     audioRefA,
@@ -329,5 +547,7 @@ export function useAudioEngine({
     visualizerData,
     togglePlayPause,
     seek,
+    fadeOutAndPause,
+    cancelSleepFade,
   };
 }

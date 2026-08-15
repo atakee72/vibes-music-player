@@ -1,11 +1,13 @@
 import { get, set } from 'idb-keyval';
 import type { LibraryRoot, Playlist, Song } from '../types';
 import type { EqPreset } from './eq';
+import { CROSSFADE_OPTIONS } from './crossfade';
 
 const ROOTS_KEY = 'library-roots';
 const PLAYLISTS_KEY = 'playlists';
 const EQ_PRESET_KEY = 'eq-preset';
 const VOLUME_KEY = 'volume';
+const CROSSFADE_KEY = 'crossfade';
 
 type SongMeta = Omit<Song, 'file' | 'url' | 'fileHandle' | 'coverArt'>;
 type HandleStoredSong = SongMeta & { fileHandle: FileSystemFileHandle };
@@ -161,4 +163,15 @@ export async function getVolume(): Promise<number> {
 
 export async function saveVolume(volume: number): Promise<void> {
   await set(VOLUME_KEY, volume);
+}
+
+export async function getCrossfade(): Promise<number> {
+  const v = await get<number>(CROSSFADE_KEY);
+  // Validate against the offered options rather than any number: a stale or
+  // hand-edited value must not become an unbounded fade duration.
+  return typeof v === 'number' && (CROSSFADE_OPTIONS as readonly number[]).includes(v) ? v : 0;
+}
+
+export async function saveCrossfade(seconds: number): Promise<void> {
+  await set(CROSSFADE_KEY, seconds);
 }

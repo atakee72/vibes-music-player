@@ -51,6 +51,7 @@ import { filterSongs } from './lib/filter';
 import { isAudioFile, isPlaylistFileName, isLrcFileName } from './lib/file-types';
 import type { ImportEntry } from './lib/playlist-import';
 import { sortSongs, SORT_LABELS, type SortKey } from './lib/sort';
+import { SLEEP_FADE_SECONDS } from './lib/sleep';
 import { extractLyrics } from './lib/lyrics';
 import { downscaleCover } from './lib/cover';
 import { mergeRescan, hasMetaChanged, type RescanReplacements } from './lib/rescan';
@@ -121,6 +122,15 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [eqPreset, setEqPreset] = useState<EqPreset>('Off');
   const [volume, setVolume] = useState(1);
+  const [crossfade, setCrossfade] = useState(0);
+  /**
+   * Sleep timer deadline as an epoch ms, or null when disarmed.
+   * Session-only — deliberately never persisted (queue precedent; a timer
+   * that survived a reload would fire at a moment nobody asked for).
+   */
+  const [sleepDeadline, setSleepDeadline] = useState<number | null>(null);
+  /** Ticks once a second purely to re-render the countdown label. */
+  const [, setSleepTick] = useState(0);
   const [pipWindow, setPipWindow] = useState<Window | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
   const [showLyrics, setShowLyrics] = useState(false);
@@ -271,11 +281,14 @@ export default function App() {
     visualizerData,
     togglePlayPause,
     seek,
+    fadeOutAndPause,
+    cancelSleepFade,
   } = useAudioEngine({
     song: currentSong,
     nextSong,
     eqPreset,
     volume,
+    crossfadeSeconds: crossfade,
     onEnded: () => onEndedRef.current(),
   });
 
@@ -296,10 +309,12 @@ export default function App() {
         const loaded = needsPrompt ? [] : await storage.getPlaylists();
         const storedEq = await storage.getEqPreset();
         const storedVolume = await storage.getVolume();
+        const storedCrossfade = await storage.getCrossfade();
         setLibraryRoots(roots);
         setPlaylists(ensureLibrary(loaded));
         setEqPreset(storedEq);
         setVolume(storedVolume);
+        setCrossfade(storedCrossfade);
         setLibraryStatus(needsPrompt ? 'needs-prompt' : 'ready');
         // ONLY now may saving begin — and only when the in-memory library
         // actually mirrors storage. Under `needsPrompt` it is an empty
@@ -469,6 +484,55 @@ export default function App() {
     if (!prefsLoadedRef.current) return;
     storage.saveVolume(volume).catch((err) => console.error('Volume save failed:', err));
   }, [volume]);
+
+  useEffect(() => {
+    if (!prefsLoadedRef.current) return;
+    storage
+      .saveCrossfade(crossfade)
+      .catch((err) => console.error('Crossfade save failed:', err));
+  }, [crossfade]);
+
+  // ---- Sleep timer ----
+  // Read at fire time, not captured: putting `isPlaying` in the effect deps
+  // would tear down and rebuild both timers on every play/pause.
+  const isPlayingRef = useRef(isPlaying);
+  isPlayingRef.current = isPlaying;
+
+  useEffect(() => {
+    if (sleepDeadline === null) return;
+    const timeout = window.setTimeout(
+      () => {
+        setSleepDeadline(null);
+        // Already paused? Just disarm — no point fading over silence.
+        if (!isPlayingRef.current) return;
+        fadeOutAndPause(SLEEP_FADE_SECONDS);
+        setNotification('Sleep timer — fading out.');
+      },
+      // The deadline is absolute, so a late mount still fires on time.
+      Math.max(0, sleepDeadline - Date.now()),
+    );
+    // Sole purpose: re-render so the countdown label ticks down.
+    const interval = window.setInterval(() => setSleepTick((t) => t + 1), 1000);
+    return () => {
+      clearTimeout(timeout);
+      clearInterval(interval);
+    };
+  }, [sleepDeadline, fadeOutAndPause]);
+
+  const handleSetSleepTimer = useCallback(
+    (minutes: number | null) => {
+      // Covers disarming while a fade is already running: restore full level.
+      cancelSleepFade();
+      if (minutes === null) {
+        setSleepDeadline(null);
+        setNotification('Sleep timer off.');
+        return;
+      }
+      setSleepDeadline(Date.now() + minutes * 60_000);
+      setNotification(`Sleep timer set for ${minutes} minutes.`);
+    },
+    [cancelSleepFade],
+  );
 
   const requestPersistOnce = useCallback(() => {
     if (persistRequestedRef.current) return;
@@ -2078,6 +2142,10 @@ export default function App() {
         onSeek={seek}
         onCycleRepeat={cycleRepeat}
         onEqPresetChange={setEqPreset}
+        crossfade={crossfade}
+        onCrossfadeChange={setCrossfade}
+        sleepDeadline={sleepDeadline}
+        onSetSleepTimer={handleSetSleepTimer}
         volume={volume}
         onVolumeChange={setVolume}
         onTogglePip={togglePip}
@@ -2117,6 +2185,10 @@ export default function App() {
             onCycleRepeat={cycleRepeat}
             onToggleShuffle={() => setShuffle((s) => !s)}
             onEqPresetChange={setEqPreset}
+            crossfade={crossfade}
+            onCrossfadeChange={setCrossfade}
+            sleepDeadline={sleepDeadline}
+            onSetSleepTimer={handleSetSleepTimer}
             onVolumeChange={setVolume}
             onToggleLyrics={() => {
               setShowLyrics((v) => !v);

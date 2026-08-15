@@ -20,7 +20,9 @@ import {
 } from 'lucide-react';
 import type { RepeatMode, Song } from '../types';
 import { EQ_PRESET_NAMES, type EqPreset } from '../lib/eq';
+import { CROSSFADE_OPTIONS, formatCrossfade } from '../lib/crossfade';
 import { ScrollingText } from './ScrollingText';
+import { SleepTimerMenu } from './SleepTimerMenu';
 
 interface PlayerBarProps {
   song: Song | null;
@@ -31,6 +33,12 @@ interface PlayerBarProps {
   repeatMode: RepeatMode;
   shuffle: boolean;
   eqPreset: EqPreset;
+  /** Crossfade duration in seconds; 0 = off. */
+  crossfade?: number;
+  onCrossfadeChange?: (seconds: number) => void;
+  /** Sleep-timer deadline (epoch ms) or null when disarmed. */
+  sleepDeadline?: number | null;
+  onSetSleepTimer?: (minutes: number | null) => void;
   onPlayPause: () => void;
   onPrev: () => void;
   onNext: () => void;
@@ -64,6 +72,10 @@ export function PlayerBar({
   repeatMode,
   shuffle,
   eqPreset,
+  crossfade = 0,
+  onCrossfadeChange,
+  sleepDeadline = null,
+  onSetSleepTimer,
   onPlayPause,
   onPrev,
   onNext,
@@ -336,19 +348,24 @@ export function PlayerBar({
               ref={eqTriggerRef}
               onClick={() => setEqOpen((v) => !v)}
               className={`p-2 hover:bg-white/10 rounded-full transition-colors ${
-                eqPreset !== 'Off' ? 'text-amber' : 'text-white/60'
+                eqPreset !== 'Off' || crossfade > 0 ? 'text-amber' : 'text-white/60'
               }`}
-              title={`Equalizer: ${eqPreset}`}
-              aria-label="Equalizer"
+              title={`Equalizer: ${eqPreset} · Crossfade: ${formatCrossfade(crossfade)}`}
+              aria-label="Audio settings"
+              aria-haspopup="menu"
+              aria-expanded={eqOpen}
             >
               <Sliders className="h-4 w-4 lg:h-5 lg:w-5" />
             </button>
             {eqOpen && (
               <div
                 role="menu"
-                aria-label="Equalizer presets"
-                className="absolute bottom-full right-0 mb-2 bg-surface/95 backdrop-blur-xl border border-white/10 rounded-lg shadow-xl py-1 min-w-[140px] z-50"
+                aria-label="Audio settings"
+                className="absolute bottom-full right-0 mb-2 bg-surface/95 backdrop-blur-xl border border-white/10 rounded-lg shadow-xl py-1 min-w-[160px] z-50"
               >
+                <p className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-faint">
+                  Equalizer
+                </p>
                 {EQ_PRESET_NAMES.map((name) => (
                   <button
                     key={name}
@@ -366,9 +383,32 @@ export function PlayerBar({
                     {name}
                   </button>
                 ))}
+                <p className="mt-1 border-t border-white/10 px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-faint">
+                  Crossfade
+                </p>
+                {CROSSFADE_OPTIONS.map((seconds) => (
+                  <button
+                    key={seconds}
+                    role="menuitem"
+                    onClick={() => {
+                      onCrossfadeChange?.(seconds);
+                      setEqOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-1.5 text-sm transition-colors ${
+                      seconds === crossfade
+                        ? 'bg-gradient-to-r from-amber/30 to-coral/30 text-cream'
+                        : 'text-white/80 hover:bg-white/5'
+                    }`}
+                  >
+                    {formatCrossfade(seconds)}
+                  </button>
+                ))}
               </div>
             )}
           </div>
+          {onSetSleepTimer && (
+            <SleepTimerMenu deadline={sleepDeadline} onSet={onSetSleepTimer} />
+          )}
           <div className="flex items-center space-x-1">
             <button
               onClick={toggleMute}
