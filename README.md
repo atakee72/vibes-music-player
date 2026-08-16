@@ -61,9 +61,16 @@ pnpm test:run  # Vitest single pass
   SMTC, Linux MPRIS
 - **Gapless playback** — next track preloaded on a second audio element
   for seamless album transitions
+- **Crossfade** — overlap the end of one track with the start of the next
+  (2–12s, or off), using an equal-power curve so the level stays constant
+  through the transition. Applies to automatic advance; manual skips stay
+  instant
+- **Sleep timer** — 15 / 30 / 45 / 60 minutes, then a gentle 10-second fade
+  to silence rather than an abrupt stop
 - **ReplayGain** — per-track volume normalization from embedded RG tags
 - **5-band equalizer** — Off / Bass Boost / Vocal Boost / Treble Boost /
-  Acoustic presets, persisted across reloads
+  Acoustic presets, persisted across reloads (shares the ⚙ popover with
+  crossfade)
 - **Dynamic background tint** — extracts the dominant color from the
   playing track's cover art and tints the background to match
 - **Picture-in-Picture** — mini player window with transport controls
@@ -118,7 +125,7 @@ src/
   index.css                    Tailwind directives + base reset
   types.ts                     Song, Playlist, RepeatMode
   hooks/
-    useAudioEngine.ts          audio graph, gapless, EQ, ReplayGain
+    useAudioEngine.ts          audio graph, gapless, crossfade, EQ, ReplayGain
     useDominantColor.ts        cover-art color extraction hook
     useMetadataExtractor.ts    music-metadata wrapper, returns Song objects
   components/
@@ -128,6 +135,8 @@ src/
     MiniPlayer.tsx             PiP window content
   lib/
     colors.ts                  dominant-color extraction from album art
+    crossfade.ts               equal-power fade curves + duration options
+    sleep.ts                   sleep-timer options + countdown formatting
 ```
 
 All app state lives in `App.tsx`; the three components are purely
