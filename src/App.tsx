@@ -21,6 +21,7 @@ import {
 import { arrayMove } from '@dnd-kit/sortable';
 import {
   ArrowDownToLine,
+  BarChart3,
   ArrowUpDown,
   Download,
   ListChecks,
@@ -52,6 +53,7 @@ import { isAudioFile, isPlaylistFileName, isLrcFileName } from './lib/file-types
 import type { ImportEntry } from './lib/playlist-import';
 import { sortSongs, SORT_LABELS, type SortKey } from './lib/sort';
 import { SLEEP_FADE_SECONDS } from './lib/sleep';
+import { recordFinish, type StatsMap } from './lib/stats';
 import { extractLyrics } from './lib/lyrics';
 import { downscaleCover } from './lib/cover';
 import { mergeRescan, hasMetaChanged, type RescanReplacements } from './lib/rescan';
@@ -75,6 +77,9 @@ const MiniPlayer = lazy(() =>
 );
 const LyricsPanel = lazy(() =>
   import('./components/LyricsPanel').then((m) => ({ default: m.LyricsPanel })),
+);
+const StatsPanel = lazy(() =>
+  import('./components/StatsPanel').then((m) => ({ default: m.StatsPanel })),
 );
 const QueuePanel = lazy(() =>
   import('./components/QueuePanel').then((m) => ({ default: m.QueuePanel })),
@@ -123,6 +128,7 @@ export default function App() {
   const [eqPreset, setEqPreset] = useState<EqPreset>('Off');
   const [volume, setVolume] = useState(1);
   const [crossfade, setCrossfade] = useState(0);
+  const [stats, setStats] = useState<StatsMap>({});
   /**
    * Sleep timer deadline as an epoch ms, or null when disarmed.
    * Session-only — deliberately never persisted (queue precedent; a timer
@@ -214,7 +220,7 @@ export default function App() {
       : playlists.find((p) => p.id === activePlaylistId);
   const filteredSongs = filterSongs(activePlaylist?.songs ?? [], searchQuery);
   // View-only ordering for the list; playback still walks the playlist order.
-  const visibleSongs = sortSongs(filteredSongs, sortBy);
+  const visibleSongs = sortSongs(filteredSongs, sortBy, stats);
 
   const [queue, setQueue] = useState<Song[]>([]);
   // Spotify-style bookmark: the last song that played via the PLAYLIST FLOW
@@ -292,6 +298,15 @@ export default function App() {
     volume,
     crossfadeSeconds: crossfade,
     onEnded: () => onEndedRef.current(),
+    // A play is counted only when a track FINISHES. This is the engine's
+    // dedicated signal, not `onEnded` — they differ at repeat-one, and under
+    // crossfade the DOM `ended` event never fires at all.
+    onTrackFinished: () => {
+      const song = currentSongRef.current;
+      // A song whose metadata never loaded has duration 0; don't record it.
+      if (!song || !(song.duration > 0)) return;
+      setStats((prev) => recordFinish(prev, song, Date.now()));
+    },
   });
 
   // Mount: load roots + playlists from IndexedDB
@@ -312,11 +327,13 @@ export default function App() {
         const storedEq = await storage.getEqPreset();
         const storedVolume = await storage.getVolume();
         const storedCrossfade = await storage.getCrossfade();
+        const storedStats = await storage.getStats();
         setLibraryRoots(roots);
         setPlaylists(ensureLibrary(loaded));
         setEqPreset(storedEq);
         setVolume(storedVolume);
         setCrossfade(storedCrossfade);
+        setStats(storedStats);
         setLibraryStatus(needsPrompt ? 'needs-prompt' : 'ready');
         // ONLY now may saving begin — and only when the in-memory library
         // actually mirrors storage. Under `needsPrompt` it is an empty
@@ -343,8 +360,12 @@ export default function App() {
   // memory forever — a quiet leak that adds up over hundreds of songs.
   const prevSongsRef = useRef<Map<string, Song>>(new Map());
   const currentSongIdRef = useRef<string | null>(null);
+  // The engine's callbacks are captured once, so the finished-track handler
+  // reads the playing song through a ref rather than a stale closure.
+  const currentSongRef = useRef<Song | null>(null);
   useEffect(() => {
     currentSongIdRef.current = currentSong?.id ?? null;
+    currentSongRef.current = currentSong;
   }, [currentSong]);
 
   useEffect(() => {
@@ -493,6 +514,11 @@ export default function App() {
       .saveCrossfade(crossfade)
       .catch((err) => console.error('Crossfade save failed:', err));
   }, [crossfade]);
+
+  useEffect(() => {
+    if (!prefsLoadedRef.current) return;
+    storage.saveStats(stats).catch((err) => console.error('Stats save failed:', err));
+  }, [stats]);
 
   // ---- Sleep timer ----
   // Read at fire time, not captured: putting `isPlaying` in the effect deps
@@ -1741,6 +1767,13 @@ export default function App() {
       onClick: () => togglePanel('lyrics'),
       active: showLyrics,
     },
+    {
+      key: 'stats',
+      label: 'Stats',
+      icon: BarChart3,
+      onClick: () => togglePanel('stats'),
+      active: showStats,
+    },
     ...(currentSong
       ? [{ key: 'share', label: 'Share', icon: Share2, onClick: handleShare }]
       : []),
@@ -1781,9 +1814,11 @@ export default function App() {
   // code-split. Monotonic render-phase ref writes: once opened, always mounted.
   if (showLyrics) lyricsEverOpenedRef.current = true;
   if (showQueue) queueEverOpenedRef.current = true;
+  if (showStats) statsEverOpenedRef.current = true;
   if (mobilePlayerOpen) mobilePlayerEverOpenedRef.current = true;
   const mountLyricsPanel = showLyrics || lyricsEverOpenedRef.current;
   const mountQueuePanel = showQueue || queueEverOpenedRef.current;
+  const mountStatsPanel = showStats || statsEverOpenedRef.current;
   const mountMobileNowPlaying = mobilePlayerOpen || mobilePlayerEverOpenedRef.current;
 
   return (
@@ -1971,6 +2006,18 @@ export default function App() {
                   >
                     Lyrics
                   </button>
+                  <button
+                    onClick={() => togglePanel('stats')}
+                    className={`p-2 rounded-lg transition-all duration-200 ${
+                      showStats
+                        ? 'bg-amber/20 text-amber border border-amber/30'
+                        : 'bg-white/5 text-white/60 hover:bg-white/10'
+                    }`}
+                    title="Listening stats"
+                    aria-label="Toggle stats"
+                  >
+                    <BarChart3 className="h-4 w-4" />
+                  </button>
                   {currentSong && (
                     <button
                       onClick={handleShare}
@@ -2069,6 +2116,7 @@ export default function App() {
             <div className="flex flex-1 min-h-0">
               <SongList
                 songs={visibleSongs}
+                stats={stats}
                 currentSong={currentSong}
                 isPlaying={isPlaying}
                 onPlay={handlePlaySong}
@@ -2098,6 +2146,15 @@ export default function App() {
                       : undefined
                 }
               />
+              {mountStatsPanel && (
+                <Suspense fallback={null}>
+                  <StatsPanel
+                    open={showStats}
+                    stats={stats}
+                    onClose={() => setShowStats(false)}
+                  />
+                </Suspense>
+              )}
               {mountLyricsPanel && (
                 <Suspense fallback={null}>
                   <LyricsPanel

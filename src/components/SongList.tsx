@@ -23,6 +23,8 @@ import { RowMenu } from './RowMenu';
 import { RowActionSheet } from './RowActionSheet';
 
 interface SongListProps {
+  /** Completed-play counts by song id. Optional — rows just show none without it. */
+  stats?: Record<string, { plays: number }>;
   songs: Song[];
   currentSong: Song | null;
   isPlaying: boolean;
@@ -59,6 +61,9 @@ interface SortableRowProps {
   selectionMode: boolean;
   isFilterActive: boolean;
   selectedIds: Set<string>;
+  /** Completed plays. A primitive on purpose: passing the whole StatsMap down
+   *  would be a fresh object every play and defeat memo for EVERY row. */
+  playCount: number;
   onPlay: (song: Song) => void;
   onPause: () => void;
   onDelete: (id: string) => void;
@@ -79,6 +84,7 @@ const SortableRow = memo(function SortableRow({
   selectionMode,
   isFilterActive,
   selectedIds,
+  playCount,
   onPlay,
   onPause,
   onDelete,
@@ -268,6 +274,14 @@ const SortableRow = memo(function SortableRow({
             </div>
           </div>
           <div className="hidden lg:flex items-center space-x-4">
+            {playCount > 0 && (
+              <span
+                className="text-xs text-white/40 font-mono"
+                title={`Played ${playCount} time${playCount === 1 ? '' : 's'}`}
+              >
+                {playCount}×
+              </span>
+            )}
             {song.duration ? (
               <span className="text-sm text-white/60 font-mono">{formatTime(song.duration)}</span>
             ) : null}
@@ -336,6 +350,7 @@ const SortableRow = memo(function SortableRow({
 
 export function SongList({
   songs,
+  stats,
   currentSong,
   isPlaying,
   selectionMode,
@@ -565,6 +580,7 @@ export function SongList({
                     selectionMode={selectionMode}
                     isFilterActive={isFilterActive}
                     selectedIds={selectedIds}
+                    playCount={stats?.[song.id]?.plays ?? 0}
                     onPlay={onPlay}
                     onPause={onPause}
                     onDelete={onDelete}

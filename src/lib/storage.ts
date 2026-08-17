@@ -2,12 +2,14 @@ import { get, set } from 'idb-keyval';
 import type { LibraryRoot, Playlist, Song } from '../types';
 import type { EqPreset } from './eq';
 import { CROSSFADE_OPTIONS } from './crossfade';
+import type { StatsMap } from './stats';
 
 const ROOTS_KEY = 'library-roots';
 const PLAYLISTS_KEY = 'playlists';
 const EQ_PRESET_KEY = 'eq-preset';
 const VOLUME_KEY = 'volume';
 const CROSSFADE_KEY = 'crossfade';
+const STATS_KEY = 'listening-stats';
 
 type SongMeta = Omit<Song, 'file' | 'url' | 'fileHandle' | 'coverArt'>;
 type HandleStoredSong = SongMeta & { fileHandle: FileSystemFileHandle };
@@ -174,4 +176,12 @@ export async function getCrossfade(): Promise<number> {
 
 export async function saveCrossfade(seconds: number): Promise<void> {
   await set(CROSSFADE_KEY, seconds);
+}
+
+export async function getStats(): Promise<StatsMap> {
+  return (await get<StatsMap>(STATS_KEY)) ?? {};
+}
+
+export async function saveStats(stats: StatsMap): Promise<void> {
+  await set(STATS_KEY, stats);
 }

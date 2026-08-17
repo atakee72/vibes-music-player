@@ -27,6 +27,14 @@ interface UseAudioEngineArgs {
   /** Crossfade duration in seconds; 0 disables it (plain gapless). */
   crossfadeSeconds?: number;
   onEnded?: () => void;
+  /**
+   * "This track reached its end." Deliberately NOT the same signal as
+   * `onEnded` ("app, advance your state"): they differ at repeat-one, which
+   * replays in place and must NOT advance but IS a completed play. Also fires
+   * at the top of a crossfade, where the DOM `ended` event never arrives
+   * because the outgoing element is paused first.
+   */
+  onTrackFinished?: () => void;
 }
 
 const PRELOAD_LEAD_SECONDS = 5;
@@ -67,6 +75,7 @@ export function useAudioEngine({
   volume = 1,
   crossfadeSeconds = 0,
   onEnded,
+  onTrackFinished,
 }: UseAudioEngineArgs): UseAudioEngineResult {
   const audioRefA = useRef<HTMLAudioElement>(null);
   const audioRefB = useRef<HTMLAudioElement>(null);
@@ -79,6 +88,7 @@ export function useAudioEngine({
   const activeRef = useRef<'A' | 'B'>('A');
   const rafRef = useRef<number | null>(null);
   const onEndedRef = useRef(onEnded);
+  const onTrackFinishedRef = useRef(onTrackFinished);
   const nextSongRef = useRef<Song | null>(nextSong ?? null);
   const crossfadeRef = useRef(crossfadeSeconds);
   /**
@@ -97,6 +107,7 @@ export function useAudioEngine({
   // Keep onEnded + nextSong + crossfade refs fresh without re-running setup
   useEffect(() => {
     onEndedRef.current = onEnded;
+    onTrackFinishedRef.current = onTrackFinished;
     nextSongRef.current = nextSong ?? null;
     crossfadeRef.current = crossfadeSeconds;
   });
@@ -254,6 +265,10 @@ export function useAudioEngine({
       const ended = e.target as HTMLAudioElement;
       if (ended !== activeAudio()) return;
 
+      // The track played through to its end — true of every branch below,
+      // including repeat-one, which returns early without advancing.
+      onTrackFinishedRef.current?.();
+
       const nextUrl = nextSongRef.current?.url;
       const inactive = activeRef.current === 'A' ? audioB : audioA;
       if (nextUrl && ended.src === nextUrl) {
@@ -359,6 +374,11 @@ export function useAudioEngine({
         timeoutId: window.setTimeout(endCrossfade, seconds * 1000),
       };
 
+      // Before onEnded: the app's advance swaps currentSong, and the finish
+      // belongs to the OUTGOING track. (Refs update on render, not
+      // synchronously, so either order works — but the intent should be
+      // explicit rather than accidental.)
+      onTrackFinishedRef.current?.();
       onEndedRef.current?.();
     };
     const onLoaded = (e: Event) => {

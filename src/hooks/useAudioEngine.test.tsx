@@ -126,13 +126,21 @@ function TestHarness({
   nextSong = null,
   crossfadeSeconds = 0,
   onEnded,
+  onTrackFinished,
 }: {
   song: HarnessSong;
   nextSong?: HarnessSong;
   crossfadeSeconds?: number;
   onEnded?: () => void;
+  onTrackFinished?: () => void;
 }) {
-  const engine = useAudioEngine({ song, nextSong, crossfadeSeconds, onEnded });
+  const engine = useAudioEngine({
+    song,
+    nextSong,
+    crossfadeSeconds,
+    onEnded,
+    onTrackFinished,
+  });
   useEffect(() => {
     engineRef.current = engine;
   });
@@ -380,6 +388,110 @@ describe('useAudioEngine — crossfade', () => {
       vi.advanceTimersByTime(6000);
     });
     expect(gains.rgA.gain.setValueAtTime.mock.calls.length).toBeGreaterThan(callsWhileFading);
+  });
+});
+
+describe('useAudioEngine — onTrackFinished', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const endTrack = async (audio: HTMLAudioElement) => {
+    await act(async () => {
+      audio.dispatchEvent(new Event('ended'));
+    });
+  };
+
+  it('fires once on a plain end (no next song)', async () => {
+    const onTrackFinished = vi.fn();
+    render(<TestHarness song={makeSong()} onTrackFinished={onTrackFinished} />);
+    await act(async () => {});
+
+    await endTrack(engineRef.current!.audioRefA.current!);
+    expect(onTrackFinished).toHaveBeenCalledTimes(1);
+  });
+
+  it('fires exactly once on a gapless flip (not twice)', async () => {
+    const songA = makeSong({ title: 'A' });
+    const songB = makeSong({ title: 'B' });
+    const onTrackFinished = vi.fn();
+    render(
+      <TestHarness song={songA} nextSong={songB} onTrackFinished={onTrackFinished} />,
+    );
+    await act(async () => {});
+
+    const audioA = engineRef.current!.audioRefA.current!;
+    // Preload B onto the inactive element, which is what enables the flip.
+    await act(async () => {
+      fireTimeUpdate(audioA, { currentTime: 178, duration: 180 });
+    });
+    await endTrack(audioA);
+
+    expect(onTrackFinished).toHaveBeenCalledTimes(1);
+  });
+
+  // The branch that deliberately does NOT call onEnded: looping one track all
+  // evening is a real listening session and must still count.
+  it('fires on the repeat-one replay-in-place, where onEnded does not', async () => {
+    const song = makeSong({ title: 'Loop' });
+    const onEnded = vi.fn();
+    const onTrackFinished = vi.fn();
+    render(
+      <TestHarness
+        song={song}
+        nextSong={song}
+        onEnded={onEnded}
+        onTrackFinished={onTrackFinished}
+      />,
+    );
+    await act(async () => {});
+
+    const audioA = engineRef.current!.audioRefA.current!;
+    Object.defineProperty(audioA, 'src', { value: song.url, configurable: true });
+    await endTrack(audioA);
+
+    expect(onTrackFinished).toHaveBeenCalledTimes(1);
+    expect(onEnded).not.toHaveBeenCalled();
+  });
+
+  // With crossfade on, the outgoing element is paused before it ever reaches
+  // `ended` — counting on the DOM event would record zero plays forever.
+  it('fires at the top of a crossfade, where the DOM ended event never arrives', async () => {
+    const songA = makeSong({ title: 'A' });
+    const songB = makeSong({ title: 'B' });
+    const onTrackFinished = vi.fn();
+    render(
+      <TestHarness
+        song={songA}
+        nextSong={songB}
+        crossfadeSeconds={6}
+        onTrackFinished={onTrackFinished}
+      />,
+    );
+    await act(async () => {});
+
+    await act(async () => {
+      fireTimeUpdate(engineRef.current!.audioRefA.current!, {
+        currentTime: 175,
+        duration: 180,
+      });
+    });
+
+    expect(onTrackFinished).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not fire from manual transport (pause or seek)', async () => {
+    const onTrackFinished = vi.fn();
+    render(<TestHarness song={makeSong()} onTrackFinished={onTrackFinished} />);
+    await act(async () => {});
+
+    act(() => engineRef.current!.togglePlayPause());
+    act(() => engineRef.current!.seek(42));
+
+    expect(onTrackFinished).not.toHaveBeenCalled();
   });
 });
 

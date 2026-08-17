@@ -14,6 +14,9 @@ import { parseBlob } from 'music-metadata';
 
 const engine = vi.hoisted(() => ({
   onEnded: undefined as (() => void) | undefined,
+  // Captured so tests can simulate "a track reached its end" — the signal a
+  // play is counted from. Distinct from onEnded: they differ at repeat-one.
+  onTrackFinished: undefined as (() => void) | undefined,
   togglePlayPause: vi.fn(),
   seek: vi.fn(),
   fadeOutAndPause: vi.fn(),
@@ -33,8 +36,10 @@ vi.mock('./hooks/useAudioEngine', () => ({
     onEnded?: () => void;
     song: Song | null;
     crossfadeSeconds?: number;
+    onTrackFinished?: () => void;
   }) => {
     engine.onEnded = args.onEnded;
+    engine.onTrackFinished = args.onTrackFinished;
     engine.song = args.song;
     engine.crossfadeSeconds = args.crossfadeSeconds;
     return {
@@ -88,6 +93,8 @@ vi.mock('./lib/storage', async () => {
     saveVolume: vi.fn(async () => {}),
     getCrossfade: vi.fn(async () => 0),
     saveCrossfade: vi.fn(async () => {}),
+    getStats: vi.fn(async () => ({})),
+    saveStats: vi.fn(async () => {}),
     addLibraryRoot: vi.fn(async () => null),
     ensurePersisted: vi.fn(async () => {}),
     getStorageEstimate: vi.fn(async () => store.estimate),
@@ -540,6 +547,106 @@ describe('App', () => {
 
     await waitFor(() => expect(vi.mocked(storage.saveCrossfade)).toHaveBeenCalledWith(6));
     expect(engine.crossfadeSeconds).toBe(6);
+  });
+});
+
+describe('listening stats', () => {
+  const renderWithSong = async (title = 'Nocturne') => {
+    await renderApp({
+      playlists: [
+        makePlaylist({
+          id: 'library',
+          name: 'Library',
+          songs: [makeSong({ title, duration: 180 })],
+        }),
+      ],
+    });
+    playRow(0);
+  };
+
+  it('counts a play when a track finishes, and persists it', async () => {
+    await renderWithSong();
+
+    await act(async () => {
+      engine.onTrackFinished?.();
+    });
+
+    await waitFor(() => expect(vi.mocked(storage.saveStats)).toHaveBeenCalled());
+    const calls = vi.mocked(storage.saveStats).mock.calls;
+    const saved = calls[calls.length - 1][0];
+    expect(Object.values(saved)[0]).toMatchObject({ plays: 1, title: 'Nocturne' });
+  });
+
+  // playNext is shared between the engine's advance and the Next button; only
+  // the former is a completed play. Counting on the shared handler would turn
+  // "top tracks" into "tracks I skipped past".
+  it('does NOT count a play when the user clicks Next', async () => {
+    // TWO songs on purpose: with one, Next has nowhere to go and the
+    // assertion would hold whether or not the counter was wired to it.
+    await renderApp({
+      playlists: [
+        makePlaylist({
+          id: 'library',
+          name: 'Library',
+          songs: [
+            makeSong({ title: 'First', duration: 180 }),
+            makeSong({ title: 'Second', duration: 180 }),
+          ],
+        }),
+      ],
+    });
+    playRow(0);
+    vi.mocked(storage.saveStats).mockClear();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+
+    // The skip really happened...
+    await waitFor(() => expect(engine.song?.title).toBe('Second'));
+    // ...and still counted nothing.
+    expect(vi.mocked(storage.saveStats)).not.toHaveBeenCalled();
+  });
+
+  it('shows the count in the song row and in the panel', async () => {
+    await renderWithSong('Cemalım');
+    await act(async () => {
+      engine.onTrackFinished?.();
+      engine.onTrackFinished?.();
+    });
+
+    expect(await screen.findByText('2×')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle stats' }));
+    const panel = await screen.findByRole('complementary', { name: 'Listening stats' });
+    expect(within(panel).getByText('Top tracks')).toBeInTheDocument();
+    expect(within(panel).getAllByText('Cemalım').length).toBeGreaterThan(0);
+  });
+});
+
+// The invariant `togglePanel` exists to protect: three panels, one slot.
+describe('right-edge panel exclusivity', () => {
+  const openStats = () => fireEvent.click(screen.getByRole('button', { name: 'Toggle stats' }));
+  const openLyrics = () => fireEvent.click(screen.getByRole('button', { name: 'Toggle lyrics' }));
+
+  it('opening one panel closes the others', async () => {
+    await renderApp({
+      playlists: [
+        makePlaylist({ id: 'library', name: 'Library', songs: [makeSong({ title: 'A' })] }),
+      ],
+    });
+
+    openLyrics();
+    expect(await screen.findByRole('complementary', { name: 'Lyrics' })).toBeInTheDocument();
+
+    openStats();
+    expect(await screen.findByRole('complementary', { name: 'Listening stats' })).toBeInTheDocument();
+    // Lyrics stays MOUNTED (its exit animation plays) but must be closed —
+    // usePresence keeps the node around, so assert on the open state, not
+    // on absence from the DOM.
+    await waitFor(() =>
+      expect(screen.getByRole('complementary', { name: 'Lyrics' })).toHaveClass(
+        'translate-x-full',
+      ),
+    );
   });
 });
 
