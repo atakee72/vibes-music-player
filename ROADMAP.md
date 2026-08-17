@@ -834,8 +834,11 @@ Backlog item 3, on branch `listening-stats`. 427 tests green.
 | Tech-debt triple | `769562d` — a11y focus traps (`useDialogFocus`), the first `App.test.tsx` suite, Web-Worker ingest + 512px cover downscale (OPFS deferred) |
 | beets integration | `97a1a59` — linked playlists (re-import updates, Refresh re-syncs), extension-based audio detection, Firefox folder drops, mobile title line |
 | Re-scan tags | `364f555` — Refresh's counterpart for in-place tag edits (beets) that leave paths unchanged: re-reads embedded metadata for handle-backed songs, merging onto live state so ids/hearts/queue survive (8 commits) |
+| PWA icons | `e66b8c8` — full-bleed maskable + apple-touch icons (the stock preset had been padding 30% onto white) |
+| Crossfade + sleep timer | `54325ad` — equal-power crossfade on its own gain node downstream of ReplayGain; mixer-ramp sleep fade |
+| Listening stats | `0c62dad` — play counts/top artists/recently played from a new `onTrackFinished` engine signal, preceded by the `togglePanel` refactor (`fc835f7`) |
 
-Total: 366 tests, all green; `pnpm build` clean; production live.
+Total: 427 tests, all green; `pnpm build` clean; production live.
 
 ## Real-library milestone (2026-08-11)
 
