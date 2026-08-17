@@ -223,6 +223,54 @@ Facts other tools (e.g. a beets-managed library feeding Vibes) must know:
   resumable byte-migration scaffolding. Revisit only under real quota
   pressure.
 
+## Listening stats
+
+- **`onTrackFinished` is NOT `onEnded`, and the distinction is the whole
+  feature.** `onEnded` means "app, advance your state"; `onTrackFinished` means
+  "this track reached its end". They diverge in both directions:
+  - **repeat-one** replays in place and deliberately never calls `onEnded` — but
+    it IS a completed play, so looping one track all evening must still count;
+  - **under crossfade the DOM `ended` event never fires at all** (the outgoing
+    element is paused at the top of the fade), so anything counting on `ended`
+    silently records **zero plays** for every user with crossfade on.
+  Fired at exactly two places in `useAudioEngine`: the top of `onAudioEnded`
+  (covering repeat-one, the gapless flip and the plain end) and inside
+  `startCrossfade`, **before** `onEnded`. Don't add a third.
+- **The manual Next button must never count.** `playNext` is shared — the engine
+  calls it via `onEndedRef`, the Next button calls it directly — so the counter
+  hangs off the engine callback, never off `playNext`.
+- **Stats live in their own `StatsMap` (`src/lib/stats.ts`), keyed by song id,
+  NOT as a field on `Song`.** `Song.favorite` makes the field look tempting (it
+  persists free via storage's `Omit`+spread), but writing to a song inside
+  `activePlaylist.songs` would (1) **re-roll shuffle** — that array is a
+  reference dep of the `nextSong` memo, so every track end would recompute the
+  random pick and desync the gapless preload — and (2) rewrite the entire
+  library through the `[playlists]` save effect every few minutes.
+- `title`/`artist` are **denormalised** into each stat and refreshed on every
+  finish, so the panel needs no join against the library and deleting a song
+  doesn't make historical totals lurch. Ids are path-based, so a beets rename
+  orphans stats — same fragility as hearts, see the interop contract.
+- Persisted under `listening-stats` via `storage.getStats`/`saveStats`, gated on
+  `prefsLoadedRef` (**not** `loadedRef` — that one guards the library).
+- Consequences of the count-on-finish rule, by design: a skip at 95% counts
+  nothing; **total listening time is the sum of completed durations**, so
+  partial listens are invisible; and under crossfade the count lands `xfade`
+  seconds early.
+
+## The right-edge panel slot
+
+- Lyrics, Queue and Stats share one slot and are mutually exclusive. Every
+  opener goes through **`togglePanel(name)`** in `App.tsx` — before it existed,
+  seven separate call sites hand-paired "open me, close the other", which a
+  third panel would have turned into "close the other two" seven times over.
+  Add a fourth panel by extending the helper, not by editing call sites.
+  Regression-tested in `App.test.tsx` ("right-edge panel exclusivity").
+- **`headerActions` feeds ONLY the mobile `⋯` HeaderMenu.** The desktop header's
+  inline buttons are hand-written duplicates, so a new header action needs
+  **two** edits or it ships invisible on desktop.
+- Panels are non-modal: `role="complementary"` + `aria-label`, no focus trap,
+  closed via the App Escape chain.
+
 ## Keyboard shortcuts
 
 - `useKeyboardShortcuts(handlers, options?)` (`src/hooks/useKeyboardShortcuts.ts`)
@@ -241,7 +289,8 @@ Facts other tools (e.g. a beets-managed library feeding Vibes) must know:
   native activation must win). The hook skips Space entirely (no handler,
   no preventDefault) when `activeElement` is a BUTTON.
 - Currently wired in App.tsx: Space=play/pause, ←/→=seek ∓10s,
-  **Shift+←/→**=prev/next track, `L`=toggle lyrics, `/`=focus search,
+  **Shift+←/→**=prev/next track, `L`=lyrics, `Q`=queue, `S`=stats,
+  `/`=focus search,
   Escape=chain (see "Selection mode" section for the full priority order).
   The ←/→ handlers branch on
   `event.shiftKey` (the hook passes the event through) and `preventDefault()`

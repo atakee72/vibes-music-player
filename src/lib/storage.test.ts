@@ -3,11 +3,13 @@ import {
   formatStorageWarning,
   getCrossfade,
   getEqPreset,
+  getStats,
   getLibraryRoots,
   getPlaylists,
   getVolume,
   saveCrossfade,
   saveEqPreset,
+  saveStats,
   savePlaylists,
   saveVolume,
   StorageQuotaError,
@@ -238,6 +240,18 @@ describe('storage — playlists', () => {
     // A hand-edited or stale key must not become an unbounded fade duration.
     await saveCrossfade(999);
     expect(await getCrossfade()).toBe(0);
+  });
+
+  it('getStats defaults to an empty map when the key is absent', async () => {
+    expect(await getStats()).toEqual({});
+  });
+
+  it('round-trips listening stats', async () => {
+    const stats = {
+      s1: { plays: 3, lastPlayedAt: 42, msPlayed: 9000, title: 'T', artist: 'A' },
+    };
+    await saveStats(stats);
+    expect(await getStats()).toEqual(stats);
   });
 
   it('drops songs whose handle getFile() throws (file moved/deleted)', async () => {

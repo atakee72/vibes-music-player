@@ -690,9 +690,10 @@ filter that ruled out most of that app's feature list, since its headline
 features run on `yt-dlp`, a Spotify client *secret*, and its own PocketBase
 server. See "Out of scope (forever)" — none of these cross those lines.
 
-**Items 1 and 2 shipped 2026-08-16** — see the section below. The rest stand.
+**Items 1-3 shipped** (1-2 on 2026-08-16, 3 on 2026-08-17) — see the sections
+below. The rest stand.
 
-3. **Local listening stats** — play counts, history, top artists, total
+3. ~~**Local listening stats**~~ — shipped. — play counts, history, top artists, total
    minutes. Their version needs PocketBase only because it syncs across
    devices; the personal version is `storage.ts` + a new IDB key. Skip
    leaderboards and profiles (accounts are out of scope forever).
@@ -764,6 +765,32 @@ Backlog items 1 and 2, on branch `sleep-timer-crossfade`. 395 tests green.
 - **Not verified with real audio yet** — the unit tests cover the state
   machine, but overlap quality, the ReplayGain-after-crossfade level and the
   repeat-one loop need ears on the real library.
+
+## Local listening stats (shipped, 2026-08-17)
+
+Backlog item 3, on branch `listening-stats`. 427 tests green.
+
+- Play counts, total listening time, top artists, top tracks and recently
+  played — in a right-edge `StatsPanel`, plus a per-row count and `plays` /
+  `played` sort keys. Local-only; the source app needs PocketBase for this
+  purely because its stats follow a user across devices.
+- **The load-bearing decision: a new `onTrackFinished` engine signal, not
+  `onEnded`.** A play is counted when a track *finishes*, and the two signals
+  diverge in both directions — repeat-one never calls `onEnded` (yet is a real
+  play), and under **crossfade the DOM `ended` event never fires at all**, so
+  the obvious implementation would have recorded **zero plays** for anyone with
+  crossfade enabled. That interaction with the feature shipped the day before
+  is the one a plan audit caught.
+- **Stats are their own map, not a `Song` field.** The `Song.favorite`
+  precedent makes a `playCount` field look free, but it would re-roll shuffle
+  on every track end (the `nextSong` memo has `activePlaylist.songs` as a
+  reference dep) and rewrite the whole library every few minutes.
+- Preceded by a **`togglePanel` refactor** (`fc835f7`): the two existing panels
+  hand-paired their toggles at seven call sites, which a third panel would have
+  made combinatorial. Now one helper, with an exclusivity regression test.
+- Also learned: `headerActions` feeds only the mobile `⋯` menu — the desktop
+  header's buttons are hand-written duplicates, so a new action needs two edits
+  or it ships invisible on desktop.
 
 ## Out of scope (forever)
 

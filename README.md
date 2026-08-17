@@ -71,6 +71,10 @@ pnpm test:run  # Vitest single pass
 - **5-band equalizer** — Off / Bass Boost / Vocal Boost / Treble Boost /
   Acoustic presets, persisted across reloads (shares the ⚙ popover with
   crossfade)
+- **Listening stats** — play counts, total time listened, top artists, top
+  tracks and recently played, in a slide-in panel (`S`). A play is counted
+  when a track finishes; counts also show on song rows, with "Most played"
+  and "Last played" sort options. Entirely local — nothing is uploaded
 - **Dynamic background tint** — extracts the dominant color from the
   playing track's cover art and tints the background to match
 - **Picture-in-Picture** — mini player window with transport controls
@@ -136,6 +140,7 @@ src/
   lib/
     colors.ts                  dominant-color extraction from album art
     crossfade.ts               equal-power fade curves + duration options
+    stats.ts                   listening stats: record, aggregate, format
     sleep.ts                   sleep-timer options + countdown formatting
 ```
 
