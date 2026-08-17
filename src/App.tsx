@@ -133,6 +133,8 @@ export default function App() {
   const [, setSleepTick] = useState(0);
   const [pipWindow, setPipWindow] = useState<Window | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
+  const [showStats, setShowStats] = useState(false);
+  const statsEverOpenedRef = useRef(false);
   const [showLyrics, setShowLyrics] = useState(false);
   const lyricsEverOpenedRef = useRef(false);
   const [showQueue, setShowQueue] = useState(false);
@@ -533,6 +535,23 @@ export default function App() {
     },
     [cancelSleepFade],
   );
+
+  /**
+   * Lyrics, Queue and Stats all occupy the same right-edge slot, so exactly one
+   * may be open. Toggling used to be hand-paired at every call site
+   * ("open me, close the other"), which was survivable with two panels and
+   * combinatorial with three — one missed line stacks two panels on top of each
+   * other. Every opener goes through here instead.
+   *
+   * Also closes the full-screen now-playing view: it's `z-[60]` and the panels
+   * are `z-40`, so leaving it open would show the panel hidden behind it.
+   */
+  const togglePanel = useCallback((panel: 'lyrics' | 'queue' | 'stats') => {
+    setShowLyrics((v) => (panel === 'lyrics' ? !v : false));
+    setShowQueue((v) => (panel === 'queue' ? !v : false));
+    setShowStats((v) => (panel === 'stats' ? !v : false));
+    setMobilePlayerOpen(false);
+  }, []);
 
   const requestPersistOnce = useCallback(() => {
     if (persistRequestedRef.current) return;
@@ -1655,20 +1674,9 @@ export default function App() {
         seek(Math.max(0, currentTime - 10));
       },
       Slash: () => searchInputRef.current?.focus(),
-      KeyL: () => {
-        setShowLyrics((v) => !v);
-        setShowQueue(false);
-        // Mirror the in-view Lyrics button: the panel is z-40, the full-screen
-        // now-playing view is z-[60], so close the view or the panel opens hidden.
-        if (mobilePlayerOpen) setMobilePlayerOpen(false);
-      },
-      KeyQ: () => {
-        setShowQueue((v) => !v);
-        // Panels share the right-edge slot — Lyrics and Queue are exclusive;
-        // and like Lyrics, the z-[60] full-screen view must close (z-40 panel).
-        setShowLyrics(false);
-        if (mobilePlayerOpen) setMobilePlayerOpen(false);
-      },
+      KeyL: () => togglePanel('lyrics'),
+      KeyQ: () => togglePanel('queue'),
+      KeyS: () => togglePanel('stats'),
       Escape: () => {
         if (mobilePlayerOpen) {
           setMobilePlayerOpen(false);
@@ -1684,6 +1692,10 @@ export default function App() {
         }
         if (showQueue) {
           setShowQueue(false);
+          return;
+        }
+        if (showStats) {
+          setShowStats(false);
           return;
         }
         if (showLyrics) {
@@ -1726,10 +1738,7 @@ export default function App() {
       key: 'lyrics',
       label: 'Lyrics',
       icon: Mic2,
-      onClick: () => {
-        setShowLyrics((v) => !v);
-        setShowQueue(false);
-      },
+      onClick: () => togglePanel('lyrics'),
       active: showLyrics,
     },
     ...(currentSong
@@ -1951,10 +1960,7 @@ export default function App() {
                     Select
                   </button>
                   <button
-                    onClick={() => {
-                      setShowLyrics((v) => !v);
-                      setShowQueue(false);
-                    }}
+                    onClick={() => togglePanel('lyrics')}
                     className={`px-3 py-2 rounded-lg transition-all duration-200 text-sm font-medium ${
                       showLyrics
                         ? 'bg-amber/20 text-amber border border-amber/30'
@@ -2151,11 +2157,7 @@ export default function App() {
         onTogglePip={togglePip}
         supportsPip={'documentPictureInPicture' in window}
         isPipOpen={pipWindow !== null}
-        onToggleQueue={() => {
-          setShowQueue((v) => !v);
-          setShowLyrics(false);
-          if (mobilePlayerOpen) setMobilePlayerOpen(false);
-        }}
+        onToggleQueue={() => togglePanel('queue')}
         isQueueOpen={showQueue}
         onExpand={() => setMobilePlayerOpen(true)}
         onToggleFavorite={currentSong ? () => toggleFavorite(currentSong.id) : undefined}
@@ -2190,17 +2192,8 @@ export default function App() {
             sleepDeadline={sleepDeadline}
             onSetSleepTimer={handleSetSleepTimer}
             onVolumeChange={setVolume}
-            onToggleLyrics={() => {
-              setShowLyrics((v) => !v);
-              setShowQueue(false);
-              // Close the full-screen view so the lyrics panel (lower z-index) shows.
-              setMobilePlayerOpen(false);
-            }}
-            onToggleQueue={() => {
-              setShowQueue((v) => !v);
-              setShowLyrics(false);
-              setMobilePlayerOpen(false);
-            }}
+            onToggleLyrics={() => togglePanel('lyrics')}
+            onToggleQueue={() => togglePanel('queue')}
             onShare={handleShare}
           />
         </Suspense>
