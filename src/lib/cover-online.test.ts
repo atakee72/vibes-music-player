@@ -167,3 +167,130 @@ describe('artworkUrl', () => {
     expect(artworkUrl('https://example.com/cover.png')).toBe('https://example.com/cover.png');
   });
 });
+
+import { fetchCoverOnline } from './cover-online';
+
+// The real downscaleCover decodes through an <img>, which never fires
+// load/error under happy-dom — every call would sit out its 3s decode
+// timeout. Identity keeps these tests fast and keeps the asserted blob
+// identical to the stubbed response body.
+vi.mock('./cover', () => ({ downscaleCover: vi.fn(async (b: Blob) => b) }));
+
+const jpeg = () => new Blob([new Uint8Array([1, 2, 3])], { type: 'image/jpeg' });
+const searchOk = (results: unknown[]) =>
+  Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ results }) } as Response);
+const imageOk = (blob: Blob) =>
+  Promise.resolve({ ok: true, status: 200, blob: () => Promise.resolve(blob) } as unknown as Response);
+
+const q = { title: 'Cemalım', artist: 'Altın Gün', album: 'On', duration: 242 };
+const hit = {
+  artistName: 'Altın Gün',
+  trackName: 'Cemalım',
+  trackTimeMillis: 242720,
+  artworkUrl100: 'https://is1-ssl.mzstatic.com/image/thumb/a/b/c/cover.jpg/100x100bb.jpg',
+};
+
+afterEach(() => vi.restoreAllMocks());
+
+describe('fetchCoverOnline', () => {
+  it('downloads the 600px artwork for a confident track match', async () => {
+    const art = jpeg();
+    vi.spyOn(globalThis, 'fetch').mockImplementation((url) => {
+      const u = String(url);
+      if (u.startsWith('https://itunes.apple.com/search')) {
+        expect(u).toContain('entity=song');
+        return searchOk([hit]);
+      }
+      expect(u).toContain('/600x600bb.jpg');
+      return imageOk(art);
+    });
+
+    expect(await fetchCoverOnline(q)).toEqual({ status: 'found', blob: art });
+  });
+
+  it('sends metadata only — no file bytes, no audio', async () => {
+    const seen: string[] = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation((url) => {
+      seen.push(String(url));
+      return searchOk([]);
+    });
+    await fetchCoverOnline({ title: 'Cemalım', artist: 'Altın Gün' });
+    expect(seen[0]).toContain('term=Alt');
+    expect(seen[0]).not.toContain('blob:');
+  });
+
+  it('falls back to an album search when no track matches confidently', async () => {
+    const art = jpeg();
+    let songSearches = 0;
+    vi.spyOn(globalThis, 'fetch').mockImplementation((url) => {
+      const u = String(url);
+      if (u.includes('entity=song')) {
+        songSearches += 1;
+        return searchOk([{ ...hit, artistName: 'Elton John' }]); // wrong artist
+      }
+      if (u.includes('entity=album')) {
+        return searchOk([
+          { artistName: 'Altın Gün', collectionName: 'On', artworkUrl100: hit.artworkUrl100 },
+        ]);
+      }
+      return imageOk(art);
+    });
+
+    expect(await fetchCoverOnline(q)).toEqual({ status: 'found', blob: art });
+    expect(songSearches).toBe(1);
+  });
+
+  it('reports none when nothing matches confidently', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() => searchOk([{ ...hit, artistName: 'Nope' }]));
+    expect(await fetchCoverOnline(q)).toEqual({ status: 'none' });
+  });
+
+  it('skips the album search entirely when the song has no album', async () => {
+    const calls: string[] = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation((url) => {
+      calls.push(String(url));
+      return searchOk([]);
+    });
+    await fetchCoverOnline({ title: 'Cemalım', artist: 'Altın Gün' });
+    expect(calls).toHaveLength(1);
+  });
+
+  // 403 is what iTunes returns when it rate-limits a caller. The sweep in
+  // App.tsx stops on this rather than firing another 200 doomed requests.
+  it('reports throttled on a 403 so a sweep can stop early', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
+      Promise.resolve({ ok: false, status: 403, json: () => Promise.resolve({}) } as Response),
+    );
+    expect(await fetchCoverOnline(q)).toEqual({ status: 'throttled' });
+  });
+
+  it('reports throttled on a 429 as well', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
+      Promise.resolve({ ok: false, status: 429, json: () => Promise.resolve({}) } as Response),
+    );
+    expect(await fetchCoverOnline(q)).toEqual({ status: 'throttled' });
+  });
+
+  it('never throws when the network fails', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline'));
+    expect(await fetchCoverOnline(q)).toEqual({ status: 'error' });
+  });
+
+  it('rejects a download that is not actually an image', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation((url) =>
+      String(url).includes('itunes')
+        ? searchOk([hit])
+        : imageOk(new Blob(['<html>404</html>'], { type: 'text/html' })),
+    );
+    expect(await fetchCoverOnline(q)).toEqual({ status: 'error' });
+  });
+
+  it('rejects a zero-byte download', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation((url) =>
+      String(url).includes('itunes')
+        ? searchOk([hit])
+        : imageOk(new Blob([], { type: 'image/jpeg' })),
+    );
+    expect(await fetchCoverOnline(q)).toEqual({ status: 'error' });
+  });
+});

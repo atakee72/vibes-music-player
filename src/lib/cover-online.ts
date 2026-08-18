@@ -9,6 +9,8 @@
  * back into the music file — beets owns tags (CLAUDE.md interop contract).
  */
 
+import { downscaleCover } from './cover';
+
 const BASE = 'https://itunes.apple.com/search';
 /** Requested artwork edge. We downscale to 512, so 600 is the smallest source
  *  that cannot upscale. 1000 exists but is ~2× the bytes for no visible gain. */
@@ -112,4 +114,70 @@ export function isConfidentAlbumMatch(q: CoverQuery, r: ItunesResult): boolean {
  *  shapes pass through unchanged — a 100px cover beats an exception. */
 export function artworkUrl(url100: string, size = ARTWORK_SIZE): string {
   return url100.replace(/\/\d+x\d+bb\.jpg$/, `/${size}x${size}bb.jpg`);
+}
+
+export type CoverResult =
+  | { status: 'found'; blob: Blob }
+  | { status: 'none' }
+  | { status: 'throttled' }
+  | { status: 'error' };
+
+/** `'throttled'` is distinct from `null` on purpose — the library sweep must
+ *  stop on it rather than issue hundreds of doomed requests. */
+type SearchOutcome = ItunesResult[] | null | 'throttled';
+
+async function search(term: string, entity: 'song' | 'album'): Promise<SearchOutcome> {
+  const qs = new URLSearchParams({
+    term,
+    entity,
+    media: 'music',
+    limit: String(SEARCH_LIMIT),
+  });
+  const res = await fetch(`${BASE}?${qs.toString()}`);
+  // 403 is iTunes' rate-limit response; 429 is the conventional one.
+  if (res.status === 403 || res.status === 429) return 'throttled';
+  if (!res.ok) return null;
+  // The endpoint answers with `content-type: text/javascript`. Response.json()
+  // does not check content-type, so this is correct — do NOT add a
+  // content-type guard, it would reject every valid response.
+  const data = (await res.json()) as { results?: ItunesResult[] };
+  return data.results ?? [];
+}
+
+async function download(r: ItunesResult): Promise<CoverResult> {
+  const res = await fetch(artworkUrl(r.artworkUrl100 as string));
+  if (!res.ok) return { status: 'error' };
+  const raw = await res.blob();
+  // A CDN error page comes back 200 with HTML; persisting it would put a
+  // permanently broken image into the library.
+  if (raw.size === 0 || !raw.type.startsWith('image/')) return { status: 'error' };
+  // The project-wide rule: never persist art that has not been downscaled.
+  return { status: 'found', blob: await downscaleCover(raw) };
+}
+
+/**
+ * Find cover art for one song. Tries an exact track match first, then falls
+ * back to the album (for tracks the store carries only as album cuts).
+ *
+ * **Never throws** — same contract as `fetchLyricsOnline`. Callers switch on
+ * `status`.
+ */
+export async function fetchCoverOnline(q: CoverQuery): Promise<CoverResult> {
+  try {
+    const tracks = await search(`${q.artist} ${q.title}`, 'song');
+    if (tracks === 'throttled') return { status: 'throttled' };
+    const track = tracks?.find((r) => isConfidentTrackMatch(q, r));
+    if (track) return await download(track);
+
+    if (q.album) {
+      const albums = await search(`${q.artist} ${q.album}`, 'album');
+      if (albums === 'throttled') return { status: 'throttled' };
+      const album = albums?.find((r) => isConfidentAlbumMatch(q, r));
+      if (album) return await download(album);
+    }
+
+    return { status: 'none' };
+  } catch {
+    return { status: 'error' };
+  }
 }
