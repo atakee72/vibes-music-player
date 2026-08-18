@@ -46,7 +46,7 @@ export function normalizeForMatch(s: string): string {
     .normalize('NFD')
     // Escapes, NOT literal combining marks — those are invisible in source
     // and corrupt on copy/paste.
-    .replace(/[̀-ͯ]/g, '') // café → cafe, Gün → Gun
+        .replace(/[\u0300-\u036f]/g, '') // café → cafe, Gün → Gun
     // Turkish dotless ı (U+0131) has NO NFD decomposition, so it survives to
     // the ASCII filter below and gets deleted MID-WORD: "Cemalım" → "cemal m",
     // "Şıkıdım" → "s k d m". Both sides still agree, but such a low-entropy
