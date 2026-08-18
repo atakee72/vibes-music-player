@@ -861,14 +861,34 @@ export default function App() {
 
       if (result.status === 'found') {
         const patch = { coverArt: URL.createObjectURL(result.blob), coverBlob: result.blob };
+        // "Art-less" was true when this song was PICKED; it can be false by
+        // now. The cover self-heal (healedCoversRef) targets the same
+        // predicate, runs async, and commits its own batch write — and the
+        // row menu's `!coverArt` gate is a render-time snapshot. Applying
+        // blind would paste an iTunes guess over the user's own embedded art.
+        // The ONE liveness checkpoint, read right before the writes (same
+        // shape as re-scan's `playingId`): decides both whether the patch
+        // lands and whether its url has to be revoked.
+        const applies = playlistsRef.current.some((p) =>
+          p.songs.some((s) => s.id === id && !s.coverBlob),
+        );
         // Merged onto the LIVE song in each updater — never onto the `song`
         // snapshot captured above, which may be stale by the time the network
         // call returns (CLAUDE.md, "Re-scan tags": same lesson).
-        const apply = (s: Song): Song => (s.id === id ? { ...s, ...patch } : s);
-        setPlaylists((prev) => prev.map((p) => ({ ...p, songs: p.songs.map(apply) })));
-        setCurrentSong((cur) => (cur ? apply(cur) : cur));
-        setQueue((q) => q.map(apply));
-        setNotification(`Cover art added for "${song.title}".`);
+        const apply = (s: Song): Song =>
+          s.id === id && applies && !s.coverBlob ? { ...s, ...patch } : s;
+        if (applies) {
+          setPlaylists((prev) => prev.map((p) => ({ ...p, songs: p.songs.map(apply) })));
+          setCurrentSong((cur) => (cur ? apply(cur) : cur));
+          setQueue((q) => q.map(apply));
+          setNotification(`Cover art added for "${song.title}".`);
+        } else {
+          // Nobody else revokes this: the playlists-diff revoke effect only
+          // fires for REMOVED ids, and this url was never assigned to a song.
+          // Deferred past the commit, like every other revoke in this file.
+          setNotification(`"${song.title}" already has cover art.`);
+          setTimeout(() => URL.revokeObjectURL(patch.coverArt), 0);
+        }
       } else if (result.status === 'throttled') {
         setNotification('Apple rate-limited the lookup. Try again in a minute.');
       } else if (result.status === 'error') {
@@ -1595,6 +1615,14 @@ export default function App() {
     );
 
     async function runSweep(songs: Song[]) {
+      // Re-checked here, not just at click time: the confirm modal is modal to
+      // the SWEEP, not to the app — the user can fire a single-song "Find
+      // cover art" (or a second sweep) while it sits open, and the click-time
+      // check above is by then minutes stale.
+      if (sweepingCoversRef.current || fetchingCoverRef.current) {
+        setNotification('Already looking for cover art…');
+        return;
+      }
       sweepingCoversRef.current = true;
       setSweepingCovers(true);
       try {
@@ -1629,29 +1657,64 @@ export default function App() {
           }
 
           done += 1;
-          // Every 5 keeps the toast alive (its timer resets on each set)
-          // without re-rendering App once per lookup.
-          if (done % 5 === 0) setNotification(`Finding cover art… ${done}/${songs.length}`);
+          // Every lookup: each one costs a network round-trip plus
+          // SWEEP_GAP_MS, so a batch of even a few routinely outlives the
+          // notification's 5s auto-dismiss — a coarser cadence leaves the
+          // user staring at nothing mid-sweep. (Re-scan's %10 is fine only
+          // because its work is local disk.)
+          setNotification(`Finding cover art… ${done}/${songs.length}`);
           if (done < songs.length) await new Promise((r) => setTimeout(r, SWEEP_GAP_MS));
         }
 
-        if (patches.size > 0) {
+        // The ONE liveness checkpoint, read right before the writes — same
+        // shape as re-scan's `playingId`. "Art-less" was true when these
+        // songs were PICKED, and a sweep is ~1s/track: the cover self-heal
+        // (healedCoversRef) targets the same predicate and commits its own
+        // batch write, so applying blind would paste an iTunes guess over
+        // art Vibes just recovered from the user's own file. Computed from
+        // the live playlists rather than inside `apply`, which is a state
+        // updater and must stay pure — it can neither revoke nor report.
+        const applied = new Set<string>();
+        for (const p of playlistsRef.current) {
+          for (const s of p.songs) {
+            if (patches.has(s.id) && !s.coverBlob) applied.add(s.id);
+          }
+        }
+        // Urls `apply` will DISCARD: a song that gained art mid-sweep, or one
+        // deleted mid-sweep (its patch now matches nothing). Nobody else
+        // revokes them — the playlists-diff revoke effect only fires for
+        // REMOVED ids, and these were never assigned to a song.
+        const discardedUrls: string[] = [];
+        for (const [id, patch] of patches) {
+          if (!applied.has(id)) discardedUrls.push(patch.coverArt);
+        }
+
+        if (applied.size > 0) {
           const apply = (s: Song): Song => {
             const patch = patches.get(s.id);
-            return patch ? { ...s, ...patch } : s;
+            // `applied` keeps currentSong/queue in lockstep with the playlist
+            // copy, so a url can never be both applied here and revoked below.
+            return patch && !s.coverBlob && applied.has(s.id) ? { ...s, ...patch } : s;
           };
           setPlaylists((prev) => prev.map((p) => ({ ...p, songs: p.songs.map(apply) })));
           setCurrentSong((cur) => (cur ? apply(cur) : cur));
           setQueue((q) => q.map(apply));
         }
 
+        if (discardedUrls.length > 0) {
+          // Deferred past React's commit, same reason as the revoke effect.
+          setTimeout(() => {
+            for (const url of discardedUrls) URL.revokeObjectURL(url);
+          }, 0);
+        }
+
         if (throttled) {
           setNotification(
-            `Apple rate-limited the lookup — stopped after ${done} of ${songs.length}. Added ${patches.size}. Try again in a minute.`,
+            `Apple rate-limited the lookup — stopped after ${done} of ${songs.length}. Added ${applied.size}. Try again in a minute.`,
           );
         } else {
           setNotification(
-            `Cover art: added ${patches.size} of ${songs.length} ${songs.length === 1 ? 'track' : 'tracks'}.`,
+            `Cover art: added ${applied.size} of ${songs.length} ${songs.length === 1 ? 'track' : 'tracks'}.`,
           );
         }
       } finally {
@@ -1960,7 +2023,14 @@ export default function App() {
     ...(activePlaylistId === 'library' && libraryRoots.length > 0 && libraryStatus === 'ready'
       ? [{ key: 'rescan', label: 'Re-scan tags', icon: ScanLine, onClick: rescanTags }]
       : []),
-    ...(activePlaylistId === 'library'
+    // `libraryStatus === 'ready'` like Re-scan, but deliberately NOT
+    // `libraryRoots.length > 0`: unlike Refresh/Re-scan this needs no FS
+    // Access handle, so it must keep working for blob-persisted
+    // Firefox/Safari libraries, which have no roots. The status gate is what
+    // matters — under `needs-prompt` `playlists` is the empty placeholder,
+    // and the sweep would report "Every track already has cover art." for a
+    // library that simply has not loaded yet.
+    ...(activePlaylistId === 'library' && libraryStatus === 'ready'
       ? [{ key: 'find-covers', label: 'Find missing covers', icon: ImagePlus, onClick: findMissingCovers }]
       : []),
     ...(activePlaylist && activePlaylist.songs.length > 0
@@ -2231,7 +2301,7 @@ export default function App() {
                         <ScanLine className="h-4 w-4" />
                       </button>
                     )}
-                  {activePlaylistId === 'library' && (
+                  {activePlaylistId === 'library' && libraryStatus === 'ready' && (
                     <button
                       onClick={findMissingCovers}
                       disabled={sweepingCovers}

@@ -176,6 +176,12 @@ import { fetchCoverOnline } from './cover-online';
 // identical to the stubbed response body.
 vi.mock('./cover', () => ({ downscaleCover: vi.fn(async (b: Blob) => b) }));
 
+// Imported so the identity mock above can still be ASSERTED on: with it
+// stubbed out, deleting the downscaleCover call from download() would
+// otherwise leave the whole suite green while breaking the project-wide
+// "never persist art that has not been downscaled" rule.
+import { downscaleCover } from './cover';
+
 const jpeg = () => new Blob([new Uint8Array([1, 2, 3])], { type: 'image/jpeg' });
 const searchOk = (results: unknown[]) =>
   Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ results }) } as Response);
@@ -206,6 +212,9 @@ describe('fetchCoverOnline', () => {
     });
 
     expect(await fetchCoverOnline(q)).toEqual({ status: 'found', blob: art });
+    // The downloaded bytes go through downscaleCover on the way out — the
+    // one place this module can violate the 512px storage cap.
+    expect(vi.mocked(downscaleCover)).toHaveBeenCalledWith(art);
   });
 
   it('sends metadata only — no file bytes, no audio', async () => {

@@ -1166,6 +1166,80 @@ describe('cover art fetch', () => {
     expect(await screen.findByText(/no cover art found/i)).toBeInTheDocument();
   });
 
+  // Regression: the row menu's `!coverArt` gate is a RENDER-TIME snapshot
+  // (and `sheetSong` in the mobile action sheet is a captured object), so by
+  // the time the network call returns the live song can already have art —
+  // most realistically from the cover self-heal, which targets the same
+  // "no coverArt and no coverBlob" predicate and commits asynchronously.
+  // Applying blind replaced the user's own embedded art with an iTunes guess
+  // AND leaked the self-heal's url; the unused url leaked either way, since
+  // the playlists-diff revoke effect only fires for REMOVED ids.
+  it('does not overwrite art that arrived while the lookup was in flight, and revokes the unused url', async () => {
+    const png = new Blob([new Uint8Array([9, 9, 9])], { type: 'image/png' });
+    const embedded = new Uint8Array([1, 2, 3, 4, 5]);
+
+    // Gate 1: hold the self-heal's parse open until after the lookup starts.
+    let releaseHeal!: () => void;
+    const heal = new Promise<void>((r) => (releaseHeal = r));
+    vi.mocked(parseBlob).mockImplementation(async () => {
+      await heal;
+      return {
+        common: { picture: [{ data: embedded, format: 'image/jpeg' }] },
+        format: {},
+      } as never;
+    });
+    // Gate 2: hold the lookup open so the self-heal's commit is guaranteed to
+    // land BEFORE the patch is applied — the exact ordering of the bug.
+    let releaseLookup!: () => void;
+    const lookup = new Promise<void>((r) => (releaseLookup = r));
+    vi.mocked(fetchCoverOnline).mockImplementation(async () => {
+      await lookup;
+      return { status: 'found' as const, blob: png };
+    });
+
+    const createSpy = vi.spyOn(URL, 'createObjectURL');
+    const revokeSpy = vi.spyOn(URL, 'revokeObjectURL');
+
+    await renderApp({
+      playlists: [
+        makePlaylist({
+          id: 'library',
+          name: 'Library',
+          songs: [makeSong({ id: 's1', title: 'Bare', artist: 'Nobody' })],
+        }),
+      ],
+    });
+
+    openRowMenuAnd('Bare', /find cover art/i);
+
+    releaseHeal();
+    await waitFor(
+      () => {
+        const saved = vi.mocked(storage.savePlaylists).mock.lastCall?.[0] as Playlist[];
+        expect(saved?.[0].songs[0].coverBlob?.size).toBe(embedded.length);
+      },
+      { timeout: 3000 },
+    );
+
+    releaseLookup();
+    expect(await screen.findByText(/already has cover art/i)).toBeInTheDocument();
+
+    // Past the 500ms save debounce: an unconditional apply would have
+    // committed the iTunes blob and persisted it right here.
+    await new Promise((r) => setTimeout(r, 700));
+    // The self-healed art survived...
+    const saved = vi.mocked(storage.savePlaylists).mock.lastCall?.[0] as Playlist[];
+    expect(saved[0].songs[0].coverBlob?.size).toBe(embedded.length);
+    // ...and the iTunes url that never reached a song was revoked.
+    const i = createSpy.mock.calls.findIndex(([blob]) => blob === png);
+    expect(i).toBeGreaterThanOrEqual(0);
+    const unusedUrl = createSpy.mock.results[i]?.value as string;
+    await waitFor(() => expect(revokeSpy).toHaveBeenCalledWith(unusedUrl));
+
+    // Restore the harness default: implementations survive clearAllMocks.
+    vi.mocked(parseBlob).mockResolvedValue({ common: {}, format: {} } as never);
+  });
+
   // The action exists to FILL gaps; offering it on a song that already has
   // art would invite silent replacement, which this feature deliberately
   // does not do (and would need object-URL revocation to do safely).
@@ -1249,6 +1323,133 @@ describe('find missing covers sweep', () => {
       const saved = vi.mocked(storage.savePlaylists).mock.lastCall?.[0] as Playlist[];
       expect(saved[0].songs[0].coverBlob).toBe(png);
     });
+  });
+
+  // Regression: candidates are art-less at SELECTION time only, and a sweep
+  // runs ~1s per track. The cover self-heal targets the same predicate and
+  // commits its own batch write, so applying the patches blind pasted an
+  // iTunes guess over art Vibes had just recovered from the user's own file
+  // — and every patch that ended up matching nothing leaked its object url.
+  it('does not overwrite art that arrived mid-sweep, and revokes the unused url', async () => {
+    const png = new Blob([new Uint8Array([7])], { type: 'image/png' });
+    const embedded = new Uint8Array([1, 2, 3, 4, 5]);
+
+    let releaseHeal!: () => void;
+    const heal = new Promise<void>((r) => (releaseHeal = r));
+    vi.mocked(parseBlob).mockImplementation(async () => {
+      await heal;
+      return {
+        common: { picture: [{ data: embedded, format: 'image/jpeg' }] },
+        format: {},
+      } as never;
+    });
+    let releaseLookup!: () => void;
+    const lookup = new Promise<void>((r) => (releaseLookup = r));
+    vi.mocked(fetchCoverOnline).mockImplementation(async () => {
+      await lookup;
+      return { status: 'found' as const, blob: png };
+    });
+
+    const createSpy = vi.spyOn(URL, 'createObjectURL');
+    const revokeSpy = vi.spyOn(URL, 'revokeObjectURL');
+
+    await renderApp({
+      playlists: [
+        makePlaylist({
+          id: 'library',
+          name: 'Library',
+          songs: [makeSong({ id: 's1', title: 'Bare One' })],
+        }),
+      ],
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Find missing covers' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Find covers' }));
+
+    // The song WAS a candidate (still art-less when the sweep picked it);
+    // now let the self-heal commit its own art underneath the running sweep.
+    releaseHeal();
+    await waitFor(
+      () => {
+        const saved = vi.mocked(storage.savePlaylists).mock.lastCall?.[0] as Playlist[];
+        expect(saved?.[0].songs[0].coverBlob?.size).toBe(embedded.length);
+      },
+      { timeout: 3000 },
+    );
+
+    releaseLookup();
+    // Nothing was applied, and the toast says so rather than over-reporting.
+    expect(await screen.findByText(/added 0 of 1/i)).toBeInTheDocument();
+
+    // Past the 500ms save debounce: an unconditional apply would have
+    // committed the iTunes blob and persisted it right here.
+    await new Promise((r) => setTimeout(r, 700));
+    const saved = vi.mocked(storage.savePlaylists).mock.lastCall?.[0] as Playlist[];
+    expect(saved[0].songs[0].coverBlob?.size).toBe(embedded.length);
+
+    const i = createSpy.mock.calls.findIndex(([blob]) => blob === png);
+    expect(i).toBeGreaterThanOrEqual(0);
+    const unusedUrl = createSpy.mock.results[i]?.value as string;
+    await waitFor(() => expect(revokeSpy).toHaveBeenCalledWith(unusedUrl));
+
+    vi.mocked(parseBlob).mockResolvedValue({ common: {}, format: {} } as never);
+  });
+
+  // The click-time guard is not enough: the confirm dialog is modal to the
+  // SWEEP, not to the app, so a single-song "Find cover art" can start while
+  // it sits open — and both paths hit the same rate-limited API.
+  it('re-checks the busy guards after the confirm resolves', async () => {
+    let releaseLookup!: () => void;
+    const lookup = new Promise<void>((r) => (releaseLookup = r));
+    vi.mocked(fetchCoverOnline).mockImplementation(async () => {
+      await lookup;
+      return { status: 'none' as const };
+    });
+
+    await renderApp({
+      playlists: [
+        makePlaylist({
+          id: 'library',
+          name: 'Library',
+          songs: [makeSong({ id: 's1', title: 'Bare One' })],
+        }),
+      ],
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Find missing covers' }));
+    const confirmButton = await screen.findByRole('button', { name: 'Find covers' });
+
+    // Single-song fetch started WHILE the confirm dialog is open.
+    openRowMenuAnd('Bare One', /find cover art/i);
+    await waitFor(() => expect(vi.mocked(fetchCoverOnline)).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(confirmButton);
+
+    expect(await screen.findByText(/already looking for cover art/i)).toBeInTheDocument();
+    // The sweep issued no requests of its own.
+    expect(vi.mocked(fetchCoverOnline)).toHaveBeenCalledTimes(1);
+
+    releaseLookup();
+    await screen.findByText(/no cover art found/i);
+    vi.mocked(fetchCoverOnline).mockResolvedValue({ status: 'none' });
+  });
+
+  // Under `needs-prompt` the in-memory library is an empty placeholder
+  // (Chromium forgets FS Access grants across restarts), so an ungated sweep
+  // reports "Every track already has cover art." for a library that simply
+  // has not loaded yet.
+  it('is not offered while a folder permission is still pending', async () => {
+    store.playlists = [
+      makePlaylist({ id: 'library', name: 'Library', songs: [makeSong({ title: 'Precious' })] }),
+    ];
+    store.roots = [
+      { id: 'root-1', name: 'Music', handle: { queryPermission: async () => 'prompt' } },
+    ];
+    render(<App />);
+    await screen.findByText(/Welcome back/);
+    expect(
+      screen.queryByRole('button', { name: 'Find missing covers' }),
+    ).not.toBeInTheDocument();
   });
 
   it('says so when every track already has art', async () => {
