@@ -38,6 +38,7 @@ interface SongListProps {
   onReorder: (songs: Song[]) => void;
   onPlayNext: (id: string) => void;
   onAddToQueue: (id: string) => void;
+  onFindCover?: (id: string) => void;
   isFilterActive: boolean;
   emptyHint?: { primary: string; secondary: string };
 }
@@ -70,6 +71,7 @@ interface SortableRowProps {
   onToggleFavorite: (id: string) => void;
   onPlayNext: (id: string) => void;
   onAddToQueue: (id: string) => void;
+  onFindCover?: (id: string) => void;
   onOpenSheet: (song: Song) => void;
   onRowClick: (song: Song, e: React.MouseEvent) => void;
   onLongPress: (song: Song) => void;
@@ -91,6 +93,7 @@ const SortableRow = memo(function SortableRow({
   onToggleFavorite,
   onPlayNext,
   onAddToQueue,
+  onFindCover,
   onOpenSheet,
   onRowClick,
   onLongPress,
@@ -322,6 +325,7 @@ const SortableRow = memo(function SortableRow({
                 songTitle={song.title}
                 onPlayNext={() => onPlayNext(song.id)}
                 onAddToQueue={() => onAddToQueue(song.id)}
+                onFindCover={onFindCover && !song.coverArt ? () => onFindCover(song.id) : undefined}
                 onOpenChange={(open) => onMenuOpenChange(song.id, open)}
               />
             </div>
@@ -363,6 +367,7 @@ export function SongList({
   onReorder,
   onPlayNext,
   onAddToQueue,
+  onFindCover,
   isFilterActive,
   emptyHint = DEFAULT_EMPTY_HINT,
 }: SongListProps) {
@@ -587,6 +592,7 @@ export function SongList({
                     onToggleFavorite={onToggleFavorite}
                     onPlayNext={onPlayNext}
                     onAddToQueue={onAddToQueue}
+                    onFindCover={onFindCover}
                     onOpenSheet={openSheet}
                     onRowClick={handleRowClick}
                     onLongPress={handleLongPress}
@@ -602,6 +608,7 @@ export function SongList({
         song={sheetSong}
         onPlayNext={onPlayNext}
         onAddToQueue={onAddToQueue}
+        onFindCover={onFindCover}
         onToggleFavorite={onToggleFavorite}
         onDelete={onDelete}
         onClose={closeSheet}

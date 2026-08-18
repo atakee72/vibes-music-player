@@ -6,6 +6,7 @@ import { encodeSharePayload } from './lib/share';
 import { SLEEP_FADE_SECONDS } from './lib/sleep';
 import type { Playlist, Song } from './types';
 import { parseBlob } from 'music-metadata';
+import { fetchCoverOnline } from './lib/cover-online';
 
 // ---------------------------------------------------------------------------
 // Harness mocks. The audio engine is the only real coupling App has to
@@ -71,6 +72,10 @@ vi.mock('music-metadata', () => ({
 // (the input Uint8Array's length), since real downscaling could change it.
 vi.mock('./lib/cover', () => ({
   downscaleCover: vi.fn(async (blob: Blob) => blob),
+}));
+
+vi.mock('./lib/cover-online', () => ({
+  fetchCoverOnline: vi.fn(async () => ({ status: 'none' })),
 }));
 
 const store = vi.hoisted(() => ({
@@ -1113,5 +1118,70 @@ describe('re-scan tags', () => {
       await screen.findByText(/Re-scan complete: 1 of 1 track updated/),
     ).toBeInTheDocument();
     await waitFor(() => expect(revokeSpy).toHaveBeenCalledWith('blob:old-cover'));
+  });
+});
+
+describe('cover art fetch', () => {
+  it('persists art fetched for a single song', async () => {
+    const png = new Blob([new Uint8Array([9, 9, 9])], { type: 'image/png' });
+    vi.mocked(fetchCoverOnline).mockResolvedValue({ status: 'found', blob: png });
+
+    await renderApp({
+      playlists: [
+        makePlaylist({
+          id: 'library',
+          name: 'Library',
+          songs: [makeSong({ id: 's1', title: 'Bare', artist: 'Nobody' })],
+        }),
+      ],
+    });
+
+    openRowMenuAnd('Bare', /find cover art/i);
+
+    await waitFor(() =>
+      expect(vi.mocked(fetchCoverOnline)).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Bare', artist: 'Nobody' }),
+      ),
+    );
+    await waitFor(() => {
+      const saved = vi.mocked(storage.savePlaylists).mock.lastCall?.[0] as Playlist[];
+      expect(saved[0].songs[0].coverBlob).toBe(png);
+    });
+  });
+
+  it('tells the user when nothing confident was found', async () => {
+    vi.mocked(fetchCoverOnline).mockResolvedValue({ status: 'none' });
+    await renderApp({
+      playlists: [
+        makePlaylist({
+          id: 'library',
+          name: 'Library',
+          songs: [makeSong({ id: 's1', title: 'Bare', artist: 'Nobody' })],
+        }),
+      ],
+    });
+
+    openRowMenuAnd('Bare', /find cover art/i);
+
+    expect(await screen.findByText(/no cover art found/i)).toBeInTheDocument();
+  });
+
+  // The action exists to FILL gaps; offering it on a song that already has
+  // art would invite silent replacement, which this feature deliberately
+  // does not do (and would need object-URL revocation to do safely).
+  it('does not offer the action for a song that already has art', async () => {
+    await renderApp({
+      playlists: [
+        makePlaylist({
+          id: 'library',
+          name: 'Library',
+          songs: [makeSong({ id: 's1', title: 'Arted', coverArt: 'blob:existing' })],
+        }),
+      ],
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'More actions for Arted' }));
+    expect(screen.getByRole('menuitem', { name: /play next/i })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: /find cover art/i })).not.toBeInTheDocument();
   });
 });

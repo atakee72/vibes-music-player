@@ -4,12 +4,14 @@ import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
-import { ListEnd, ListStart, MoreHorizontal } from 'lucide-react';
+import { ImagePlus, ListEnd, ListStart, MoreHorizontal } from 'lucide-react';
 
 interface RowMenuProps {
   songTitle: string;
   onPlayNext: () => void;
   onAddToQueue: () => void;
+  /** Present only when the song has no cover art — absent hides the item. */
+  onFindCover?: () => void;
   /** Notified on every open/close transition — lets the virtualized list
    *  raise this row's wrapper z-index while the menu is open (CLAUDE.md
    *  "RowMenu occluded by following virtualized rows"). */
@@ -20,7 +22,13 @@ interface RowMenuProps {
  * The song-row "⋯" dropdown. Local open state + outside-click close — same
  * convention-break precedent as PlayerBar's `eqOpen` (CLAUDE.md).
  */
-export function RowMenu({ songTitle, onPlayNext, onAddToQueue, onOpenChange }: RowMenuProps) {
+export function RowMenu({
+  songTitle,
+  onPlayNext,
+  onAddToQueue,
+  onFindCover,
+  onOpenChange,
+}: RowMenuProps) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -105,6 +113,7 @@ export function RowMenu({ songTitle, onPlayNext, onAddToQueue, onOpenChange }: R
         >
           {item('Play next', ListStart, onPlayNext)}
           {item('Add to queue', ListEnd, onAddToQueue)}
+          {onFindCover && item('Find cover art', ImagePlus, onFindCover)}
         </div>
       )}
     </div>

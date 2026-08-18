@@ -820,6 +820,68 @@ export default function App() {
     }
   }, [currentSong, fetchingLyrics]);
 
+  // Guarded by a ref, not state: the guard must be readable synchronously
+  // inside the callback, and a busy flag rendered into memoized rows would
+  // re-render the whole list for a one-song network call.
+  const fetchingCoverRef = useRef(false);
+  // Declared here, set by Task 4's sweep. Both refs live together so the
+  // cross-guard below compiles before the sweep exists.
+  const sweepingCoversRef = useRef(false);
+
+  const handleFetchCover = useCallback(async (id: string) => {
+    // Cross-guarded against the sweep, not just against itself: the two paths
+    // hit the SAME rate-limited API, and a single lookup fired mid-sweep both
+    // doubles the request rate and can be the request that gets the sweep
+    // throttled.
+    if (fetchingCoverRef.current || sweepingCoversRef.current) {
+      setNotification('Already looking for cover art…');
+      return;
+    }
+    const song = filteredSongsRef.current.find((s) => s.id === id);
+    if (!song) return;
+
+    fetchingCoverRef.current = true;
+    setNotification(`Looking for cover art for "${song.title}"…`);
+    try {
+      // Dynamic import keeps the iTunes client out of the startup bundle,
+      // exactly like lyrics-online.
+      const { fetchCoverOnline } = await import('./lib/cover-online');
+      const result = await fetchCoverOnline({
+        title: song.title,
+        artist: song.artist,
+        album: song.album,
+        duration: song.duration,
+      });
+
+      if (result.status === 'found') {
+        const patch = { coverArt: URL.createObjectURL(result.blob), coverBlob: result.blob };
+        // Merged onto the LIVE song in each updater — never onto the `song`
+        // snapshot captured above, which may be stale by the time the network
+        // call returns (CLAUDE.md, "Re-scan tags": same lesson).
+        const apply = (s: Song): Song => (s.id === id ? { ...s, ...patch } : s);
+        setPlaylists((prev) => prev.map((p) => ({ ...p, songs: p.songs.map(apply) })));
+        setCurrentSong((cur) => (cur ? apply(cur) : cur));
+        setQueue((q) => q.map(apply));
+        setNotification(`Cover art added for "${song.title}".`);
+      } else if (result.status === 'throttled') {
+        setNotification('Apple rate-limited the lookup. Try again in a minute.');
+      } else if (result.status === 'error') {
+        setNotification('Cover art lookup failed — check your connection.');
+      } else {
+        setNotification(`No cover art found for "${song.title}".`);
+      }
+    } catch (err) {
+      // `fetchCoverOnline` never throws, but `import()` can — a tab left open
+      // across a deploy 404s on the lazy chunk. Without this the rejection
+      // escapes an onClick as an unhandled rejection with no user feedback,
+      // which is the exact bug the Re-scan `.catch` exists for.
+      console.warn('cover fetch: unexpected failure', err);
+      setNotification('Cover art lookup failed unexpectedly.');
+    } finally {
+      fetchingCoverRef.current = false;
+    }
+  }, []);
+
   const handleFiles = useCallback(
     async (files: FileList | File[]) => {
       const allFiles = Array.from(files);
@@ -2124,6 +2186,7 @@ export default function App() {
                 onDelete={handleDeleteSong}
                 onPlayNext={playNextInQueue}
                 onAddToQueue={addToQueue}
+                onFindCover={handleFetchCover}
                 onToggleFavorite={toggleFavorite}
                 onBatchDelete={handleBatchDelete}
                 onReorder={handleReorder}

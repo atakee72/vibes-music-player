@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Heart, ListEnd, ListStart, Trash2 } from 'lucide-react';
+import { Heart, ImagePlus, ListEnd, ListStart, Trash2 } from 'lucide-react';
 import type { Song } from '../types';
 import { usePresence } from '../hooks/usePresence';
 import { useDialogFocus } from '../hooks/useDialogFocus';
@@ -10,6 +10,7 @@ interface RowActionSheetProps {
   song: Song | null;
   onPlayNext: (id: string) => void;
   onAddToQueue: (id: string) => void;
+  onFindCover?: (id: string) => void;
   onToggleFavorite: (id: string) => void;
   onDelete: (id: string) => void;
   onClose: () => void;
@@ -26,6 +27,7 @@ export function RowActionSheet({
   song,
   onPlayNext,
   onAddToQueue,
+  onFindCover,
   onToggleFavorite,
   onDelete,
   onClose,
@@ -96,6 +98,18 @@ export function RowActionSheet({
           <ListEnd className="h-5 w-5 text-white/60" />
           Add to queue
         </button>
+        {onFindCover && !shown.coverArt && (
+          <button
+            onClick={() => {
+              onFindCover(shown.id);
+              onClose();
+            }}
+            className={`${itemClass} text-white/80`}
+          >
+            <ImagePlus className="h-5 w-5 text-white/60" />
+            Find cover art
+          </button>
+        )}
         <button
           onClick={act(onToggleFavorite)}
           aria-pressed={!!shown.favorite}
