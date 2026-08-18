@@ -631,6 +631,44 @@ Facts other tools (e.g. a beets-managed library feeding Vibes) must know:
 - Don't try to persist the `coverArt` URL itself — blob URLs are session-
   scoped and will be dead after a reload.
 
+## Online cover art (iTunes Search API)
+
+- `src/lib/cover-online.ts` is the only file that knows iTunes exists.
+  **Metadata only** (artist/title/album/duration) — no audio, no file bytes,
+  same invariant as `lyrics-online.ts` and share links. Free, no key, no
+  secret, and **CORS-open on both the JSON and the `mzstatic` artwork host**,
+  which is what makes `res.blob()` possible in the browser and is why iTunes
+  was chosen over Spotify (whose client-credentials flow needs a server).
+- **Matching is strict and scored, never positional.** A live probe had an
+  album search for "altin gun on" return Altın Gün *and Elton John*, so
+  `result[0]` would paste wrong art across a library. `isConfidentTrackMatch`
+  requires normalized artist AND title equality (equality, not containment —
+  containment matches "Love" against "Love Story") plus duration within ±7s
+  when both sides know it. `isConfidentAlbumMatch` is the fallback for album
+  cuts. `normalizeForMatch` is a comparison key, not a display name: its only
+  contract is that both sides run through it.
+- `fetchCoverOnline` returns a **discriminated `CoverResult`**, not
+  `Blob | null`. `'throttled'` (HTTP 403/429) has to be distinguishable from
+  `'none'` or the library sweep cannot stop early — and a throttled sweep
+  would otherwise read as "your library has no matchable art".
+- The search endpoint answers `content-type: text/javascript`. `Response.json()`
+  ignores content-type, so it parses — **don't add a content-type guard**, it
+  would reject every valid response.
+- **Only songs with no art are candidates**, on both surfaces. That is what
+  keeps object-URL revocation out of this feature entirely: there is no
+  previous `coverArt` URL to free. Replacing existing art is deliberately out
+  of scope.
+- **The sweep is sequential with a `SWEEP_GAP_MS` gap** — the API rate-limits
+  per IP, so Re-scan's `Promise.all` fan-out is exactly wrong here. Its batch
+  write merges patches onto the **live** song inside the state updater, never
+  a pre-sweep snapshot (same lesson as Re-scan: a heart toggled mid-sweep
+  would otherwise be reverted and then persisted).
+- Fetched art is downscaled through `downscaleCover` *inside* the module, so
+  no caller can forget. It goes into `coverBlob` and **never back into the
+  file** — Vibes stays read-only on music files; beets owns tags.
+- The header opener needs **two** edits (`headerActions` for the mobile `⋯`
+  menu + the hand-written desktop button), per "The right-edge panel slot".
+
 ## Volume
 
 - Lives in App.tsx as `volume: number` (0–1), persisted via

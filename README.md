@@ -94,6 +94,10 @@ pnpm test:run  # Vitest single pass
 - **Synced lyrics** — from embedded tags, dropped `.lrc` files, or fetched
   on demand from **LRCLIB** ("Find lyrics" — free, metadata-only, no key);
   auto-scrolling panel toggled with `L`, fetched lyrics persist + work offline
+- **Cover art lookup** — fill in missing artwork from the free iTunes Search
+  API, one track at a time (row `⋯` menu) or across the whole library
+  (**Find missing covers**). Only the artist, title and album are sent; the
+  art is stored in Vibes and never written back to your files.
 - **Double-click a row to play**; click the play overlay also plays
 - **Collapsible sidebar** — hide the playlist sidebar on desktop for a
   wider song list view (icon: `PanelLeftClose` to close, `PanelLeftOpen`
@@ -142,6 +146,8 @@ src/
     crossfade.ts               equal-power fade curves + duration options
     stats.ts                   listening stats: record, aggregate, format
     sleep.ts                   sleep-timer options + countdown formatting
+    lyrics-online.ts           LRCLIB API lyrics fetch + LRC parser wrapper
+    cover-online.ts            iTunes Search API cover lookup + strict matching
 ```
 
 All app state lives in `App.tsx`; the three components are purely

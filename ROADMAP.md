@@ -690,19 +690,14 @@ filter that ruled out most of that app's feature list, since its headline
 features run on `yt-dlp`, a Spotify client *secret*, and its own PocketBase
 server. See "Out of scope (forever)" — none of these cross those lines.
 
-**Items 1-3 shipped** (1-2 on 2026-08-16, 3 on 2026-08-17) — see the sections
+**Items 1-4 shipped** (1-2 on 2026-08-16, 3 on 2026-08-17, 4 on 2026-08-19) — see the sections
 below. The rest stand.
 
 3. ~~**Local listening stats**~~ — shipped. — play counts, history, top artists, total
    minutes. Their version needs PocketBase only because it syncs across
    devices; the personal version is `storage.ts` + a new IDB key. Skip
    leaderboards and profiles (accounts are out of scope forever).
-4. **Cover art fetch for songs missing embedded art** — same shape as the
-   LRCLIB "Find lyrics" button: manual, metadata-only request, merged onto
-   the song and persisted. Use the **iTunes Search API** (free, no key,
-   CORS-open) — *not* Spotify, whose client-credentials flow needs a secret
-   and therefore a server. Respect the read-only-on-files contract: the art
-   goes into Vibes' `coverBlob`, never back into the file (beets owns tags).
+4. ~~**Cover art fetch for songs missing embedded art**~~ — shipped.
 5. **Lyrics romanization** — Japanese (Kanji/Kana→Romaji), Chinese
    (Hanzi→Pinyin), Korean (Hangul→Revised Romanization) for the lyrics
    panel. The source app routes this through its own Vercel function;
@@ -791,6 +786,28 @@ Backlog item 3, on branch `listening-stats`. 427 tests green.
 - Also learned: `headerActions` feeds only the mobile `⋯` menu — the desktop
   header's buttons are hand-written duplicates, so a new action needs two edits
   or it ships invisible on desktop.
+
+## Cover art fetch (shipped, 2026-08-19)
+
+Backlog item 4, on branch `cover-art-fetch`. 461 tests green.
+
+- Fills missing artwork from the **iTunes Search API** — free, no key, no
+  secret, and CORS-open on both the JSON *and* the `mzstatic` artwork host,
+  which is the fact the whole feature rests on (verified with live requests
+  before the plan was written). Spotify was ruled out for the opposite
+  reason: a client secret implies a server.
+- **Two surfaces on one primitive**: a per-song action in the row `⋯` menu /
+  mobile sheet, and a library-wide sweep behind a confirm modal with a
+  progress toast.
+- **Matching is strict and scored.** The probe that shaped it: an album search
+  for "altin gun on" returned Altın Gün *and Elton John*, so a positional
+  `result[0]` would have pasted wrong art across the library. Acceptance needs
+  normalized artist AND title equality plus a ±7s duration agreement.
+- **The sweep is sequential and stops on HTTP 403/429.** The API rate-limits
+  per IP, so Re-scan's parallel fan-out is exactly wrong here, and a throttled
+  sweep that kept going would over-report its own coverage.
+- Read-only on files throughout: art lands in `coverBlob`, downscaled inside
+  the module so no caller can skip it, and never written back to tags.
 
 ## Out of scope (forever)
 
