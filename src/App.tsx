@@ -24,6 +24,7 @@ import {
   BarChart3,
   ArrowUpDown,
   Download,
+  ImagePlus,
   ListChecks,
   Mic2,
   Music,
@@ -97,6 +98,11 @@ const SharedTrackModal = lazy(() =>
 type LibraryStatus = 'loading' | 'ready' | 'needs-prompt';
 
 const FAVORITES_CREATED = new Date(0); // stable identity for the virtual playlist
+
+/** Politeness gap between iTunes lookups. The Search API rate-limits per IP,
+ *  so the sweep is deliberately sequential — a Promise.all over a library's
+ *  worth of gaps would be throttled within seconds. */
+const SWEEP_GAP_MS = 400;
 
 function ensureLibrary(playlists: Playlist[]): Playlist[] {
   if (playlists.some((p) => p.id === 'library')) return playlists;
@@ -1546,6 +1552,115 @@ export default function App() {
     }
   }, [libraryStatus, libraryRoots, playlists, requestConfirm]);
 
+  // `sweepingCoversRef` was already declared in Task 3, beside fetchingCoverRef.
+  const [sweepingCovers, setSweepingCovers] = useState(false);
+
+  const findMissingCovers = useCallback(() => {
+    // Cross-guarded, same reason as handleFetchCover: one rate-limited API.
+    if (sweepingCoversRef.current || fetchingCoverRef.current) {
+      setNotification('Already looking for cover art…');
+      return;
+    }
+
+    // Deduped across playlists by id: ingest adds songs only to the active
+    // playlist, so Library is NOT a strict superset (same as Re-scan).
+    const candidates: Song[] = [];
+    const seen = new Set<string>();
+    for (const p of playlistsRef.current) {
+      for (const s of p.songs) {
+        if (!s.coverArt && !s.coverBlob && !seen.has(s.id)) {
+          seen.add(s.id);
+          candidates.push(s);
+        }
+      }
+    }
+
+    if (candidates.length === 0) {
+      setNotification('Every track already has cover art.');
+      return;
+    }
+
+    const total = candidates.length;
+    requestConfirm(
+      'Find missing covers',
+      `Look up artwork for ${total} ${total === 1 ? 'track' : 'tracks'} on Apple's iTunes Search API? Only the artist, title and album are sent — never your files. Art is saved in Vibes and never written back to the files.`,
+      () => {
+        void runSweep(candidates).catch((err) => {
+          console.warn('cover sweep: unexpected failure', err);
+          setNotification('Cover art lookup failed unexpectedly.');
+        });
+      },
+      'Find covers',
+      false, // not destructive — keep the confirm button off the `danger` token
+    );
+
+    async function runSweep(songs: Song[]) {
+      sweepingCoversRef.current = true;
+      setSweepingCovers(true);
+      try {
+        const { fetchCoverOnline } = await import('./lib/cover-online');
+        // id → the fields to merge. Raw patches, applied to the LIVE song at
+        // commit time — never a pre-merged snapshot (CLAUDE.md, Re-scan).
+        const patches = new Map<string, { coverArt: string; coverBlob: Blob }>();
+        let throttled = false;
+        let done = 0;
+
+        setNotification(`Finding cover art… 0/${songs.length}`);
+
+        for (const song of songs) {
+          const result = await fetchCoverOnline({
+            title: song.title,
+            artist: song.artist,
+            album: song.album,
+            duration: song.duration,
+          });
+
+          if (result.status === 'throttled') {
+            // Every further request would be refused too, and the toast would
+            // over-report how much of the library was actually checked.
+            throttled = true;
+            break;
+          }
+          if (result.status === 'found') {
+            patches.set(song.id, {
+              coverArt: URL.createObjectURL(result.blob),
+              coverBlob: result.blob,
+            });
+          }
+
+          done += 1;
+          // Every 5 keeps the toast alive (its timer resets on each set)
+          // without re-rendering App once per lookup.
+          if (done % 5 === 0) setNotification(`Finding cover art… ${done}/${songs.length}`);
+          if (done < songs.length) await new Promise((r) => setTimeout(r, SWEEP_GAP_MS));
+        }
+
+        if (patches.size > 0) {
+          const apply = (s: Song): Song => {
+            const patch = patches.get(s.id);
+            return patch ? { ...s, ...patch } : s;
+          };
+          setPlaylists((prev) => prev.map((p) => ({ ...p, songs: p.songs.map(apply) })));
+          setCurrentSong((cur) => (cur ? apply(cur) : cur));
+          setQueue((q) => q.map(apply));
+        }
+
+        if (throttled) {
+          setNotification(
+            `Apple rate-limited the lookup — stopped after ${done} of ${songs.length}. Added ${patches.size}. Try again in a minute.`,
+          );
+        } else {
+          setNotification(
+            `Cover art: added ${patches.size} of ${songs.length} ${songs.length === 1 ? 'track' : 'tracks'}.`,
+          );
+        }
+      } finally {
+        sweepingCoversRef.current = false;
+        setSweepingCovers(false);
+      }
+    }
+  }, [requestConfirm]);
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor),
@@ -1845,6 +1960,9 @@ export default function App() {
     ...(activePlaylistId === 'library' && libraryRoots.length > 0 && libraryStatus === 'ready'
       ? [{ key: 'rescan', label: 'Re-scan tags', icon: ScanLine, onClick: rescanTags }]
       : []),
+    ...(activePlaylistId === 'library'
+      ? [{ key: 'find-covers', label: 'Find missing covers', icon: ImagePlus, onClick: findMissingCovers }]
+      : []),
     ...(activePlaylist && activePlaylist.songs.length > 0
       ? [
           {
@@ -2113,6 +2231,17 @@ export default function App() {
                         <ScanLine className="h-4 w-4" />
                       </button>
                     )}
+                  {activePlaylistId === 'library' && (
+                    <button
+                      onClick={findMissingCovers}
+                      disabled={sweepingCovers}
+                      className="p-2 rounded-lg bg-white/5 text-white/60 hover:bg-white/10 transition-all disabled:opacity-40"
+                      title="Look up artwork for tracks with no cover"
+                      aria-label="Find missing covers"
+                    >
+                      <ImagePlus className="h-4 w-4" />
+                    </button>
+                  )}
                   {activePlaylist && activePlaylist.songs.length > 0 && (
                     <button
                       onClick={() => exportPlaylist(activePlaylistId)}

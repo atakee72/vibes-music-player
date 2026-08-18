@@ -1185,3 +1185,86 @@ describe('cover art fetch', () => {
     expect(screen.queryByRole('menuitem', { name: /find cover art/i })).not.toBeInTheDocument();
   });
 });
+
+describe('find missing covers sweep', () => {
+  it('fills art for every candidate and reports the count', async () => {
+    const png = new Blob([new Uint8Array([7])], { type: 'image/png' });
+    vi.mocked(fetchCoverOnline).mockResolvedValue({ status: 'found', blob: png });
+
+    await renderApp({
+      playlists: [
+        makePlaylist({
+          id: 'library',
+          name: 'Library',
+          songs: [
+            makeSong({ id: 's1', title: 'Bare One' }),
+            makeSong({ id: 's2', title: 'Bare Two' }),
+            makeSong({ id: 's3', title: 'Has Art', coverArt: 'blob:existing' }),
+          ],
+        }),
+      ],
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Find missing covers' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Find covers' }));
+
+    // Only the two art-less songs are candidates.
+    // 3s: the sweep's SWEEP_GAP_MS pause sits between the two lookups, so
+    // waitFor's 1s default is uncomfortably close to the real timing.
+    await waitFor(() => expect(vi.mocked(fetchCoverOnline)).toHaveBeenCalledTimes(2), {
+      timeout: 3000,
+    });
+    expect(await screen.findByText(/added 2 of 2/i)).toBeInTheDocument();
+  });
+
+  it('stops early when Apple rate-limits, keeping what it already found', async () => {
+    const png = new Blob([new Uint8Array([7])], { type: 'image/png' });
+    vi.mocked(fetchCoverOnline)
+      .mockResolvedValueOnce({ status: 'found', blob: png })
+      .mockResolvedValue({ status: 'throttled' });
+
+    await renderApp({
+      playlists: [
+        makePlaylist({
+          id: 'library',
+          name: 'Library',
+          songs: [
+            makeSong({ id: 's1', title: 'Bare One' }),
+            makeSong({ id: 's2', title: 'Bare Two' }),
+            makeSong({ id: 's3', title: 'Bare Three' }),
+          ],
+        }),
+      ],
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Find missing covers' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Find covers' }));
+
+    // Song 1 succeeded, song 2 was throttled, song 3 was never attempted.
+    await waitFor(() => expect(screen.getByText(/rate-limited/i)).toBeInTheDocument(), {
+      timeout: 3000,
+    });
+    expect(vi.mocked(fetchCoverOnline)).toHaveBeenCalledTimes(2);
+    await waitFor(() => {
+      const saved = vi.mocked(storage.savePlaylists).mock.lastCall?.[0] as Playlist[];
+      expect(saved[0].songs[0].coverBlob).toBe(png);
+    });
+  });
+
+  it('says so when every track already has art', async () => {
+    await renderApp({
+      playlists: [
+        makePlaylist({
+          id: 'library',
+          name: 'Library',
+          songs: [makeSong({ id: 's1', title: 'Has Art', coverArt: 'blob:existing' })],
+        }),
+      ],
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Find missing covers' }));
+
+    expect(await screen.findByText(/already has cover art/i)).toBeInTheDocument();
+    expect(vi.mocked(fetchCoverOnline)).not.toHaveBeenCalled();
+  });
+});
