@@ -654,10 +654,25 @@ Facts other tools (e.g. a beets-managed library feeding Vibes) must know:
 - The search endpoint answers `content-type: text/javascript`. `Response.json()`
   ignores content-type, so it parses — **don't add a content-type guard**, it
   would reject every valid response.
-- **Only songs with no art are candidates**, on both surfaces. That is what
-  keeps object-URL revocation out of this feature entirely: there is no
-  previous `coverArt` URL to free. Replacing existing art is deliberately out
-  of scope.
+- **Only songs with no art are candidates**, on both surfaces — but that is a
+  *selection-time* fact, and the invariant lives at **apply time**. Being
+  art-less when the lookup starts does not mean still art-less when it
+  returns: the `healedCoversRef` self-heal effect targets the identical
+  predicate (`!coverArt && !coverBlob`), runs async, and commits its own batch
+  write, and a library full of blank rows is exactly when it is still running.
+  The mobile sheet's gate is a render-time snapshot too. So **both paths
+  re-check `!s.coverBlob` at ONE liveness checkpoint read from
+  `playlistsRef.current` immediately before the state writes** — otherwise a
+  sweep pastes an iTunes guess over art Vibes just recovered from the user's
+  own file. Replacing existing art is deliberately out of scope.
+- **This feature therefore DOES own object-URL revocation** (an earlier version
+  of this section claimed it didn't). Every URL whose patch is dropped —
+  because the song gained art mid-flight, or was deleted — is collected into
+  `discardedUrls` and revoked in a deferred `setTimeout`. Nobody else frees
+  them: the `useEffect([playlists])` revoke diff only fires for **removed**
+  ids, and these were never assigned to a song. The checkpoint is computed
+  OUTSIDE `apply`, which is a state updater and must stay pure — it can
+  neither revoke nor report. Same shape as re-scan's `playingId`.
 - **The sweep is sequential with a `SWEEP_GAP_MS` gap** — the API rate-limits
   per IP, so Re-scan's `Promise.all` fan-out is exactly wrong here. Its batch
   write merges patches onto the **live** song inside the state updater, never

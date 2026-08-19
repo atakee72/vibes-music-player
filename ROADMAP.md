@@ -789,7 +789,9 @@ Backlog item 3, on branch `listening-stats`. 427 tests green.
 
 ## Cover art fetch (shipped, 2026-08-19)
 
-Backlog item 4, on branch `cover-art-fetch`. 461 tests green.
+Backlog item 4, on branch `cover-art-fetch`. 465 tests green, and the first
+feature here **verified end-to-end in a real browser** rather than by unit tests
+alone (see the last bullet).
 
 - Fills missing artwork from the **iTunes Search API** — free, no key, no
   secret, and CORS-open on both the JSON *and* the `mzstatic` artwork host,
@@ -808,6 +810,28 @@ Backlog item 4, on branch `cover-art-fetch`. 461 tests green.
   sweep that kept going would over-report its own coverage.
 - Read-only on files throughout: art lands in `coverBlob`, downscaled inside
   the module so no caller can skip it, and never written back to tags.
+- **The final whole-branch review caught the defect the plan had reasoned its
+  way past.** The plan argued the feature needed no object-URL revocation
+  "because only art-less songs are candidates" — true when a lookup STARTS,
+  false when it RETURNS. The cover self-heal effect targets the same predicate
+  and commits its own batch write, so a sweep could paste an iTunes guess over
+  art Vibes had just recovered from the user's own file, and leak the URL.
+  Both paths now re-check `!s.coverBlob` at one liveness checkpoint before the
+  writes and revoke every dropped URL. Six plan-audit passes and four task
+  reviews missed it; the whole-branch pass found it, because it is a defect
+  only visible where two independent async effects meet.
+- **Browser-verified (2026-08-19)** against live iTunes with synthesized
+  art-less MP3s (ffmpeg fixtures + playwright-cli + the Add Music file input,
+  which takes the blob-persist path and so needs no FS Access picker):
+  - *Wrong tags attach nothing* — two files both titled "Teardrop", both 330s,
+    one tagged `Massive Attack` and one `Zzqxx Nonexistent Ensemble`. Sweep
+    reported "added 3 of 4"; the bogus-artist one got no art. Identical title
+    and duration, rejected on artist alone.
+  - *Persistence* — covers survived a full reload, so `coverBlob` reached IDB.
+  - *The live-merge invariant* — hearting a track at 5/8 through a sweep left
+    it with BOTH the fetched art and the heart, surviving a further reload.
+    This is the case the fix above exists for.
+  - Not covered: anything audio. The fixtures are silent.
 
 ## Out of scope (forever)
 
