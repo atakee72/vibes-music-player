@@ -64,6 +64,51 @@ describe('ingestDirectoryHandle', () => {
     expect(result.map((r) => r.relativePath).sort()).toEqual(['alsogood.mp3', 'good.mp3']);
   });
 
+  it('reports every unreadable entry through onSkip, with its relative path', async () => {
+    // The path is the point: Refresh subtracts the walk from the stored
+    // library to decide what to DELETE, so it needs to know which ids the
+    // walk could not vouch for. A count alone cannot protect them.
+    const sub = fakeDirHandle('Sub', [
+      fakeFileHandle('deep-bad.mp3', async () => {
+        throw new Error('offline placeholder');
+      }),
+    ]);
+    const root = fakeDirHandle('Music', [
+      fakeFileHandle('good.mp3', audioFile('good.mp3')),
+      fakeFileHandle('bad.mp3', async () => {
+        throw new Error('locked');
+      }),
+      sub,
+    ]);
+
+    const skipped: string[] = [];
+    const result = await ingestDirectoryHandle(root, '', undefined, (path) => skipped.push(path));
+
+    expect(result.map((r) => r.relativePath)).toEqual(['good.mp3']);
+    // Nested failures must surface too — the recursive call forwards onSkip.
+    expect(skipped.sort()).toEqual(['Sub/deep-bad.mp3', 'bad.mp3']);
+  });
+
+  it('reports an unreadable DIRECTORY by its own path, standing for the subtree', async () => {
+    const exploding = {
+      kind: 'directory',
+      name: 'Locked',
+      values: () => {
+        throw new Error('permission denied');
+      },
+    } as unknown as FileSystemDirectoryHandle;
+    const root = fakeDirHandle('Music', [
+      fakeFileHandle('good.mp3', audioFile('good.mp3')),
+      exploding,
+    ]);
+
+    const skipped: string[] = [];
+    const result = await ingestDirectoryHandle(root, '', undefined, (path) => skipped.push(path));
+
+    expect(result.map((r) => r.relativePath)).toEqual(['good.mp3']);
+    expect(skipped).toEqual(['Locked']);
+  });
+
   it('a custom accept predicate applies inside NESTED directories too', async () => {
     // Guards the recursion-passthrough trap: the recursive call must forward
     // `accept`, or playlists in Music/Playlists/ would be silently invisible.

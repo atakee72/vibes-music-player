@@ -991,14 +991,27 @@ export default function App() {
       // Exclude playlist files explicitly: Chromium reports `.m3u` as
       // `audio/x-mpegurl`, so the default audio filter would ingest them as
       // unplayable junk "songs" — which Refresh would then mass-delete.
+      let unreadable = 0;
       const ingested = await ingestDirectoryHandle(
         handle,
         '',
         isAudioFile,
+        () => {
+          unreadable += 1;
+        },
       );
+      // Report unreadable entries even when nothing was ingested: a folder of
+      // Dropbox online-only placeholders reads as "empty" otherwise, sending
+      // the user to look for a problem in the wrong place.
+      const unreadableNote =
+        unreadable > 0 ? ` · ${unreadable} couldn't be read` : '';
       if (ingested.length === 0) {
         setShowUpload(false);
-        setNotification(`No audio files found in "${handle.name}".`);
+        setNotification(
+          unreadable > 0
+            ? `No audio files could be read in "${handle.name}" — ${unreadable} entries failed. If this folder is in Dropbox or OneDrive, make it available offline.`
+            : `No audio files found in "${handle.name}".`,
+        );
         return;
       }
       // Parallel extraction (worker pool bounds concurrency); `map` preserves
@@ -1030,7 +1043,7 @@ export default function App() {
         }
         setShowUpload(false);
         setNotification(
-          `"${root.name}" is already in your library — no new tracks found.`,
+          `"${root.name}" is already in your library — no new tracks found.${unreadableNote}`,
         );
         return;
       }
@@ -1045,7 +1058,8 @@ export default function App() {
       setShowUpload(false);
       setNotification(
         `Added ${songs.length} ${songs.length === 1 ? 'track' : 'tracks'} from "${root.name}"` +
-          (skipped > 0 ? ` · ${skipped} already in your library` : ''),
+          (skipped > 0 ? ` · ${skipped} already in your library` : '') +
+          unreadableNote,
       );
       requestPersistOnce();
     },
@@ -1310,6 +1324,16 @@ export default function App() {
       await import('./lib/playlist-import');
     const resyncs: { playlistId: string; entries: ImportEntry[] }[] = [];
 
+    // Ids the walk could not vouch for. An entry whose `getFile()` throws
+    // (Dropbox online-only placeholder, a file locked by another process, a
+    // transient I/O error) is MISSING FROM `seenIds` while still existing on
+    // disk — and `removedIds` is computed by subtraction, so without this it
+    // would be deleted from the library, every playlist and the queue. A
+    // directory that throws protects its whole subtree: nothing under it was
+    // enumerated, so every id beneath it is unknown rather than gone.
+    const unreadable: string[] = [];
+    let unreadableCount = 0;
+
     for (const root of libraryRoots) {
       // ONE walk collecting songs AND playlist files (getFile runs before the
       // filter either way, so the wider predicate is free).
@@ -1317,6 +1341,10 @@ export default function App() {
         root.handle,
         '',
         (f) => isAudioFile(f) || isPlaylistFileName(f.name),
+        (relativePath) => {
+          unreadableCount += 1;
+          unreadable.push(`${root.id}/${relativePath}`);
+        },
       );
       const ingested = walked.filter((w) => !isPlaylistFileName(w.file.name));
 
@@ -1358,8 +1386,10 @@ export default function App() {
       newSongs.push(...extracted);
     }
 
+    const isUnreadable = (id: string) =>
+      unreadable.some((u) => id === u || id.startsWith(`${u}/`));
     const removedIds = new Set(
-      Array.from(existingIds).filter((id) => !seenIds.has(id)),
+      Array.from(existingIds).filter((id) => !seenIds.has(id) && !isUnreadable(id)),
     );
 
     const resyncById = new Map(resyncs.map((r) => [r.playlistId, r.entries]));
@@ -1398,11 +1428,17 @@ export default function App() {
       resyncs.length > 0
         ? ` · ${resyncs.length} ${resyncs.length === 1 ? 'playlist' : 'playlists'} re-synced`
         : '';
+    // Surfaced, never silent: an unreadable file is the difference between
+    // "your library is fine" and "6 tracks are online-only in Dropbox".
+    const unreadableNote =
+      unreadableCount > 0
+        ? ` · ${unreadableCount} unreadable (kept)`
+        : '';
     if (newSongs.length === 0 && removedIds.size === 0) {
-      setNotification(`Library is up to date${resyncNote}`);
+      setNotification(`Library is up to date${resyncNote}${unreadableNote}`);
     } else {
       setNotification(
-        `Refreshed: +${newSongs.length} ${newSongs.length === 1 ? 'song' : 'songs'}, -${removedIds.size} removed${resyncNote}`,
+        `Refreshed: +${newSongs.length} ${newSongs.length === 1 ? 'song' : 'songs'}, -${removedIds.size} removed${resyncNote}${unreadableNote}`,
       );
     }
   }, [libraryRoots, playlists, extractMetadata]);

@@ -1593,3 +1593,112 @@ describe('re-picking a folder already registered as a library root', () => {
     expect(screen.getByRole('button', { name: 'Choose Folder' })).toBeInTheDocument();
   });
 });
+
+describe('Refresh and files it could not read', () => {
+  const fileEntry = (name: string, thrower = false) =>
+    ({
+      kind: 'file',
+      name,
+      getFile: thrower
+        ? async () => {
+            throw new Error('offline placeholder');
+          }
+        : async () => new File([], name, { type: 'audio/mpeg' }),
+    }) as unknown as FileSystemFileHandle;
+
+  const rootWith = (entries: unknown[]) => ({
+    id: 'root1',
+    name: 'Music',
+    handle: {
+      requestPermission: async () => 'granted',
+      queryPermission: async () => 'granted',
+      values: () =>
+        (async function* () {
+          for (const e of entries) yield e;
+        })(),
+    },
+    addedAt: new Date('2026-01-01T00:00:00Z'),
+  });
+
+  // The data-loss guard. `removedIds` is computed by SUBTRACTING the walk from
+  // the stored library, and a file whose getFile() throws never reaches the
+  // walk's results — so before this, one Dropbox online-only placeholder was
+  // indistinguishable from a deleted file and Refresh dropped it from the
+  // library, every playlist and the queue.
+  it('keeps a song whose file is unreadable, and says so', async () => {
+    vi.mocked(parseBlob).mockResolvedValue({ common: {}, format: {} } as never);
+    await renderApp({
+      playlists: [
+        makePlaylist({
+          id: 'library',
+          name: 'Library',
+          songs: [
+            makeSong({ id: 'root1/good.mp3', title: 'Readable' }),
+            makeSong({ id: 'root1/bad.mp3', title: 'Placeholder' }),
+          ],
+        }),
+      ],
+      roots: [rootWith([fileEntry('good.mp3'), fileEntry('bad.mp3', true)])],
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh library' }));
+
+    expect(await screen.findByText(/1 unreadable \(kept\)/)).toBeInTheDocument();
+    expect(screen.getByText('Placeholder')).toBeInTheDocument();
+    expect(screen.getByText('Readable')).toBeInTheDocument();
+  });
+
+  // The other half: the guard must not make Refresh unable to remove anything.
+  it('still removes a song whose file is genuinely gone', async () => {
+    vi.mocked(parseBlob).mockResolvedValue({ common: {}, format: {} } as never);
+    await renderApp({
+      playlists: [
+        makePlaylist({
+          id: 'library',
+          name: 'Library',
+          songs: [
+            makeSong({ id: 'root1/good.mp3', title: 'Readable' }),
+            makeSong({ id: 'root1/gone.mp3', title: 'Deleted' }),
+          ],
+        }),
+      ],
+      roots: [rootWith([fileEntry('good.mp3')])],
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh library' }));
+
+    expect(await screen.findByText(/-1 removed/)).toBeInTheDocument();
+    expect(screen.queryByText('Deleted')).not.toBeInTheDocument();
+    expect(screen.queryByText(/unreadable/)).not.toBeInTheDocument();
+  });
+
+  it('protects the whole subtree when a directory cannot be enumerated', async () => {
+    vi.mocked(parseBlob).mockResolvedValue({ common: {}, format: {} } as never);
+    const lockedDir = {
+      kind: 'directory',
+      name: 'Locked',
+      values: () => {
+        throw new Error('permission denied');
+      },
+    };
+    await renderApp({
+      playlists: [
+        makePlaylist({
+          id: 'library',
+          name: 'Library',
+          songs: [
+            makeSong({ id: 'root1/good.mp3', title: 'Readable' }),
+            makeSong({ id: 'root1/Locked/hidden.mp3', title: 'Under Locked' }),
+          ],
+        }),
+      ],
+      roots: [rootWith([fileEntry('good.mp3'), lockedDir])],
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh library' }));
+
+    expect(await screen.findByText(/1 unreadable \(kept\)/)).toBeInTheDocument();
+    // Nothing under the directory was enumerated — unknown, not gone.
+    expect(screen.getByText('Under Locked')).toBeInTheDocument();
+  });
+});

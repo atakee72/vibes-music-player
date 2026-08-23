@@ -870,6 +870,23 @@ Facts other tools (e.g. a beets-managed library feeding Vibes) must know:
   re-walks each `libraryRoot.handle` via `ingestDirectoryHandle`, diffs
   by stable id (`${root.id}/${relativePath}`). Adds new files, removes
   orphans from Library AND from any user playlist that referenced them.
+  **UNREADABLE IS NOT ABSENT — the walk's `onSkip` is a data-loss guard, not
+  a progress log.** `removedIds` is computed by SUBTRACTING the walk's results
+  from the stored library, and `getFile()` throws for a Dropbox/OneDrive
+  online-only placeholder, a file locked by another process, or a transient
+  I/O error. Before `ingestDirectoryHandle` reported skips, one such file was
+  indistinguishable from a deleted one, so Refresh silently dropped it from
+  Library, every user playlist and the queue — a cloud-sync hiccup could shrink
+  the library, which is the "my library reset itself" class of bug. Refresh now
+  collects skipped paths as `${root.id}/${relativePath}` and excludes any id
+  that equals one, **or lives under one** — a directory whose `values()` throws
+  reports its own path and thereby protects its whole unenumerated subtree.
+  The count is always surfaced (`· N unreadable (kept)`); the ingest path
+  reports it too, and says so explicitly when a folder yields ONLY unreadable
+  entries, since "no audio files found" would send the user hunting in the
+  wrong place. Regression-tested in `ingest.test.ts` (path + subtree reporting)
+  and `App.test.tsx` ("Refresh and files it could not read" — kept vs genuinely
+  removed, so the guard can't neuter Refresh).
 - **Re-scan tags** (Library only, handle-backed songs only): Refresh diffs
   PATHS, so an external tagger rewriting tags in place (beets BPM/genre pass,
   `embedart`) is invisible to it. Re-scan is the counterpart — it re-reads

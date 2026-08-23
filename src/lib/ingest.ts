@@ -15,14 +15,27 @@ export interface IngestedFile {
  * `accept` defaults to audio-only. Refresh passes a wider predicate so one
  * walk collects songs AND playlist files (`getFile()` runs before the filter
  * either way, so a wider predicate costs no extra round-trips).
- * **The recursive call MUST forward `accept`** — otherwise subdirectories
- * silently fall back to audio-only, and files that only live in a subfolder
- * (e.g. `Music/Playlists/*.m3u`) become invisible with no error.
+ * **The recursive call MUST forward `accept` AND `onSkip`** — otherwise
+ * subdirectories silently fall back to audio-only (files that only live in a
+ * subfolder, e.g. `Music/Playlists/*.m3u`, become invisible with no error) and
+ * failures below the top level go unreported.
+ *
+ * `onSkip` receives the relative path of every entry the walk could not read.
+ * **A skipped entry is NOT an absent entry, and callers that diff paths must
+ * treat the difference as load-bearing.** `getFile()` throws for a Dropbox
+ * online-only placeholder, a file locked by another process, or a transient
+ * I/O error — the file still exists. Refresh decides what to DELETE by
+ * subtracting the walk's results from the stored library, so without this
+ * signal one unreadable file is indistinguishable from a deleted one and
+ * Refresh silently drops it from the library, every playlist and the queue.
+ * A directory that throws reports the directory's own path: nothing beneath
+ * it was enumerated, so the whole subtree is unknown, not gone.
  */
 export async function ingestDirectoryHandle(
   handle: FileSystemDirectoryHandle,
   prefix = '',
   accept: (file: File) => boolean = isAudioFile,
+  onSkip?: (relativePath: string, err: unknown) => void,
 ): Promise<IngestedFile[]> {
   const out: IngestedFile[] = [];
   for await (const entry of handle.values()) {
@@ -30,7 +43,12 @@ export async function ingestDirectoryHandle(
     try {
       if (entry.kind === 'directory') {
         out.push(
-          ...(await ingestDirectoryHandle(entry as FileSystemDirectoryHandle, path, accept)),
+          ...(await ingestDirectoryHandle(
+            entry as FileSystemDirectoryHandle,
+            path,
+            accept,
+            onSkip,
+          )),
         );
       } else {
         const fileHandle = entry as FileSystemFileHandle;
@@ -39,6 +57,7 @@ export async function ingestDirectoryHandle(
       }
     } catch (err) {
       console.warn('ingest: skipping entry', path, err);
+      onSkip?.(path, err);
     }
   }
   return out;
