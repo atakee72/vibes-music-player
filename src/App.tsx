@@ -977,8 +977,16 @@ export default function App() {
 
   const addFolderHandle = useCallback(
     async (handle: FileSystemDirectoryHandle) => {
-      const root = await storage.addLibraryRoot(handle.name, handle);
-      if (!root) return; // dedupe — already added
+      const added = await storage.addLibraryRoot(handle.name, handle);
+      // A folder already registered as a root is NOT a dead end. This used to
+      // `return` silently — no toast, the upload modal left open — so after a
+      // first ingest that failed part-way, re-picking the same folder did
+      // nothing, forever, with no UI anywhere to unregister the root. Re-walk
+      // it against the EXISTING root instead: reusing `root.id` keeps the
+      // path-based song ids stable, so hearts and playlist membership survive
+      // and the id dedupe below adds only what is genuinely missing.
+      const root = added ?? (await storage.findLibraryRoot(handle));
+      if (!root) return;
 
       // Exclude playlist files explicitly: Chromium reports `.m3u` as
       // `audio/x-mpegurl`, so the default audio filter would ingest them as
@@ -988,25 +996,58 @@ export default function App() {
         '',
         isAudioFile,
       );
+      if (ingested.length === 0) {
+        setShowUpload(false);
+        setNotification(`No audio files found in "${handle.name}".`);
+        return;
+      }
       // Parallel extraction (worker pool bounds concurrency); `map` preserves
       // the walk order so path-based ids line up with stable playlist order.
-      const songs: Song[] = await Promise.all(
+      const scanned: Song[] = await Promise.all(
         ingested.map(async ({ file, fileHandle, relativePath }) => {
           const base = await extractMetadata(file);
           return { ...base, id: `${root.id}/${relativePath}`, fileHandle };
         }),
       );
 
-      setLibraryRoots((prev) => [...prev, root]);
       // 'favorites' is a virtual view — route ingested songs to Library.
       const targetId = activePlaylistId === 'favorites' ? 'library' : activePlaylistId;
+      // Dedupe against what the target playlist ALREADY holds, read from the
+      // ref rather than the `playlists` dep — a re-walk of a known root
+      // re-derives ids that are by design identical to the stored ones, and
+      // appending them blindly would duplicate every existing row.
+      const present = new Set(
+        (playlistsRef.current.find((p) => p.id === targetId)?.songs ?? []).map((s) => s.id),
+      );
+      const songs = scanned.filter((s) => !present.has(s.id));
+      // Nothing new: free the object URLs this walk created, or they outlive
+      // their Blobs with no song left to own them (same rule as the cover
+      // sweep's discarded patches).
+      if (songs.length === 0) {
+        for (const s of scanned) {
+          URL.revokeObjectURL(s.url);
+          if (s.coverArt) URL.revokeObjectURL(s.coverArt);
+        }
+        setShowUpload(false);
+        setNotification(
+          `"${root.name}" is already in your library — no new tracks found.`,
+        );
+        return;
+      }
+      const skipped = scanned.length - songs.length;
+
+      if (added) setLibraryRoots((prev) => [...prev, added]);
       setPlaylists((prev) =>
         prev.map((p) =>
           p.id === targetId ? { ...p, songs: [...p.songs, ...songs] } : p,
         ),
       );
       setShowUpload(false);
-      if (songs.length > 0) requestPersistOnce();
+      setNotification(
+        `Added ${songs.length} ${songs.length === 1 ? 'track' : 'tracks'} from "${root.name}"` +
+          (skipped > 0 ? ` · ${skipped} already in your library` : ''),
+      );
+      requestPersistOnce();
     },
     [activePlaylistId, extractMetadata, requestPersistOnce],
   );
@@ -2579,6 +2620,14 @@ export default function App() {
                     // User cancelled the picker (AbortError) — silent
                     if ((err as Error).name !== 'AbortError') {
                       console.error('Folder pick failed:', err);
+                      // Anything else is a real failure the user must see:
+                      // Chrome refuses some folders outright (SecurityError),
+                      // and an unreadable file mid-walk rejects the whole
+                      // ingest. Logging alone reads as "the button is dead".
+                      setShowUpload(false);
+                      setNotification(
+                        `Couldn't add that folder: ${(err as Error).message || (err as Error).name}`,
+                      );
                     }
                   }
                 }}

@@ -98,6 +98,23 @@ export async function getLibraryRoots(): Promise<LibraryRoot[]> {
   return (await get<LibraryRoot[]>(ROOTS_KEY)) ?? [];
 }
 
+/**
+ * The root already registered for this folder, or null.
+ *
+ * `addLibraryRoot` answers "is this new?" by returning null for a duplicate,
+ * which leaves the caller with no way to act on the folder it was just handed.
+ * Re-picking an already-registered folder is the common case after a failed or
+ * partial first ingest, so the caller needs the existing root to re-walk it.
+ */
+export async function findLibraryRoot(
+  handle: FileSystemDirectoryHandle,
+): Promise<LibraryRoot | null> {
+  for (const root of await getLibraryRoots()) {
+    if (await root.handle.isSameEntry(handle)) return root;
+  }
+  return null;
+}
+
 export async function addLibraryRoot(
   name: string,
   handle: FileSystemDirectoryHandle,

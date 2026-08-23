@@ -101,6 +101,7 @@ vi.mock('./lib/storage', async () => {
     getStats: vi.fn(async () => ({})),
     saveStats: vi.fn(async () => {}),
     addLibraryRoot: vi.fn(async () => null),
+    findLibraryRoot: vi.fn(async () => null),
     ensurePersisted: vi.fn(async () => {}),
     getStorageEstimate: vi.fn(async () => store.estimate),
     formatStorageWarning: actual.formatStorageWarning,
@@ -1467,5 +1468,128 @@ describe('find missing covers sweep', () => {
 
     expect(await screen.findByText(/already has cover art/i)).toBeInTheDocument();
     expect(vi.mocked(fetchCoverOnline)).not.toHaveBeenCalled();
+  });
+});
+
+describe('re-picking a folder already registered as a library root', () => {
+  const fakeFileHandle = (name: string) =>
+    ({
+      kind: 'file',
+      name,
+      getFile: async () => new File([], name, { type: 'audio/mpeg' }),
+    }) as unknown as FileSystemFileHandle;
+
+  const fakeDirHandle = (name: string, children: unknown[]) =>
+    ({
+      kind: 'directory',
+      name,
+      values: () =>
+        (async function* () {
+          for (const c of children) yield c;
+        })(),
+    }) as unknown as FileSystemDirectoryHandle;
+
+  const pick = (handle: FileSystemDirectoryHandle) => {
+    (window as { showDirectoryPicker?: unknown }).showDirectoryPicker = vi.fn(async () => handle);
+  };
+
+  afterEach(() => {
+    delete (window as { showDirectoryPicker?: unknown }).showDirectoryPicker;
+  });
+
+  // The regression: `addLibraryRoot` returns null for a folder it already
+  // knows, and `addFolderHandle` used to `return` on that branch with no
+  // toast and the modal still open. A first ingest that died part-way left
+  // the user with an empty library and a Choose Folder button that could
+  // never do anything again — there is no UI to unregister a root.
+  it('re-walks the root and adds the tracks missing from the library', async () => {
+    vi.mocked(parseBlob).mockResolvedValue({ common: {}, format: {} } as never);
+    const handle = fakeDirHandle('music', [fakeFileHandle('a.mp3'), fakeFileHandle('b.mp3')]);
+    pick(handle);
+    vi.mocked(storage.addLibraryRoot).mockResolvedValue(null);
+    vi.mocked(storage.findLibraryRoot).mockResolvedValue({
+      id: 'root1',
+      name: 'music',
+      handle,
+      addedAt: new Date(),
+    });
+
+    await renderApp({
+      playlists: [
+        makePlaylist({
+          id: 'library',
+          name: 'Library',
+          songs: [makeSong({ id: 'root1/a.mp3', title: 'a' })],
+        }),
+      ],
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Music' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Choose Folder' }));
+
+    expect(await screen.findByText(/Added 1 track from "music"/)).toBeInTheDocument();
+    expect(screen.getByText('b')).toBeInTheDocument();
+    // Reusing the existing root id is what keeps this a merge, not a double.
+    expect(screen.getAllByText('a')).toHaveLength(1);
+  });
+
+  it('says so instead of dead-ending when the folder holds nothing new', async () => {
+    vi.mocked(parseBlob).mockResolvedValue({ common: {}, format: {} } as never);
+    const handle = fakeDirHandle('music', [fakeFileHandle('a.mp3')]);
+    pick(handle);
+    vi.mocked(storage.addLibraryRoot).mockResolvedValue(null);
+    vi.mocked(storage.findLibraryRoot).mockResolvedValue({
+      id: 'root1',
+      name: 'music',
+      handle,
+      addedAt: new Date(),
+    });
+
+    await renderApp({
+      playlists: [
+        makePlaylist({
+          id: 'library',
+          name: 'Library',
+          songs: [makeSong({ id: 'root1/a.mp3', title: 'a' })],
+        }),
+      ],
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Music' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Choose Folder' }));
+
+    expect(await screen.findByText(/already in your library/)).toBeInTheDocument();
+    // The modal must close too — leaving it open is half the "button is dead" feel.
+    expect(screen.queryByRole('button', { name: 'Choose Folder' })).not.toBeInTheDocument();
+  });
+
+  it('surfaces a picker failure as a toast rather than only a console error', async () => {
+    (window as { showDirectoryPicker?: unknown }).showDirectoryPicker = vi.fn(async () => {
+      throw Object.assign(new Error('User activation is required'), { name: 'SecurityError' });
+    });
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await renderApp({ playlists: [makePlaylist({ id: 'library', name: 'Library' })] });
+    fireEvent.click(screen.getByRole('button', { name: 'Add Music' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Choose Folder' }));
+
+    expect(await screen.findByText(/Couldn't add that folder/)).toBeInTheDocument();
+    errSpy.mockRestore();
+  });
+
+  it('stays silent when the user cancels the picker', async () => {
+    (window as { showDirectoryPicker?: unknown }).showDirectoryPicker = vi.fn(async () => {
+      throw Object.assign(new Error('aborted'), { name: 'AbortError' });
+    });
+
+    await renderApp({ playlists: [makePlaylist({ id: 'library', name: 'Library' })] });
+    fireEvent.click(screen.getByRole('button', { name: 'Add Music' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Choose Folder' }));
+
+    await waitFor(() =>
+      expect(screen.queryByText(/Couldn't add that folder/)).not.toBeInTheDocument(),
+    );
+    // Cancelling must leave the dialog up — the user may pick again.
+    expect(screen.getByRole('button', { name: 'Choose Folder' })).toBeInTheDocument();
   });
 });

@@ -343,6 +343,20 @@ Facts other tools (e.g. a beets-managed library feeding Vibes) must know:
   reload); `crypto.randomUUID()` for legacy file-drop songs (which are
   also persisted now via blobs — drop-the-same-file-twice creates
   duplicate entries, accepted limitation).
+- **Re-picking an already-registered folder MUST re-walk it, not bail.**
+  `storage.addLibraryRoot` returns `null` when `isSameEntry` matches a stored
+  root, and `addFolderHandle` once treated that as "nothing to do" — silent
+  `return`, no toast, upload modal left open. Since there is **no UI anywhere
+  to unregister a root**, a first ingest that died part-way (a Dropbox
+  online-only placeholder stalling the walk is the realistic cause) left the
+  user with an empty library and a Choose Folder button that could never do
+  anything again. It now falls back to `storage.findLibraryRoot(handle)` and
+  re-walks against the EXISTING root: reusing `root.id` keeps the path-based
+  ids identical, so the id-set dedupe adds only genuinely-missing files and
+  hearts/playlist membership survive. Songs dropped by that dedupe have their
+  audio+cover object URLs revoked — nothing else owns them. **Every exit from
+  this function reports** (added / nothing new / no audio files / error);
+  a silent one reads as a broken button.
 - **Browser compatibility**: Persistence works in all evergreen browsers
   via the hybrid model. Chromium gets the efficient handle path;
   Firefox/Safari get the blob path. **iOS Safari evicts IDB after 7 days

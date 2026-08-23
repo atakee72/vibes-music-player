@@ -1,5 +1,6 @@
 import {
   addLibraryRoot,
+  findLibraryRoot,
   formatStorageWarning,
   getCrossfade,
   getEqPreset,
@@ -80,6 +81,25 @@ describe('storage — library roots', () => {
 
     const all = await getLibraryRoots();
     expect(all).toHaveLength(1);
+  });
+
+  it('findLibraryRoot returns the root already registered for a folder', async () => {
+    const handleA = fakeDirHandle('Music');
+    const handleB = fakeDirHandle('Music');
+    (handleA as unknown as { isSameEntry: (h: unknown) => Promise<boolean> }).isSameEntry =
+      async (other) => other === handleB;
+
+    const added = await addLibraryRoot('Music', handleA);
+    // Re-picking the same folder in the OS dialog yields a DIFFERENT handle
+    // object for the same directory — the id must still resolve, or a re-walk
+    // would mint new ids and duplicate every song.
+    const found = await findLibraryRoot(handleB);
+    expect(found?.id).toBe(added!.id);
+  });
+
+  it('findLibraryRoot returns null for an unregistered folder', async () => {
+    await addLibraryRoot('Music', fakeDirHandle('Music'));
+    expect(await findLibraryRoot(fakeDirHandle('Other'))).toBeNull();
   });
 });
 
