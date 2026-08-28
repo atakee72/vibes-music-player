@@ -40,6 +40,20 @@ function renderView(overrides = {}) {
 }
 
 describe('MobileNowPlaying', () => {
+  it('renders transport in shuffle · prev · play · next · repeat order', () => {
+    const { container } = renderView();
+    const order = Array.from(container.querySelectorAll('button'))
+      .map((b) => b.getAttribute('aria-label'))
+      .filter((l): l is string => !!l && /^(Shuffle|Repeat|Previous|Next|Play|Pause)/.test(l));
+    expect(order).toEqual([
+      'Shuffle: off',
+      'Previous',
+      'Play',
+      'Next',
+      'Repeat: none',
+    ]);
+  });
+
   it('renders nothing when closed', () => {
     const { container } = renderView({ open: false });
     expect(container).toBeEmptyDOMElement();
