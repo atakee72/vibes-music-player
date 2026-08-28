@@ -124,4 +124,16 @@ describe('MobileNowPlaying', () => {
     expect(screen.queryByLabelText('Volume')).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
   });
+
+  it('spreads the utility row edge to edge rather than huddling it', () => {
+    renderView();
+    // The row is identified by its first child, the lyrics button — happy-dom
+    // has no layout, so the class IS the assertion here. Real edge-to-edge
+    // spacing is confirmed in a browser (see the plan's Verification section).
+    const row = screen.getByRole('button', { name: 'Toggle lyrics' }).parentElement;
+    expect(row).toHaveClass('justify-between');
+    // NOT `container.querySelector('.justify-between')` — the header row at
+    // :159 already carries that class and would match first.
+    expect(row).toHaveClass('flex', 'items-center');
+  });
 });

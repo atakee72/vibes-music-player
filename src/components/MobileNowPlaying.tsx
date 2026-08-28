@@ -248,7 +248,10 @@ export function MobileNowPlaying({
           </button>
         </div>
 
-        <div className="flex items-center gap-3">
+        {/* Edge to edge, not a huddle: `gap-2` is a floor for the narrowest
+            phones (where six buttons can exceed the row), `justify-between`
+            does the spreading everywhere else. */}
+        <div className="flex items-center justify-between gap-2">
           <button
             onClick={onToggleLyrics}
             className="p-2 rounded-full bg-white/5 text-white/70 hover:bg-white/10 transition-colors"
