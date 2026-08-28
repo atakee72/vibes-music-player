@@ -491,8 +491,10 @@ Facts other tools (e.g. a beets-managed library feeding Vibes) must know:
   drifted into different orders. One pair now serves both; don't re-split it.
   `MiniPlayer` (PiP) deliberately has neither button. Order is regression-tested
   by aria-label sequence in both components' tests. `MobileNowPlaying`'s utility
-  row (lyrics, EQ, volume, share) is `justify-between` with `gap-2` — the gap
-  floors button size on narrow phones where buttons risk overflow.
+  row (lyrics, queue, audio settings, sleep timer, volume, share) is
+  `justify-between` with `gap-2`: `justify-between` does the spreading, and the
+  gap is only a minimum SPACING between buttons for the narrowest phones, where
+  six of them can exceed the row width. It does not constrain button size.
 - **`MobileNowPlaying`** (`src/components/MobileNowPlaying.tsx`) is the
   full-screen (`fixed inset-0 z-[60]`) frame-D view — the orb wrapped by
   `OrbVisualizerRing`, title, scrubbable progress, full transport, and the

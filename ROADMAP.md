@@ -719,7 +719,9 @@ server. See "Out of scope (forever)" — none of these cross those lines.
    `shuffle · prev · play · next · repeat` on **every** surface, and
    `PlayerBar`'s duplicate responsive shuffle/repeat pair collapsed into one
    (4 buttons → 2) since both breakpoints finally agree. `MobileNowPlaying`'s
-   utility row is `justify-between` with `gap-2` (the gap floors button size on narrow phones where buttons risk overflow; `justify-between` spreads them edge-to-edge everywhere else). The third sub-item — "make the EQ
+   utility row is `justify-between` with `gap-2` — `justify-between` spreads the
+   six buttons edge to edge, and the gap is only a minimum spacing between them
+   for the narrowest phones. The third sub-item — "make the EQ
    `<select>` a round trigger + popover" — was **already shipped** with the
    crossfade work and had gone stale in this list.
 
