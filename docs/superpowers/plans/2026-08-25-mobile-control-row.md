@@ -147,6 +147,8 @@ In `src/components/PlayerBar.tsx`, replace the whole transport `<div>` (starts a
 
 Tab order is unaffected: the retired copies were `display:none` at their breakpoint, so only one pair was ever focusable or in the a11y tree. DOM order still matches visual order after the move, which is what matters for keyboard users.
 
+**Expect one small visual diff on the mobile mini-bar, and do NOT "fix" it back.** Tailwind compiles `space-x-2` to `.space-x-2 > :not([hidden]) ~ :not([hidden])` — that is the HTML `hidden` ATTRIBUTE, which the `hidden`/`lg:hidden` *classes* never set. So a `display:none` sibling still counts in the `~` chain: today, on mobile, `prev` is the third child and receives `margin-left: .5rem` even though the two `hidden lg:block` buttons before it have no width. The result is a phantom 8px indent at the left edge of the mobile transport cluster. After the collapse, shuffle is the first child and the indent disappears — the cluster shifts 8px left. That is a fix, not a regression.
+
 Note what is deliberately preserved: the play button keeps `text-deep` glyphs on the amber→coral fill (white fails AA on amber) and its `motion-safe:active:scale-95`; prev/next keep their `lg:` size bump. The surviving buttons carry `title` (the old mobile copies had none — a tooltip that never appears on touch is harmless).
 
 - [ ] **Step 4: Run the PlayerBar order test**
@@ -306,7 +308,7 @@ git commit -m "refactor: one transport order everywhere, shuffle left and repeat
 ### Task 2: Spread the utility row edge to edge
 
 **Files:**
-- Modify: `src/components/MobileNowPlaying.tsx:251` (the utility row `<div>`)
+- Modify: `src/components/MobileNowPlaying.tsx` — the utility row `<div>`, **found by string, not line number**: it is the only `flex items-center gap-3` in the file, and it is the direct parent of the `Toggle lyrics` button. (It sits at line 251 in the pre-Task-1 file. Task 1's replacement block happens to be the same 34 lines as the original, so 251 still holds afterwards — but do not rely on that; match the string.)
 - Modify: `ROADMAP.md` (backlog item 8 → shipped)
 - Modify: `CLAUDE.md` (transport-order invariant)
 - Test: `src/components/MobileNowPlaying.test.tsx`
@@ -323,7 +325,7 @@ Add to `src/components/MobileNowPlaying.test.tsx`:
 
 ```tsx
   it('spreads the utility row edge to edge rather than huddling it', () => {
-    const { container } = renderView();
+    renderView();
     // The row is identified by its first child, the lyrics button — happy-dom
     // has no layout, so the class IS the assertion here. Real edge-to-edge
     // spacing is confirmed in a browser (see the plan's Verification section).
@@ -342,7 +344,7 @@ Expected: FAIL — `expect(element).toHaveClass("justify-between")` against the 
 
 - [ ] **Step 3: Change the row's layout**
 
-In `src/components/MobileNowPlaying.tsx` line 251, change:
+In `src/components/MobileNowPlaying.tsx`, change the utility row's opening tag — the only occurrence of this exact string in the file:
 
 ```tsx
         <div className="flex items-center gap-3">
@@ -446,6 +448,8 @@ Ingest a track and open the full-screen view, then confirm edge-to-edge spacing 
 ```
 
 Expected: `leftGap` and `rightGap` both under ~2, `count` 6. Then screenshot at 390×844 and confirm by eye that shuffle sits left of prev and repeat right of next, and that the row of round buttons reads as evenly distributed.
+
+Also close the full-screen view and check the mini-bar underneath: its transport cluster should have **no** leading indent before the shuffle button (see the `space-x-2` note in Task 1 — an 8px phantom margin disappears with the collapse). Compare against `git stash` if unsure.
 
 Clean up: `playwright-cli close`, kill the preview (find it with `ss -lptn 'sport = :4173'` — `pkill -f "vite preview"` matches its own wrapper shell and returns 144), `rm -rf .playwright-cli`.
 
