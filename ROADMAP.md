@@ -691,7 +691,7 @@ features run on `yt-dlp`, a Spotify client *secret*, and its own PocketBase
 server. See "Out of scope (forever)" — none of these cross those lines.
 
 **Items 1-4 and 8 shipped** (1-2 on 2026-08-16, 3 on 2026-08-17, 4 on 2026-08-19,
-8 on 2026-08-25) — see the sections below. Items 5-7 stand.
+8 on 2026-08-25) — 1-4 have sections below. Items 5-7 stand.
 
 3. ~~**Local listening stats**~~ — shipped. — play counts, history, top artists, total
    minutes. Their version needs PocketBase only because it syncs across
@@ -719,7 +719,7 @@ server. See "Out of scope (forever)" — none of these cross those lines.
    `shuffle · prev · play · next · repeat` on **every** surface, and
    `PlayerBar`'s duplicate responsive shuffle/repeat pair collapsed into one
    (4 buttons → 2) since both breakpoints finally agree. `MobileNowPlaying`'s
-   utility row is `justify-between`. The third sub-item — "make the EQ
+   utility row is `justify-between` with `gap-2` (the gap floors button size on narrow phones where buttons risk overflow; `justify-between` spreads them edge-to-edge everywhere else). The third sub-item — "make the EQ
    `<select>` a round trigger + popover" — was **already shipped** with the
    crossfade work and had gone stale in this list.
 
