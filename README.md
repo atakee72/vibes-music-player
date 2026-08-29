@@ -29,7 +29,8 @@ pnpm test:run  # Vitest single pass
 ## Features
 
 - **Drop a folder** (or individual files) — recursive ingest of every audio
-  file inside
+  file inside. Re-picking a folder Vibes already knows re-walks it and adds
+  only what's missing, so a part-finished first ingest can be resumed
 - **Library persists across reloads** in every modern browser. Chromium
   uses the File System Access API (zero data duplication, one click to
   re-grant per session); Firefox and Safari store the audio bytes in
@@ -85,7 +86,9 @@ pnpm test:run  # Vitest single pass
   sidebar (copy by default; Ctrl-drag to move; Library never deletes)
 - **Volume slider** with mute toggle, persisted across reloads
 - **Refresh library** — re-scan your library folder for added or
-  removed tracks (Chromium only; uses the original FS Access handle)
+  removed tracks (Chromium only; uses the original FS Access handle). A file
+  it cannot read — a cloud placeholder that isn't downloaded, a file locked by
+  another program — is **kept and reported**, never mistaken for a deletion
 - **Export as M3U** — download any playlist as a portable `.m3u` file
 - **Confirmation modals** for destructive actions (delete song, delete
   playlist) — no accidental wipes

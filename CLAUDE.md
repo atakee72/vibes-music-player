@@ -1163,4 +1163,26 @@ Facts other tools (e.g. a beets-managed library feeding Vibes) must know:
   is the way to take screenshots / a11y snapshots. System Chrome isn't
   installed on this machine, so always pass `--browser=chromium` to use
   the bundled browser.
-- Per-session output lands in `.playwright-cli/` (gitignored).
+- Per-session output lands in `.playwright-cli/` (gitignored). `screenshot`
+  takes no `--filename` flag in this version — call it bare and read the path
+  it prints.
+- **The FS Access paths ARE end-to-end testable, via OPFS.** The folder picker
+  is an OS dialog Playwright cannot drive, but the app never cares where a
+  handle came from: `navigator.storage.getDirectory()` returns a GENUINE
+  `FileSystemDirectoryHandle` — real `isSameEntry`, `values()`,
+  `queryPermission`, structured-cloneable into IDB — with no picker and no
+  permission prompt. Create a subdir, write real bytes fetched from a file
+  served out of `dist/`, then `window.showDirectoryPicker = async () => thatDir`.
+  Everything below runs for real: the walk, `music-metadata` on real tags, the
+  id dedupe, IDB persistence. This is the only way to exercise Refresh and
+  Re-scan, which are gated on `libraryRoots` and therefore unreachable via the
+  Add Music file input (that route takes the blob path).
+  - Simulate a Dropbox online-only placeholder by patching
+    `FileSystemFileHandle.prototype.getFile` to reject with a
+    `NotReadableError` for one filename — that is exactly the shape Refresh's
+    unreadable-file guard exists for.
+  - **The 500ms debounced save will overwrite a manual IDB edit** made from the
+    console: call `location.reload()` in the SAME eval as the write, or the
+    live app writes its in-memory state straight back over you.
+- **What none of this can cover: audio.** Crossfade quality, ReplayGain levels
+  and gapless transitions need a human ear.

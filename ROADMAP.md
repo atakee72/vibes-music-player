@@ -843,6 +843,41 @@ alone (see the last bullet).
 
 ---
 
+## Ingest + Refresh reliability (shipped, 2026-08-23/24)
+
+Two bugs found by using the app on a real 463-track Dropbox library, not by
+reading code. Both were **silent** — the failure mode in each case was the app
+doing nothing, or doing the wrong thing, without saying so.
+
+- **Choose Folder was a permanent dead end for an already-registered folder**
+  (`d5456cf`). `storage.addLibraryRoot` returns `null` when `isSameEntry`
+  matches a stored root, and `addFolderHandle` treated that as "nothing to do":
+  silent `return`, no toast, the upload modal left open. Since there is **no UI
+  anywhere to unregister a root**, a first ingest that died part-way left an
+  empty library and a button that could never do anything again. It now falls
+  back to the new `storage.findLibraryRoot(handle)` and re-walks against the
+  EXISTING root — same `root.id`, so ids stay stable and the id-set dedupe adds
+  only genuinely-missing files. Hearts and playlist membership survive. Every
+  exit reports (added / nothing new / no audio files / error).
+- **Refresh deleted songs whose files were merely unreadable** (`2ba12c6`).
+  `removedIds` is computed by SUBTRACTING the walk's results from the stored
+  library, and `getFile()` throws for a cloud placeholder, a locked file, or a
+  transient I/O error — so one such file was indistinguishable from a deleted
+  one and got dropped from Library, every playlist and the queue. This is the
+  "my library reset itself" class of bug. `ingestDirectoryHandle` gained
+  `onSkip`, and Refresh now protects any id that equals a skipped path **or
+  lives under one** (a directory whose `values()` throws stands for its whole
+  unenumerated subtree). Always reported: `· N unreadable (kept)`.
+
+Both verified end-to-end in real Chromium, not just unit tests — see
+CLAUDE.md "Persistence" and "Refresh library + M3U export". The enabling trick:
+**OPFS (`navigator.storage.getDirectory()`) hands out genuine
+`FileSystemDirectoryHandle`s** with no picker and no permission prompt, so
+stubbing `window.showDirectoryPicker` to return one exercises the entire
+FS Access path for real. A Dropbox placeholder is simulated faithfully by
+patching `FileSystemFileHandle.prototype.getFile` to reject with
+`NotReadableError`.
+
 ## Quick reference: shipped commits
 
 | Phase | Headline commit |
@@ -875,8 +910,11 @@ alone (see the last bullet).
 | PWA icons | `e66b8c8` — full-bleed maskable + apple-touch icons (the stock preset had been padding 30% onto white) |
 | Crossfade + sleep timer | `54325ad` — equal-power crossfade on its own gain node downstream of ReplayGain; mixer-ramp sleep fade |
 | Listening stats | `0c62dad` — play counts/top artists/recently played from a new `onTrackFinished` engine signal, preceded by the `togglePanel` refactor (`fc835f7`) |
+| Cover art fetch | `e416235` — iTunes Search API lookup for art-less songs (row action + Library-wide sweep); strict scored matching, apply-time liveness checkpoint so a sweep can't overwrite art the self-heal just recovered |
+| Ingest + Refresh reliability | `d5456cf` — re-picking a known folder re-walks instead of dead-ending; `2ba12c6` — Refresh keeps and reports unreadable files instead of deleting them |
+| Mobile control row | `8b34583` — one transport order everywhere (shuffle left, repeat right), `PlayerBar`'s duplicate responsive shuffle/repeat pair collapsed 4 buttons into 2, utility row spread edge to edge (4 commits) |
 
-Total: 427 tests, all green; `pnpm build` clean; production live.
+Total: 479 tests, all green; `pnpm build` clean; production live.
 
 ## Real-library milestone (2026-08-11)
 
