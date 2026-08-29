@@ -236,22 +236,19 @@ export function PlayerBar({
         )}
 
         <div className="flex items-center space-x-2 lg:space-x-4">
+          {/* One pair, both breakpoints. There used to be two — a
+              `hidden lg:block` pair left of transport and an `lg:hidden` pair
+              right of it — because the layouts disagreed about which side
+              shuffle and repeat belonged on. They now agree, so a single pair
+              serves both and changing one button is one edit again. */}
           <button
             onClick={onToggleShuffle}
-            className={`hidden lg:block p-2 hover:bg-white/10 rounded-full transition-all duration-200 ${shuffleColor}`}
+            className={`p-2 hover:bg-white/10 rounded-full transition-all duration-200 ${shuffleColor}`}
             title={`Shuffle: ${shuffle ? 'on' : 'off'}`}
             aria-label={`Shuffle: ${shuffle ? 'on' : 'off'}`}
             aria-pressed={shuffle}
           >
             <Shuffle className="h-4 w-4" />
-          </button>
-          <button
-            onClick={onCycleRepeat}
-            className={`hidden lg:block p-2 hover:bg-white/10 rounded-full transition-all duration-200 ${repeatColor}`}
-            title={`Repeat: ${repeatMode}`}
-            aria-label={`Repeat: ${repeatMode}`}
-          >
-            <RepeatIcon className="h-4 w-4" />
           </button>
           <button
             onClick={onPrev}
@@ -280,18 +277,11 @@ export function PlayerBar({
           </button>
           <button
             onClick={onCycleRepeat}
-            className={`lg:hidden p-2 hover:bg-white/10 rounded-full transition-all duration-200 ${repeatColor}`}
+            className={`p-2 hover:bg-white/10 rounded-full transition-all duration-200 ${repeatColor}`}
+            title={`Repeat: ${repeatMode}`}
             aria-label={`Repeat: ${repeatMode}`}
           >
             <RepeatIcon className="h-4 w-4" />
-          </button>
-          <button
-            onClick={onToggleShuffle}
-            className={`lg:hidden p-2 hover:bg-white/10 rounded-full transition-all duration-200 ${shuffleColor}`}
-            aria-label={`Shuffle: ${shuffle ? 'on' : 'off'}`}
-            aria-pressed={shuffle}
-          >
-            <Shuffle className="h-4 w-4" />
           </button>
         </div>
 

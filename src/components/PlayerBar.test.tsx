@@ -41,6 +41,20 @@ function renderPlayerBar(overrides: Partial<Parameters<typeof PlayerBar>[0]> = {
 }
 
 describe('PlayerBar', () => {
+  it('renders one transport row in shuffle · prev · play · next · repeat order', () => {
+    const { container } = renderPlayerBar({ song: makeSong() });
+    const order = Array.from(container.querySelectorAll('button'))
+      .map((b) => b.getAttribute('aria-label'))
+      .filter((l): l is string => !!l && /^(Shuffle|Repeat|Previous|Next|Play|Pause)/.test(l));
+    expect(order).toEqual([
+      'Shuffle: off',
+      'Previous',
+      'Play',
+      'Next',
+      'Repeat: none',
+    ]);
+  });
+
   it('renders only "No song playing" when song is null', () => {
     renderPlayerBar();
     expect(screen.getByText('No song playing')).toBeInTheDocument();
@@ -97,8 +111,8 @@ describe('PlayerBar', () => {
   it('swaps Repeat icon for Repeat1 when repeatMode is "one"', () => {
     const song = makeSong();
     const { rerender, onCycleRepeat } = renderPlayerBar({ song, repeatMode: 'all' });
-    // "all" — both desktop and mobile repeat buttons render
-    expect(screen.getAllByRole('button', { name: 'Repeat: all' })).toHaveLength(2);
+    // One repeat button now serves both breakpoints.
+    expect(screen.getByRole('button', { name: 'Repeat: all' })).toBeInTheDocument();
 
     rerender(
       <PlayerBar
@@ -121,7 +135,7 @@ describe('PlayerBar', () => {
         onVolumeChange={vi.fn()}
       />,
     );
-    expect(screen.getAllByRole('button', { name: 'Repeat: one' })).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Repeat: one' })).toBeInTheDocument();
   });
 
   it('transport buttons fire the right callbacks', () => {
@@ -187,14 +201,13 @@ describe('PlayerBar', () => {
 
   it('fires onToggleShuffle when the shuffle button is clicked', () => {
     const { onToggleShuffle } = renderPlayerBar({ song: makeSong() });
-    // Two responsive copies (desktop + mobile) render in happy-dom; click one.
-    fireEvent.click(screen.getAllByRole('button', { name: /Shuffle/ })[0]);
+    fireEvent.click(screen.getByRole('button', { name: /Shuffle/ }));
     expect(onToggleShuffle).toHaveBeenCalledOnce();
   });
 
   it('shuffle button shows the amber active tint when shuffle is on', () => {
     renderPlayerBar({ song: makeSong(), shuffle: true });
-    expect(screen.getAllByRole('button', { name: /Shuffle/ })[0]).toHaveClass('text-amber');
+    expect(screen.getByRole('button', { name: /Shuffle/ })).toHaveClass('text-amber');
   });
 
   it('volume slider fires onVolumeChange when moved', () => {

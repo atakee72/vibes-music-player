@@ -483,6 +483,18 @@ Facts other tools (e.g. a beets-managed library feeding Vibes) must know:
   (`lg:hidden`), and the in-cluster text block is `hidden lg:block`. The bar is
   `h-24` at every size — matching the empty state keeps it from jumping when
   playback starts.
+- **Transport order is `shuffle · prev · play · next · repeat` on every
+  surface** (`PlayerBar`, `MobileNowPlaying`) — Spotify/Apple convention, and
+  the reason `PlayerBar` no longer renders shuffle and repeat twice. It used to
+  carry a `hidden lg:block` pair LEFT of transport and an `lg:hidden` pair
+  RIGHT of it, so changing one button meant two edits and the two breakpoints
+  drifted into different orders. One pair now serves both; don't re-split it.
+  `MiniPlayer` (PiP) deliberately has neither button. Order is regression-tested
+  by aria-label sequence in both components' tests. `MobileNowPlaying`'s utility
+  row (lyrics, queue, audio settings, sleep timer, volume, share) is
+  `justify-between` with `gap-2`: `justify-between` does the spreading, and the
+  gap is only a minimum SPACING between buttons for the narrowest phones, where
+  six of them can exceed the row width. It does not constrain button size.
 - **`MobileNowPlaying`** (`src/components/MobileNowPlaying.tsx`) is the
   full-screen (`fixed inset-0 z-[60]`) frame-D view — the orb wrapped by
   `OrbVisualizerRing`, title, scrubbable progress, full transport, and the

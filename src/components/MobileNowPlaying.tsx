@@ -215,11 +215,12 @@ export function MobileNowPlaying({
 
         <div className="flex items-center justify-center gap-6">
           <button
-            onClick={onCycleRepeat}
-            className={`p-2 transition-colors ${repeatMode !== 'none' ? 'text-amber' : 'text-white/60'}`}
-            aria-label={`Repeat: ${repeatMode}`}
+            onClick={onToggleShuffle}
+            className={`p-2 transition-colors ${shuffle ? 'text-amber' : 'text-white/60'}`}
+            aria-label={`Shuffle: ${shuffle ? 'on' : 'off'}`}
+            aria-pressed={shuffle}
           >
-            <RepeatIcon className="h-5 w-5" />
+            <Shuffle className="h-5 w-5" />
           </button>
           <button onClick={onPrev} className="p-2 text-white/80" aria-label="Previous">
             <SkipBack className="h-6 w-6" fill="currentColor" />
@@ -239,16 +240,18 @@ export function MobileNowPlaying({
             <SkipForward className="h-6 w-6" fill="currentColor" />
           </button>
           <button
-            onClick={onToggleShuffle}
-            className={`p-2 transition-colors ${shuffle ? 'text-amber' : 'text-white/60'}`}
-            aria-label={`Shuffle: ${shuffle ? 'on' : 'off'}`}
-            aria-pressed={shuffle}
+            onClick={onCycleRepeat}
+            className={`p-2 transition-colors ${repeatMode !== 'none' ? 'text-amber' : 'text-white/60'}`}
+            aria-label={`Repeat: ${repeatMode}`}
           >
-            <Shuffle className="h-5 w-5" />
+            <RepeatIcon className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="flex items-center gap-3">
+        {/* Edge to edge, not a huddle: `gap-2` is a floor for the narrowest
+            phones (where six buttons can exceed the row), `justify-between`
+            does the spreading everywhere else. */}
+        <div className="flex items-center justify-between gap-2">
           <button
             onClick={onToggleLyrics}
             className="p-2 rounded-full bg-white/5 text-white/70 hover:bg-white/10 transition-colors"

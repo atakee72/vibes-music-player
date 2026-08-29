@@ -690,8 +690,8 @@ filter that ruled out most of that app's feature list, since its headline
 features run on `yt-dlp`, a Spotify client *secret*, and its own PocketBase
 server. See "Out of scope (forever)" — none of these cross those lines.
 
-**Items 1-4 shipped** (1-2 on 2026-08-16, 3 on 2026-08-17, 4 on 2026-08-19) — see the sections
-below. The rest stand.
+**Items 1-4 and 8 shipped** (1-2 on 2026-08-16, 3 on 2026-08-17, 4 on 2026-08-19,
+8 on 2026-08-25) — 1-4 have sections below. Items 5-7 stand.
 
 3. ~~**Local listening stats**~~ — shipped. — play counts, history, top artists, total
    minutes. Their version needs PocketBase only because it syncs across
@@ -715,18 +715,15 @@ below. The rest stand.
    toggling lyrics there has to CLOSE the view, because `LyricsPanel` is
    `z-40` and the view is `z-[60]`. A swipe-up sheet is the better model
    for that relationship and removes the workaround.
-8. **Mobile control-row layout** — three small fixes, all inside
-   `MobileNowPlaying`, no new surfaces:
-   - Transport order is mirrored vs. every other player: it's currently
-     repeat · prev · play · next · shuffle. Convention (Spotify, Apple) is
-     **shuffle left, repeat right**. Free muscle-memory win.
-   - The secondary row is a centered `gap-3` huddle; spreading it edge to
-     edge (`justify-between`) reads better and matches the transport row's
-     width.
-   - The EQ `<select>` pill breaks the rhythm of an otherwise uniform row
-     of round icon buttons. Make it a round trigger + popover — the exact
-     precedent already sitting next to it, since volume was converted for
-     the same reason (the inline slider was unusable there).
+8. ~~**Mobile control-row layout**~~ — shipped 2026-08-25. Transport is now
+   `shuffle · prev · play · next · repeat` on **every** surface, and
+   `PlayerBar`'s duplicate responsive shuffle/repeat pair collapsed into one
+   (4 buttons → 2) since both breakpoints finally agree. `MobileNowPlaying`'s
+   utility row is `justify-between` with `gap-2` — `justify-between` spreads the
+   six buttons edge to edge, and the gap is only a minimum spacing between them
+   for the narrowest phones. The third sub-item — "make the EQ
+   `<select>` a round trigger + popover" — was **already shipped** with the
+   crossfade work and had gone stale in this list.
 
 Explicitly NOT taking: their full-bleed artwork background. It's a Spotify
 Canvas *video* (undocumented endpoint, out of scope), and without the video
