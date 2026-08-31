@@ -191,16 +191,27 @@ describe('MobileNowPlaying', () => {
     expect(screen.getByText('a line')).toBeInTheDocument();
   });
 
-  it('keeps the transport reachable while the sheet is open', () => {
-    // The sheet is scoped to the content area precisely so playback stays
-    // controllable. Anchoring it to the view root would bury these.
+  it('mounts the sheet inside the content area, not the view root, so the transport is not covered', () => {
+    // A sheet anchored to the view root was measured in a real browser to
+    // cover the progress bar and transport, removing all playback control
+    // while lyrics are open. happy-dom computes no layout, so presence
+    // alone (getByRole found it somewhere) can't catch that regression —
+    // this asserts DOM structure instead: the sheet's parent must be the
+    // `relative` content div, not the view root itself.
     renderView({
       lyricsSheetOpen: true,
       onLyricsSheetChange: vi.fn(),
       lyrics: [{ time: 0, text: 'a line' }],
     });
 
-    expect(screen.getByRole('complementary', { name: 'Lyrics' })).toBeInTheDocument();
+    const view = screen.getByRole('dialog', { name: 'Now playing' });
+    const sheet = screen.getByRole('complementary', { name: 'Lyrics' });
+    const sheetParent = sheet.parentElement;
+
+    expect(sheetParent).not.toBe(view);
+    expect(sheetParent?.className).toContain('relative');
+    expect(sheetParent && view.contains(sheetParent)).toBe(true);
+
     for (const label of ['Previous', 'Next', 'Toggle lyrics']) {
       expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
     }
