@@ -14,6 +14,12 @@ export interface Song {
   bpm?: number;
   year?: number;
   bitrate?: number;
+  /** music-metadata `format.codec`, e.g. 'MPEG-4/AAC'. Absent until a re-scan
+   *  for songs ingested before the format badge shipped. */
+  codec?: string;
+  sampleRate?: number;
+  bitsPerSample?: number;
+  lossless?: boolean;
   coverArt?: string;
   coverBlob?: Blob;
   file: File;
