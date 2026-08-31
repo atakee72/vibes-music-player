@@ -1,0 +1,86 @@
+import { X } from 'lucide-react';
+import type { LyricLine } from '../types';
+import { usePresence } from '../hooks/usePresence';
+import { useSwipeGesture } from '../hooks/useSwipeGesture';
+import { LyricsView } from './LyricsView';
+
+interface LyricsSheetProps {
+  open: boolean;
+  onClose: () => void;
+  lyrics: LyricLine[] | undefined;
+  currentTime: number;
+  onSeek?: (time: number) => void;
+  onFetch?: () => void;
+  fetching?: boolean;
+  fetchError?: string | null;
+}
+
+/**
+ * Lyrics as a bottom sheet INSIDE the now-playing view.
+ *
+ * Exists so the view no longer has to close itself to show lyrics: the
+ * right-edge LyricsPanel is z-40 and the view is z-[60], so App used to
+ * dismiss the view whenever lyrics opened. This is positioned `absolute`
+ * against the view's CONTENT AREA — deliberately not the view root, which
+ * would bury the progress bar and transport and leave no way to control
+ * playback while reading lyrics. The negative inline inset cancels the
+ * host's padding so it still bleeds edge to edge.
+ *
+ * Non-modal, like the other panels: labelled landmark, no focus trap.
+ */
+export function LyricsSheet({
+  open,
+  onClose,
+  lyrics,
+  currentTime,
+  onSeek,
+  onFetch,
+  fetching,
+  fetchError,
+}: LyricsSheetProps) {
+  const { mounted, visible } = usePresence(open);
+
+  // Only the handle is draggable. The body scrolls, and a downward scroll
+  // there must not read as a dismissal.
+  const drag = useSwipeGesture({ onSwipeDown: onClose });
+
+  if (!mounted) return null;
+
+  return (
+    <div
+      role="complementary"
+      aria-label="Lyrics"
+      className={`absolute inset-y-0 -inset-x-6 z-10 flex flex-col rounded-t-card border-t border-white/10 bg-surface/95 backdrop-blur-xl motion-safe:transition-transform motion-safe:duration-300 ${
+        visible ? 'translate-y-0' : 'translate-y-full'
+      }`}
+    >
+      <div
+        data-testid="lyrics-sheet-handle"
+        className="flex shrink-0 cursor-grab touch-none flex-col items-center pt-2"
+        {...drag}
+      >
+        <div className="h-1 w-10 rounded-full bg-white/25" />
+      </div>
+
+      <div className="flex shrink-0 items-center justify-between px-4 py-2">
+        <span className="text-sm font-medium text-white/80">Lyrics</span>
+        <button
+          onClick={onClose}
+          className="rounded-full p-1 transition-colors hover:bg-white/10"
+          aria-label="Close lyrics"
+        >
+          <X className="h-4 w-4 text-white/60" />
+        </button>
+      </div>
+
+      <LyricsView
+        lyrics={lyrics}
+        currentTime={currentTime}
+        onSeek={onSeek}
+        onFetch={onFetch}
+        fetching={fetching}
+        fetchError={fetchError}
+      />
+    </div>
+  );
+}
