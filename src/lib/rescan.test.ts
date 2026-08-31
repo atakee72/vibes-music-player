@@ -27,6 +27,20 @@ describe('mergeRescan', () => {
     });
   });
 
+  it('takes the format fields from the file', () => {
+    const song = makeSong({ codec: undefined, sampleRate: undefined });
+    const out = mergeRescan(
+      song,
+      meta({ codec: 'MPEG-4/AAC', sampleRate: 44100, bitsPerSample: 16, lossless: false }),
+    );
+    expect(out).toMatchObject({
+      codec: 'MPEG-4/AAC',
+      sampleRate: 44100,
+      bitsPerSample: 16,
+      lossless: false,
+    });
+  });
+
   it('clears a scalar the file no longer carries', () => {
     const song = makeSong({ genre: 'Old', bpm: 100 });
     const out = mergeRescan(song, meta());
@@ -113,6 +127,15 @@ describe('hasMetaChanged', () => {
     const song = makeSong({ bpm: undefined });
     expect(hasMetaChanged(song, { ...song, bpm: 128 })).toBe(true);
     expect(hasMetaChanged(song, { ...song, title: 'Renamed' })).toBe(true);
+  });
+
+  it('counts a song gaining format fields as changed', () => {
+    // The first re-scan after the format badge ships reports every existing
+    // song as updated: they genuinely gain codec/sampleRate they never had.
+    // A one-time accurate report, not the permanent over-count that reference
+    // comparison of cover blobs once caused.
+    const song = makeSong({ codec: undefined });
+    expect(hasMetaChanged(song, { ...song, codec: 'MPEG-4/AAC', sampleRate: 44100 })).toBe(true);
   });
 
   it('detects a new cover and new lyrics', () => {

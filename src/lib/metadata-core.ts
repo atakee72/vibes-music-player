@@ -17,6 +17,10 @@ export interface ExtractedMeta {
   bpm?: number;
   year?: number;
   bitrate?: number;
+  codec?: string;
+  sampleRate?: number;
+  bitsPerSample?: number;
+  lossless?: boolean;
   replayGainDb?: number;
   lyrics?: LyricLine[];
   /** Raw embedded art bytes (first picture) — Blob-ified by the caller. */
@@ -35,6 +39,10 @@ export function extractSongMeta(meta: IAudioMetadata, fileName: string): Extract
     bpm: meta.common.bpm,
     year: meta.common.year,
     bitrate: meta.format.bitrate,
+    codec: meta.format.codec,
+    sampleRate: meta.format.sampleRate,
+    bitsPerSample: meta.format.bitsPerSample,
+    lossless: meta.format.lossless,
     // Note: replaygain_track_gain is an IRatio object — `.dB` is the number.
     replayGainDb: meta.common.replaygain_track_gain?.dB,
     lyrics: extractLyrics(meta),

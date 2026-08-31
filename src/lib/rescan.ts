@@ -40,6 +40,10 @@ export function mergeRescan(
     bpm: meta.bpm,
     year: meta.year,
     bitrate: meta.bitrate,
+    codec: meta.codec,
+    sampleRate: meta.sampleRate,
+    bitsPerSample: meta.bitsPerSample,
+    lossless: meta.lossless,
     replayGainDb: meta.replayGainDb,
     // A zero duration means the parse couldn't determine it — keeping the
     // known-good value beats breaking the progress bar and the gapless
@@ -69,6 +73,10 @@ export function hasMetaChanged(before: Song, after: Song): boolean {
     before.bpm !== after.bpm ||
     before.year !== after.year ||
     before.bitrate !== after.bitrate ||
+    before.codec !== after.codec ||
+    before.sampleRate !== after.sampleRate ||
+    before.bitsPerSample !== after.bitsPerSample ||
+    before.lossless !== after.lossless ||
     before.replayGainDb !== after.replayGainDb
   ) {
     return true;

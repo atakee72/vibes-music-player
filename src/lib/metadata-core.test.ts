@@ -64,4 +64,25 @@ describe('extractSongMeta', () => {
     expect(out.picData).toBeUndefined();
     expect(out.picFormat).toBeUndefined();
   });
+
+  it('captures the format fields the quality badge needs', () => {
+    const out = extractSongMeta(
+      meta({
+        format: {
+          duration: 200,
+          codec: 'MPEG-4/AAC',
+          sampleRate: 44100,
+          bitsPerSample: 16,
+          lossless: false,
+        },
+      }),
+      'file.m4a',
+    );
+    expect(out).toMatchObject({
+      codec: 'MPEG-4/AAC',
+      sampleRate: 44100,
+      bitsPerSample: 16,
+      lossless: false,
+    });
+  });
 });
