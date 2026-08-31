@@ -55,6 +55,8 @@ pnpm test:run  # Vitest single pass
   artist / duration)
 - **Genre / BPM chips** on the now-playing hero (when the tags exist); click a
   genre to filter
+- **Format/quality badge** on both now-playing views — `AAC · 44.1 kHz · 133 kbps`
+  (bit depth too, for lossless formats)
 - **Fluid motion** — cover-art cross-dissolves, a breathing/spinning orb, and
   tactile press feedback, all of which respect `prefers-reduced-motion`
 - **OS media integration** via the Media Session API — lock-screen

@@ -257,6 +257,52 @@ Facts other tools (e.g. a beets-managed library feeding Vibes) must know:
   partial listens are invisible; and under crossfade the count lands `xfade`
   seconds early.
 
+## Format/quality badge
+
+- **`describeFormat(song)` (`src/lib/audio-format.ts`) is the only place that
+  builds the badge string** (`AAC · 44.1 kHz · 133 kbps`). Pure, no parser, no
+  async — everything it needs is on the `Song` already. Rendered as a third
+  chip in `NowPlayingHero` (deliberately `text-muted`, not the lilac of the
+  clickable genre chip — it's reference info, not a filter) and as a dim mono
+  line under the artist in `MobileNowPlaying`.
+- **`format.bitrate` CANNOT BE TRUSTED, and a plausibility floor does not
+  save you.** music-metadata reports nonsense for most AAC files: across the
+  user's 463-file library, 404 of 413 AAC files report a bitrate that is
+  wrong, and the bad values are not uniformly tiny — seven land at **8-17
+  kbps** for files that actually run at ~135 kbps. So any floor low enough to
+  admit a genuine 8 kbps stream also admits that garbage; a floor at 8 would
+  have shipped `8 kbps` on real tracks. **The rule is an agreement check
+  instead**: derive `size × 8 ÷ duration` (always computable, never absurd)
+  and keep the parsed value only when it lands within `TRUST_MIN..TRUST_MAX`
+  (0.5-1.5) of it. On the real library the garbage sits at 0.122 or below and every
+  good value at 0.67 or above, so the band has wide empty margins on both
+  sides.
+  A derived value is prefixed `~` because it includes container and embedded-art
+  overhead (a 56 kbps file with big cover art derives to 64).
+- **No duration means no bitrate at all.** Without a derived value there is
+  nothing to cross-check against, and an unchecked parsed value is exactly the
+  trap above. Showing nothing beats showing `3 kbps`.
+- **Bit depth is gated on `format.lossless`**, and the gate is load-bearing,
+  not cosmetic: music-metadata reports `bitsPerSample: 16` for AAC, so without
+  it every lossy track would falsely claim "16-bit". Bit depth is a PCM
+  property; a lossy stream has no sample depth. NB the user's library is 100%
+  lossy, so this branch is covered by unit tests only — it has never been seen
+  in a browser.
+- **Before a re-scan, the label is the CONTAINER, not a guessed codec**
+  (`M4A · ~133 kbps`). Songs ingested before this shipped have no `codec`
+  field, and a `.m4a` may hold AAC *or* ALAC — claiming "AAC" from the
+  extension would be a guess presented as fact. Re-scan tags replaces it with
+  the real codec and adds the sample rate.
+- The four new `Song` fields (`codec`, `sampleRate`, `bitsPerSample`,
+  `lossless`) cost **no** storage.ts change — `SongMeta`'s `Omit`+spread
+  persists them free — and no metadata-client change, since the worker
+  round-trip forwards the whole `ExtractedMeta` with no field whitelist.
+- **The first Re-scan after this shipped reports every song as updated**, because
+  `hasMetaChanged` now compares fields that were previously `undefined` on every
+  stored song. That is a one-time and *accurate* report — do not "fix" it as if
+  it were the permanent over-counting bug that reference-comparing cover blobs
+  once caused.
+
 ## The right-edge panel slot
 
 - Lyrics, Queue and Stats share one slot and are mutually exclusive. Every

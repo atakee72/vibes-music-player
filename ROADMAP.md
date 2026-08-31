@@ -690,8 +690,9 @@ filter that ruled out most of that app's feature list, since its headline
 features run on `yt-dlp`, a Spotify client *secret*, and its own PocketBase
 server. See "Out of scope (forever)" — none of these cross those lines.
 
-**Items 1-4 and 8 shipped** (1-2 on 2026-08-16, 3 on 2026-08-17, 4 on 2026-08-19,
-8 on 2026-08-25) — 1-4 have sections below. Items 5-7 stand.
+**Items 1-4, 6 and 8 shipped** (1-2 on 2026-08-16, 3 on 2026-08-17, 4 on
+2026-08-19, 8 on 2026-08-25, 6 on 2026-08-31) — 1-4 and 6 have sections below.
+Items 5 and 7 stand.
 
 3. ~~**Local listening stats**~~ — shipped. — play counts, history, top artists, total
    minutes. Their version needs PocketBase only because it syncs across
@@ -706,11 +707,8 @@ server. See "Out of scope (forever)" — none of these cross those lines.
    `kuroshiro`'s dictionary is heavy, so load it dynamically like the
    other on-demand libs. Lyrics *translation* is the sibling that does
    need a hosted service — not this.
-6. **Format/quality badge** in the now-playing views — `FLAC · 44.1 kHz ·
-   16-bit · 1066 kbps`. `bitrate` is already captured; sample rate, bit
-   depth and codec come off the same `music-metadata` `format` object, so
-   it's a few more fields at ingest. **Catch**: new fields don't backfill
-   onto already-ingested songs — existing libraries need a Re-scan.
+6. ~~**Format/quality badge**~~ — shipped 2026-08-31. See the section below;
+   the "bitrate is already captured" premise turned out to be the catch.
 7. **Swipe-up-for-lyrics** from `MobileNowPlaying`. Not just polish: today
    toggling lyrics there has to CLOSE the view, because `LyricsPanel` is
    `z-40` and the view is `z-[60]`. A swipe-up sheet is the better model
@@ -933,3 +931,33 @@ moot (the library is all singletons).
 Also fixed that evening: a **data-loss bug** where a permission-gated cold
 start persisted an empty library over the stored one — see CLAUDE.md
 "Persistence → Save-effect race guard".
+
+## Format/quality badge (shipped, 2026-08-31)
+
+Backlog item 6. `describeFormat` (`src/lib/audio-format.ts`) renders
+`AAC · 44.1 kHz · 133 kbps` as a third chip on the desktop hero and a dim mono
+line on `MobileNowPlaying`. Four new `Song` fields (`codec`, `sampleRate`,
+`bitsPerSample`, `lossless`) captured at ingest and merged on Re-scan; no
+storage.ts change was needed.
+
+**The plan's premise was wrong, and finding that out was most of the work.**
+The backlog entry said "`bitrate` is already captured", so the badge looked
+like pure rendering. Probing all 463 files in the real library showed
+music-metadata reports a *wrong* bitrate for 404 of the 413 AAC files — and
+not uniformly tiny: seven report 8-17 kbps for ~135 kbps audio, which defeats
+the obvious "reject implausibly small values" floor. The shipped rule
+cross-checks the parsed value against `size × 8 ÷ duration` and keeps it only
+when the two agree within 0.5-1.5×. Measured over the whole library, the floor
+rule would have displayed a wildly wrong bitrate on 7 songs; the agreement
+rule on 0.
+
+Also settled here: bit depth renders only when `format.lossless`, because
+music-metadata reports `bitsPerSample: 16` for AAC; and before a Re-scan the
+badge names the *container* (`M4A`) rather than guessing a codec, since a
+`.m4a` may hold AAC or ALAC.
+
+Verified in Chromium against four real library files (the 2963 bps AAC, the
+8 kbps trap file, an exact 320 kbps MP3, a 24 kHz/56 kbps MP3), including a
+forced two-row chip layout to confirm the fixed-height hero does not overflow.
+Not verifiable on this library: the lossless bit-depth branch — it has no
+lossless files.
