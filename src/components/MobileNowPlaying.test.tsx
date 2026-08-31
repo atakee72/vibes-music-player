@@ -146,4 +146,71 @@ describe('MobileNowPlaying', () => {
     renderView({ song: makeSong({ duration: 0, file: new File([], 'x') }) });
     expect(screen.queryByText(/kHz|kbps/)).not.toBeInTheDocument();
   });
+
+  it('opens the lyrics sheet from the lyrics button without closing the view', () => {
+    const onLyricsSheetChange = vi.fn();
+    renderView({ onLyricsSheetChange, lyrics: [{ time: 0, text: 'a line' }] });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle lyrics' }));
+
+    expect(onLyricsSheetChange).toHaveBeenCalledWith(true);
+    // The view itself must stay put — that is the entire point of the sheet.
+    expect(screen.getByRole('dialog', { name: 'Now playing' })).toBeInTheDocument();
+  });
+
+  it('opens the lyrics sheet on an upward drag', () => {
+    const onLyricsSheetChange = vi.fn();
+    renderView({ onLyricsSheetChange });
+    const view = screen.getByRole('dialog', { name: 'Now playing' });
+
+    fireEvent.pointerDown(view, { pointerId: 1, clientX: 100, clientY: 400 });
+    fireEvent.pointerUp(view, { pointerId: 1, clientX: 100, clientY: 200 });
+
+    expect(onLyricsSheetChange).toHaveBeenCalledWith(true);
+  });
+
+  it('does not open the sheet when a drag starts on a transport button', () => {
+    const onLyricsSheetChange = vi.fn();
+    renderView({ onLyricsSheetChange });
+    const next = screen.getByRole('button', { name: 'Next' });
+
+    fireEvent.pointerDown(next, { pointerId: 1, clientX: 100, clientY: 400 });
+    fireEvent.pointerUp(next, { pointerId: 1, clientX: 100, clientY: 200 });
+
+    expect(onLyricsSheetChange).not.toHaveBeenCalled();
+  });
+
+  it('renders the sheet when lyricsSheetOpen is set', () => {
+    renderView({
+      lyricsSheetOpen: true,
+      onLyricsSheetChange: vi.fn(),
+      lyrics: [{ time: 0, text: 'a line' }],
+    });
+
+    expect(screen.getByRole('complementary', { name: 'Lyrics' })).toBeInTheDocument();
+    expect(screen.getByText('a line')).toBeInTheDocument();
+  });
+
+  it('keeps the transport reachable while the sheet is open', () => {
+    // The sheet is scoped to the content area precisely so playback stays
+    // controllable. Anchoring it to the view root would bury these.
+    renderView({
+      lyricsSheetOpen: true,
+      onLyricsSheetChange: vi.fn(),
+      lyrics: [{ time: 0, text: 'a line' }],
+    });
+
+    expect(screen.getByRole('complementary', { name: 'Lyrics' })).toBeInTheDocument();
+    for (const label of ['Previous', 'Next', 'Toggle lyrics']) {
+      expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
+    }
+  });
+
+  it('still calls onToggleLyrics when no sheet handler is supplied', () => {
+    // Backwards-compatible path: hosts that have not adopted the sheet keep
+    // the old behaviour.
+    const { onToggleLyrics } = renderView();
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle lyrics' }));
+    expect(onToggleLyrics).toHaveBeenCalledTimes(1);
+  });
 });

@@ -17,7 +17,7 @@ import {
   Volume2,
   VolumeX,
 } from 'lucide-react';
-import type { RepeatMode, Song } from '../types';
+import type { LyricLine, RepeatMode, Song } from '../types';
 import { EQ_PRESET_NAMES, type EqPreset } from '../lib/eq';
 import { CROSSFADE_OPTIONS, formatCrossfade } from '../lib/crossfade';
 import { SleepTimerMenu } from './SleepTimerMenu';
@@ -27,6 +27,8 @@ import { OrbVisualizerRing } from './OrbVisualizerRing';
 import { ScrollingText } from './ScrollingText';
 import { usePresence } from '../hooks/usePresence';
 import { useDialogFocus } from '../hooks/useDialogFocus';
+import { useSwipeGesture } from '../hooks/useSwipeGesture';
+import { LyricsSheet } from './LyricsSheet';
 
 interface MobileNowPlayingProps {
   open: boolean;
@@ -56,6 +58,16 @@ interface MobileNowPlayingProps {
   onEqPresetChange: (preset: EqPreset) => void;
   onVolumeChange: (v: number) => void;
   onToggleLyrics: () => void;
+  /** Whether the in-view lyrics sheet is showing. */
+  lyricsSheetOpen?: boolean;
+  /** Supplied by hosts that use the in-view sheet; when absent the lyrics
+   *  button falls back to `onToggleLyrics`. */
+  onLyricsSheetChange?: (open: boolean) => void;
+  lyrics?: LyricLine[];
+  onSeekLyric?: (time: number) => void;
+  onFetchLyrics?: () => void;
+  fetchingLyrics?: boolean;
+  fetchLyricsError?: string | null;
   onToggleQueue: () => void;
   onShare: () => void;
 }
@@ -99,6 +111,13 @@ export function MobileNowPlaying({
   onEqPresetChange,
   onVolumeChange,
   onToggleLyrics,
+  lyricsSheetOpen,
+  onLyricsSheetChange,
+  lyrics,
+  onSeekLyric,
+  onFetchLyrics,
+  fetchingLyrics,
+  fetchLyricsError,
   onToggleQueue,
   onShare,
 }: MobileNowPlayingProps) {
@@ -109,6 +128,14 @@ export function MobileNowPlaying({
   // fire at close time while the exit slide still plays.
   const viewRef = useRef<HTMLDivElement>(null);
   useDialogFocus(open && !!song && mounted, viewRef);
+
+  // Swipe up anywhere on the view (except on a control) to reveal lyrics.
+  // Called here, ahead of the `!mounted || !song` early return below, so the
+  // hook count stays stable across renders (e.g. when `song` goes null while
+  // `open` is still true, mid auto-close).
+  const swipe = useSwipeGesture({
+    onSwipeUp: () => onLyricsSheetChange?.(true),
+  });
 
   // Volume popover: the inline slider was unusable squeezed into the crowded
   // utility row on narrow screens — a tap opens a full-width slider instead.
@@ -151,6 +178,7 @@ export function MobileNowPlaying({
   return (
     <div
       ref={viewRef}
+      {...swipe}
       role="dialog"
       aria-modal="true"
       aria-label="Now playing"
@@ -172,7 +200,7 @@ export function MobileNowPlaying({
         <span className="w-10 shrink-0" />
       </div>
 
-      <div className="flex flex-1 flex-col items-center justify-center gap-8">
+      <div className="relative flex flex-1 flex-col items-center justify-center gap-8">
         <div className="relative flex h-72 w-72 items-center justify-center">
           <OrbVisualizerRing data={visualizerData} isPlaying={isPlaying} />
           <VibeOrb coverArt={song.coverArt} isPlaying={isPlaying} className="h-56 w-56" />
@@ -190,6 +218,17 @@ export function MobileNowPlaying({
             <p className="mt-1 truncate font-mono text-xs text-muted/70">{format}</p>
           )}
         </div>
+
+        <LyricsSheet
+          open={!!lyricsSheetOpen}
+          onClose={() => onLyricsSheetChange?.(false)}
+          lyrics={lyrics}
+          currentTime={currentTime}
+          onSeek={onSeekLyric}
+          onFetch={onFetchLyrics}
+          fetching={fetchingLyrics}
+          fetchError={fetchLyricsError}
+        />
       </div>
 
       <div className="space-y-5">
@@ -258,7 +297,7 @@ export function MobileNowPlaying({
             does the spreading everywhere else. */}
         <div className="flex items-center justify-between gap-2">
           <button
-            onClick={onToggleLyrics}
+            onClick={() => (onLyricsSheetChange ? onLyricsSheetChange(true) : onToggleLyrics())}
             className="p-2 rounded-full bg-white/5 text-white/70 hover:bg-white/10 transition-colors"
             aria-label="Toggle lyrics"
           >
