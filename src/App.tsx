@@ -125,6 +125,14 @@ export default function App() {
   const [shuffle, setShuffle] = useState(false);
   const [sortBy, setSortBy] = useState<SortKey>('manual');
   const [mobilePlayerOpen, setMobilePlayerOpen] = useState(false);
+  // Read by the stable `togglePanel` callback, which can't take
+  // `mobilePlayerOpen` as a dependency (see its comment).
+  const mobilePlayerOpenRef = useRef(false);
+  mobilePlayerOpenRef.current = mobilePlayerOpen;
+  // Lyrics shown INSIDE the now-playing view. Separate from `showLyrics`
+  // (the right-edge panel) because both surfaces exist and serve different
+  // contexts — see ROADMAP item 7.
+  const [lyricsSheetOpen, setLyricsSheetOpen] = useState(false);
   const [fetchingLyrics, setFetchingLyrics] = useState(false);
   const [fetchLyricsError, setFetchLyricsError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(
@@ -579,9 +587,17 @@ export default function App() {
    * are `z-40`, so leaving it open would show the panel hidden behind it.
    */
   const togglePanel = useCallback((panel: 'lyrics' | 'queue' | 'stats') => {
+    // Inside the full-screen view, lyrics mean the in-view sheet: it rides
+    // above the view instead of being hidden beneath it, so the view stays.
+    if (panel === 'lyrics' && mobilePlayerOpenRef.current) {
+      setLyricsSheetOpen((v) => !v);
+      return;
+    }
     setShowLyrics((v) => (panel === 'lyrics' ? !v : false));
     setShowQueue((v) => (panel === 'queue' ? !v : false));
     setShowStats((v) => (panel === 'stats' ? !v : false));
+    // Queue and Stats are z-40 beneath a z-[60] view, so they still have to
+    // dismiss it. Only lyrics got its own in-view surface.
     setMobilePlayerOpen(false);
   }, []);
 
@@ -1950,7 +1966,8 @@ export default function App() {
   // Close the mobile now-playing view if the track goes away (mirrors PiP).
   useEffect(() => {
     if (mobilePlayerOpen && !currentSong) setMobilePlayerOpen(false);
-  }, [mobilePlayerOpen, currentSong]);
+    if (!mobilePlayerOpen && lyricsSheetOpen) setLyricsSheetOpen(false);
+  }, [mobilePlayerOpen, currentSong, lyricsSheetOpen]);
 
   // Clear any stale "no lyrics found" message when the track changes.
   useEffect(() => {
@@ -2021,6 +2038,10 @@ export default function App() {
       KeyQ: () => togglePanel('queue'),
       KeyS: () => togglePanel('stats'),
       Escape: () => {
+        if (lyricsSheetOpen) {
+          setLyricsSheetOpen(false);
+          return;
+        }
         if (mobilePlayerOpen) {
           setMobilePlayerOpen(false);
           return;
@@ -2591,6 +2612,13 @@ export default function App() {
             onToggleLyrics={() => togglePanel('lyrics')}
             onToggleQueue={() => togglePanel('queue')}
             onShare={handleShare}
+            lyricsSheetOpen={lyricsSheetOpen}
+            onLyricsSheetChange={setLyricsSheetOpen}
+            lyrics={currentSong?.lyrics}
+            onSeekLyric={seek}
+            onFetchLyrics={currentSong ? handleFetchLyrics : undefined}
+            fetchingLyrics={fetchingLyrics}
+            fetchLyricsError={fetchLyricsError}
           />
         </Suspense>
       )}

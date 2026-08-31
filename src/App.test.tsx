@@ -656,6 +656,64 @@ describe('right-edge panel exclusivity', () => {
   });
 });
 
+const libraryWith = (...songs: Song[]) =>
+  makePlaylist({ id: 'library', name: 'Library', songs });
+
+describe('lyrics sheet inside the now-playing view', () => {
+  // The brief's own click-the-title recipe doesn't start playback here: a row
+  // click outside selection mode is a no-op (see SongList's handleRowClick),
+  // so `playRow` (the existing helper used by the rest of this file) is used
+  // to start playback instead. "Open now playing" is also not unique — both
+  // the floating pull-up handle and the cover/title row carry that aria-label
+  // — so the first match is used, same as any other row/element ambiguity.
+  const openNowPlaying = async (title: string) => {
+    await screen.findByText(title);
+    playRow(0);
+    fireEvent.click(screen.getAllByLabelText('Open now playing')[0]);
+  };
+
+  it('opens the sheet from L and leaves the now-playing view open', async () => {
+    await renderApp({ playlists: [libraryWith(makeSong({ title: 'Cemalım' }))] });
+    await openNowPlaying('Cemalım');
+
+    fireEvent.keyDown(document, { code: 'KeyL' });
+
+    expect(await screen.findByRole('complementary', { name: 'Lyrics' })).toBeInTheDocument();
+    // The regression this whole feature exists to prevent.
+    expect(screen.getByRole('dialog', { name: 'Now playing' })).toBeInTheDocument();
+  });
+
+  it('Escape closes the sheet before the view', async () => {
+    await renderApp({ playlists: [libraryWith(makeSong({ title: 'Cemalım' }))] });
+    await openNowPlaying('Cemalım');
+    fireEvent.keyDown(document, { code: 'KeyL' });
+    await screen.findByRole('complementary', { name: 'Lyrics' });
+
+    fireEvent.keyDown(document, { code: 'Escape' });
+
+    expect(screen.getByRole('dialog', { name: 'Now playing' })).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { code: 'Escape' });
+    // The view is a `usePresence` surface (Task 4): closing leaves it mounted
+    // for its exit animation rather than removing it synchronously, so assert
+    // on the exit state — same convention as "right-edge panel exclusivity"
+    // below, which does the same for LyricsPanel.
+    expect(screen.getByRole('dialog', { name: 'Now playing' })).toHaveClass('opacity-0');
+  });
+
+  it('still closes the view when the queue is opened from it', async () => {
+    // Queue is z-40 under a z-[60] view, so it must keep closing the view.
+    await renderApp({ playlists: [libraryWith(makeSong({ title: 'Cemalım' }))] });
+    await openNowPlaying('Cemalım');
+
+    fireEvent.keyDown(document, { code: 'KeyQ' });
+
+    // See the note above: usePresence keeps the dialog mounted through its
+    // exit animation, so assert the exit state rather than absence.
+    expect(screen.getByRole('dialog', { name: 'Now playing' })).toHaveClass('opacity-0');
+  });
+});
+
 describe('sleep timer', () => {
   // Timers are faked only AFTER renderApp: the helper awaits findAllByText,
   // whose polling is itself timer-driven and would hang under fake timers.
