@@ -85,4 +85,41 @@ describe('useSwipeGesture', () => {
 
     expect(onSwipeUp).not.toHaveBeenCalled();
   });
+
+  it('second pointer does not hijack the first gesture', () => {
+    // If a second pointer touches down while a gesture is in flight (pinch, etc),
+    // it must not overwrite the first pointer's start coordinates.
+    const onSwipeUp = vi.fn();
+    const { result } = renderHook(() => useSwipeGesture({ onSwipeUp }));
+
+    result.current.onPointerDown(evt({ x: 100, y: 300, id: 1 }));
+    result.current.onPointerDown(evt({ x: 200, y: 250, id: 2 }));
+    result.current.onPointerUp(evt({ x: 100, y: 200, id: 1 }));
+
+    // Pointer 1's gesture should fire (100px vertical from start)
+    expect(onSwipeUp).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not call setPointerCapture', () => {
+    const onSwipeUp = vi.fn();
+    const { result } = renderHook(() => useSwipeGesture({ onSwipeUp }));
+
+    const mockElement = {
+      closest: () => null,
+      setPointerCapture: vi.fn(),
+    };
+
+    const evtWithCapture = (over: { x?: number; y?: number; id?: number } = {}) =>
+      ({
+        pointerId: over.id ?? 1,
+        clientX: over.x ?? 0,
+        clientY: over.y ?? 0,
+        target: mockElement,
+      }) as unknown as React.PointerEvent;
+
+    result.current.onPointerDown(evtWithCapture({ x: 100, y: 300 }));
+    result.current.onPointerUp(evtWithCapture({ x: 100, y: 200 }));
+
+    expect(mockElement.setPointerCapture).not.toHaveBeenCalled();
+  });
 });

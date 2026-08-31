@@ -35,6 +35,7 @@ export function useSwipeGesture({
 
   return {
     onPointerDown: (e) => {
+      if (start.current) return; // Ignore if a gesture is already in flight
       if ((e.target as Element | null)?.closest?.(INTERACTIVE)) return;
       start.current = { x: e.clientX, y: e.clientY, id: e.pointerId };
     },
