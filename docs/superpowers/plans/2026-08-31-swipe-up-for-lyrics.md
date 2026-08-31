@@ -552,7 +552,8 @@ git commit -m "feat: add useSwipeGesture for vertical drag on overlays"
 
 **Design notes:**
 
-- Root is `absolute inset-x-0 bottom-0 top-20`, **not** `fixed`. Its host `MobileNowPlaying` is `fixed inset-0 z-[60]`, which makes it the containing block for absolutely-positioned descendants — so the sheet is scoped to the view and needs no z-index fight with the rest of the app. It carries `z-10` to sit above the view's own content.
+- Root is `absolute inset-y-0 -inset-x-6 z-10`, **not** `fixed`, and its containing block is the view's **content area** (the orb/title region), not the whole view. That scoping is load-bearing, not cosmetic: measured in Chromium, a sheet anchored to the view root covers the progress bar, transport and utility rows, so opening lyrics would remove all playback control. Today's mobile `LyricsPanel` is `z-40` under a `z-50` `PlayerBar`, so the player stays reachable behind it — a root-anchored sheet would be a regression against that. Scoped to the content area, the sheet gets ~610px of height on a 390×844 phone while every control below stays hittable (all measured).
+- The negative `-inset-x-6` cancels the host's `p-6` so the sheet still bleeds edge to edge and reads as a sheet rather than an inset card. Verified in Chromium: 390px wide at left 0, and `documentElement.scrollWidth` stays at 390, so it introduces no horizontal overflow.
 - Non-modal: `role="complementary"` + `aria-label="Lyrics"`, **no focus trap**. Per `CLAUDE.md`, `useDialogFocus` is for modals only.
 - The drag handle is a distinct element at the top of the sheet carrying the `useSwipeGesture` handlers for `onSwipeDown`. Do not put them on the sheet root — the body scrolls, and a downward scroll gesture there would dismiss the sheet.
 
@@ -650,8 +651,10 @@ interface LyricsSheetProps {
  * Exists so the view no longer has to close itself to show lyrics: the
  * right-edge LyricsPanel is z-40 and the view is z-[60], so App used to
  * dismiss the view whenever lyrics opened. This is positioned `absolute`
- * against the view (which is `fixed`, and therefore the containing block),
- * so it rides above the view's content without entering the global z-order.
+ * against the view's CONTENT AREA — deliberately not the view root, which
+ * would bury the progress bar and transport and leave no way to control
+ * playback while reading lyrics. The negative inline inset cancels the
+ * host's padding so it still bleeds edge to edge.
  *
  * Non-modal, like the other panels: labelled landmark, no focus trap.
  */
@@ -677,7 +680,7 @@ export function LyricsSheet({
     <div
       role="complementary"
       aria-label="Lyrics"
-      className={`absolute inset-x-0 bottom-0 top-20 z-10 flex flex-col rounded-t-card border-t border-white/10 bg-surface/95 backdrop-blur-xl motion-safe:transition-transform motion-safe:duration-300 ${
+      className={`absolute inset-y-0 -inset-x-6 z-10 flex flex-col rounded-t-card border-t border-white/10 bg-surface/95 backdrop-blur-xl motion-safe:transition-transform motion-safe:duration-300 ${
         visible ? 'translate-y-0' : 'translate-y-full'
       }`}
     >
@@ -752,7 +755,7 @@ git commit -m "feat: add LyricsSheet, a bottom sheet for the now-playing view"
 
 - The Mic2 button opens the sheet when `onLyricsSheetChange` is supplied, and otherwise falls back to `onToggleLyrics`. That fallback keeps every existing `MobileNowPlaying` test rendering without the new props.
 - Swipe-up handlers go on the **view root**, guarded by the hook's interactive-element check. They must be spread *before* nothing else — the root has no other pointer handlers today, so there is no ordering hazard.
-- `LyricsSheet` renders as the last child of the root, so it paints above the transport and utility rows.
+- `LyricsSheet` renders **inside the orb/title content div**, which must gain `relative` — not as a child of the view root. Anchoring it to the root covers the transport (measured), which is the one thing a lyrics view must not do.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -801,6 +804,21 @@ Append to `src/components/MobileNowPlaying.test.tsx`, inside the existing top-le
 
     expect(screen.getByRole('complementary', { name: 'Lyrics' })).toBeInTheDocument();
     expect(screen.getByText('a line')).toBeInTheDocument();
+  });
+
+  it('keeps the transport reachable while the sheet is open', () => {
+    // The sheet is scoped to the content area precisely so playback stays
+    // controllable. Anchoring it to the view root would bury these.
+    renderView({
+      lyricsSheetOpen: true,
+      onLyricsSheetChange: vi.fn(),
+      lyrics: [{ time: 0, text: 'a line' }],
+    });
+
+    expect(screen.getByRole('complementary', { name: 'Lyrics' })).toBeInTheDocument();
+    for (const label of ['Previous', 'Next', 'Toggle lyrics']) {
+      expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
+    }
   });
 
   it('still calls onToggleLyrics when no sheet handler is supplied', () => {
@@ -862,9 +880,21 @@ Change the lyrics button's `onClick` from `onClick={onToggleLyrics}` to:
             onClick={() => (onLyricsSheetChange ? onLyricsSheetChange(true) : onToggleLyrics())}
 ```
 
-- [ ] **Step 5: Render the sheet**
+- [ ] **Step 5: Render the sheet inside the content area**
 
-As the **last child** of the root `<div>`, immediately before its closing `</div>`, add:
+Give the orb/title container a positioning context. Change:
+
+```tsx
+      <div className="flex flex-1 flex-col items-center justify-center gap-8">
+```
+
+to:
+
+```tsx
+      <div className="relative flex flex-1 flex-col items-center justify-center gap-8">
+```
+
+Then, as the **last child of that div** (after the title block, still inside it), add:
 
 ```tsx
       <LyricsSheet
@@ -908,6 +938,7 @@ git commit -m "feat: open lyrics as an in-view sheet, by button or swipe up"
 - `togglePanel` currently ends with an unconditional `setMobilePlayerOpen(false)`. It must stop doing that **for `'lyrics'` only**. Queue and Stats are still `z-40` beneath a `z-[60]` view and must keep closing it (Decision 3).
 - While the view is open, `togglePanel('lyrics')` toggles the sheet and leaves `showLyrics` alone — otherwise pressing `L` twice from the view would leave the right-edge panel open behind it.
 - The Escape chain gains `lyricsSheetOpen` as its **first** branch, before `mobilePlayerOpen`: Escape should peel the sheet off before dismissing the view underneath it.
+- **Known benign state, do not "fix" it:** opening the now-playing view does not close the right-edge `LyricsPanel` (pre-existing — nothing in the expand path touches panel state). So a user who has the panel open and then expands the view can have both lyrics surfaces mounted at once. The view is `z-[60]` over the panel's `z-40`, so only the sheet is visible and nothing is broken. Closing the view reveals the panel again, which is the state the user left. Suppressing one from the other would need new coupling between two surfaces that are deliberately independent.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1081,9 +1112,14 @@ In the **"Mobile layout (the `lg` split)"** section, the `MobileNowPlaying` bull
 
 ```
   **Lyrics from this view open an in-view `LyricsSheet`, not the right-edge
-  panel** — the sheet is `absolute` against the view (which is `fixed`, hence
-  the containing block), so it rides above the view's content without entering
-  the global z-order, and the view no longer has to close itself. Reachable by
+  panel** — the sheet is `absolute` against the view's **content area** (the
+  orb/title region, which carries `relative` for exactly this), so it rides
+  above the orb without entering the global z-order, and the view no longer has
+  to close itself. **It is deliberately NOT anchored to the view root**: that
+  covers the progress bar and transport, leaving no way to control playback
+  while reading — and today's `LyricsPanel` (`z-40`) sits under `PlayerBar`
+  (`z-50`), so burying the controls would be a regression. `-inset-x-6` cancels
+  the view's `p-6` so it still bleeds edge to edge. Reachable by
   the Mic2 button or a swipe up (`useSwipeGesture`, which ignores drags
   starting on a control so scrubbing the progress bar never opens it).
   **Queue and Stats still close the view** — they are `z-40` beneath a `z-[60]`
@@ -1128,7 +1164,11 @@ Backlog item 7. Lyrics now open as a `LyricsSheet` *inside* `MobileNowPlaying`
 — by the Mic2 button or an upward drag — instead of forcing the view to close.
 The old workaround existed because `LyricsPanel` is `z-40` and the view is
 `z-[60]`; the sheet sidesteps the global z-order entirely by being `absolute`
-against the view, which is `fixed` and therefore its containing block.
+against the view's content area. Anchoring it to the view root was tried on
+paper and rejected after measuring in Chromium: it covers the progress bar and
+transport, which would have made lyrics and playback control mutually
+exclusive — a regression, since today's `z-40` panel sits under the `z-50`
+player bar.
 
 `LyricsView` was extracted first so the panel and the sheet render identical
 lyrics from one source — the extraction was verified faithful by requiring
@@ -1172,9 +1212,10 @@ Manual, in a real browser (`pnpm build && pnpm preview`, then `playwright-cli --
 
 1. **Phone width (390×844).** Play a track, tap the mini-bar to open the now-playing view, drag upward from the middle of the view → the sheet rises and **the view stays**. Drag the handle down → the sheet falls, the view is still there.
 2. **The guard that matters.** Drag *upward starting on the progress bar*, then on the volume button → the sheet must not open. This is the failure mode the interactive-element check exists for.
-3. **Desktop (1280×800).** Click the bottom player bar's cover to open the view; the button and the gesture behave the same. (`MobileNowPlaying` renders at every size despite its name.)
-4. **Queue is unchanged.** From the view, tap the queue button → the view closes and the right-edge queue panel opens, exactly as before.
-5. **Reduced motion.** Toggle the OS "reduce motion" setting and re-open the sheet: it appears and disappears instantly, with no 300ms empty hold.
-6. **Escape order.** With the sheet open, Escape closes the sheet; a second Escape closes the view.
+3. **Playback stays controllable.** With the sheet open, press play/pause, skip a track and drag the progress bar. All must work — the sheet is scoped to the content area for exactly this reason, and it is the defect this plan's audit caught.
+4. **Desktop (1280×800).** Click the bottom player bar's cover to open the view; the button and the gesture behave the same. (`MobileNowPlaying` renders at every size despite its name.)
+5. **Queue is unchanged.** From the view, tap the queue button → the view closes and the right-edge queue panel opens, exactly as before.
+6. **Reduced motion.** Toggle the OS "reduce motion" setting and re-open the sheet: it appears and disappears instantly, with no 300ms empty hold.
+7. **Escape order.** With the sheet open, Escape closes the sheet; a second Escape closes the view.
 
 Not covered by any of this: nothing audio-related is touched, so no listening test is required for this feature.
