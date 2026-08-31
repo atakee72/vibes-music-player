@@ -83,4 +83,14 @@ describe('NowPlayingHero', () => {
       'true',
     );
   });
+
+  it('shows the format badge when the song carries format fields', () => {
+    renderHero({ codec: 'MPEG-4/AAC', sampleRate: 44100, duration: 0 });
+    expect(screen.getByText('AAC · 44.1 kHz')).toBeInTheDocument();
+  });
+
+  it('shows no format badge when nothing about the format is known', () => {
+    renderHero({ codec: undefined, sampleRate: undefined, duration: 0, file: new File([], 'x') });
+    expect(screen.queryByText(/kHz|kbps/)).not.toBeInTheDocument();
+  });
 });

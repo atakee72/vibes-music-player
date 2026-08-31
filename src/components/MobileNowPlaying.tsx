@@ -21,6 +21,7 @@ import type { RepeatMode, Song } from '../types';
 import { EQ_PRESET_NAMES, type EqPreset } from '../lib/eq';
 import { CROSSFADE_OPTIONS, formatCrossfade } from '../lib/crossfade';
 import { SleepTimerMenu } from './SleepTimerMenu';
+import { describeFormat } from '../lib/audio-format';
 import { VibeOrb } from './VibeOrb';
 import { OrbVisualizerRing } from './OrbVisualizerRing';
 import { ScrollingText } from './ScrollingText';
@@ -145,6 +146,7 @@ export function MobileNowPlaying({
 
   const RepeatIcon = repeatMode === 'one' ? Repeat1 : Repeat;
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const format = describeFormat(song);
 
   return (
     <div
@@ -184,6 +186,9 @@ export function MobileNowPlaying({
             {song.artist}
             {song.album && song.album !== 'Unknown Album' && ` · ${song.album}`}
           </p>
+          {format && (
+            <p className="mt-1 truncate font-mono text-xs text-muted/70">{format}</p>
+          )}
         </div>
       </div>
 

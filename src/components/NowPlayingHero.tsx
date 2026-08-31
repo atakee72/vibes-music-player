@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import { Heart } from 'lucide-react';
 import type { Song } from '../types';
+import { describeFormat } from '../lib/audio-format';
 import { VibeOrb } from './VibeOrb';
 import { ScrollingText } from './ScrollingText';
 
@@ -38,7 +39,8 @@ export function NowPlayingHero({
   onToggleFavorite,
 }: NowPlayingHeroProps) {
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
-  const hasChips = Boolean(song.genre || song.bpm);
+  const format = describeFormat(song);
+  const hasChips = Boolean(song.genre || song.bpm || format);
 
   return (
     <div className="hidden lg:flex shrink-0 mx-4 lg:mx-6 mt-3 mb-3 h-[180px] items-center gap-6 rounded-card border border-white/10 bg-white/[0.06] backdrop-blur-xl p-4">
@@ -77,6 +79,13 @@ export function NowPlayingHero({
                 {Math.round(song.bpm)} BPM
               </span>
             ) : null}
+            {/* Reference info, not a filter — deliberately quieter than the
+                clickable genre chip and the lilac BPM chip. */}
+            {format && (
+              <span className="rounded-full bg-white/[0.06] px-3 py-1 font-mono text-xs text-muted">
+                {format}
+              </span>
+            )}
           </div>
         )}
 

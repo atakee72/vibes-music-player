@@ -136,4 +136,14 @@ describe('MobileNowPlaying', () => {
     // :159 already carries that class and would match first.
     expect(row).toHaveClass('flex', 'items-center');
   });
+
+  it('shows the format badge when the song carries format fields', () => {
+    renderView({ song: makeSong({ codec: 'FLAC', sampleRate: 48000, duration: 0 }) });
+    expect(screen.getByText('FLAC · 48 kHz')).toBeInTheDocument();
+  });
+
+  it('shows no format badge when nothing about the format is known', () => {
+    renderView({ song: makeSong({ duration: 0, file: new File([], 'x') }) });
+    expect(screen.queryByText(/kHz|kbps/)).not.toBeInTheDocument();
+  });
 });
