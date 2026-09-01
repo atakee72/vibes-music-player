@@ -512,6 +512,19 @@ Facts other tools (e.g. a beets-managed library feeding Vibes) must know:
   `{ mounted, visible }`: keep the node while `mounted`, drive the from/to class
   with `visible` (double-rAF so the browser paints the "from" state first).
   **Honors `prefers-reduced-motion`** — instant swap, no 300ms empty hold.
+  **A `usePresence` surface that stays ON SCREEN while exiting MUST carry
+  `pointer-events-none` in its hidden branch.** For the ~300ms exit the node is
+  still mounted and still hit-testable, so an opaque overlay that merely
+  *translates* keeps swallowing taps meant for what is underneath it. This bit
+  `LyricsSheet`: closing it left an invisible panel over the transport, so
+  play/next did nothing until the animation finished. Surfaces that slide fully
+  off-viewport (`LyricsPanel`'s `translate-x-full`) get away without it — the
+  ones that don't, cannot. `LyricsPanel`'s own backdrop already had the idiom
+  (`visible ? 'opacity-100' : 'opacity-0 pointer-events-none'`); copy it.
+  **Do NOT reach for `overflow-hidden` on the parent to solve this** — it clips
+  the child's transform, which silently broke `LyricsSheet`'s deliberate
+  `-inset-x-6` edge-to-edge bleed. The overlap during exit is normal sheet
+  motion; only the swallowed taps were the defect.
   - `MobileNowPlaying` fades + slides (`opacity`/`translate-y-4`); it no longer
     early-returns on `!open` — it calls the hook, then `if (!mounted) return null`.
   - `LyricsPanel` slides in from the right (`translate-x-full`→`0`) + backdrop

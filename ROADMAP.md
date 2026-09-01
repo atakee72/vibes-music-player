@@ -985,3 +985,8 @@ The swipe guard ignores drags starting on a button or other focusable
 control (transport, popovers) via role-based selectors, plus the progress
 bar — a plain `<div>` with no such role — via an explicit `data-no-swipe`
 attribute the selector also matches.
+
+**Known, deferred**: focus can still reach the sheet during its 300ms exit
+(`useDialogFocus` filters on `display`/`visibility`, which a translate does not
+change), so Tab can land on the closing sheet's buttons. Cosmetic; a correct
+fix needs `inert` via a ref.
