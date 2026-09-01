@@ -99,6 +99,7 @@ pnpm test:run  # Vitest single pass
 - **Synced lyrics** — from embedded tags, dropped `.lrc` files, or fetched
   on demand from **LRCLIB** ("Find lyrics" — free, metadata-only, no key);
   auto-scrolling panel toggled with `L`, fetched lyrics persist + work offline
+- **Swipe up in the now-playing view** to reveal lyrics without leaving it
 - **Cover art lookup** — fill in missing artwork from the free iTunes Search
   API, one track at a time (row `⋯` menu) or across the whole library
   (**Find missing covers**). Only the artist, title and album are sent; the

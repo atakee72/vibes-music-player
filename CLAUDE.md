@@ -316,6 +316,11 @@ Facts other tools (e.g. a beets-managed library feeding Vibes) must know:
   **two** edits or it ships invisible on desktop.
 - Panels are non-modal: `role="complementary"` + `aria-label`, no focus trap,
   closed via the App Escape chain.
+- **`togglePanel('lyrics')` is context-sensitive**: while `mobilePlayerOpen`,
+  it toggles `lyricsSheetOpen` and returns, leaving `showLyrics` untouched.
+  It reads the view's state through `mobilePlayerOpenRef`, not the state
+  value — `togglePanel` is a stable `useCallback([])` consumed by memoized
+  children and must not gain a dependency.
 
 ## Keyboard shortcuts
 
@@ -553,9 +558,25 @@ Facts other tools (e.g. a beets-managed library feeding Vibes) must know:
   it opens by clicking the bottom `PlayerBar`'s cover/title (the `onExpand` no
   longer gated to mobile); on mobile, by tapping the mini-bar. State
   `mobilePlayerOpen` lives in `App.tsx`; closes via the chevron, the Escape chain
-  (first branch), or auto-close when `currentSong` goes null. **Toggling Lyrics
-  from this view also closes it** (the `LyricsPanel` is `z-40`, below this view's
-  `z-[60]`, so it would otherwise be hidden behind it).
+  (first branch), or auto-close when `currentSong` goes null.
+  **Lyrics from this view open an in-view `LyricsSheet`, not the right-edge
+  panel** — the sheet is `absolute` against the view's **content area** (the
+  orb/title region, which carries `relative` for exactly this), so it rides
+  above the orb without entering the global z-order, and the view no longer has
+  to close itself. **It is deliberately NOT anchored to the view root**: the
+  progress bar and transport are siblings of the content area, not descendants
+  of it, so an `inset-0` sheet anchored to the root would cover them too,
+  leaving no way to control playback while reading (confirmed in a real
+  browser before this was ruled out — happy-dom computes no layout, so a
+  presence-only test can't catch that regression). `-inset-x-6` cancels the
+  view's `p-6` so it still bleeds edge to edge. Reachable by the Mic2 button
+  or an upward drag (`useSwipeGesture`, guarded by `.closest('button, input,
+  select, textarea, a, [role="button"], [role="slider"]')` — covers the
+  transport buttons and popover triggers, but **not** the progress-bar
+  `<div>` itself, which carries none of those roles: an upward drag starting
+  there also opens the sheet, a gap this guard doesn't close). **Queue and
+  Stats still close the view** — they are `z-40` beneath a `z-[60]` view and
+  have no in-view surface.
 - **`OrbVisualizerRing`** (`src/components/OrbVisualizerRing.tsx`) draws 48 bars
   radially (each `rotate(i/N·360°)` + pushed to `BASE_RADIUS`), driven by
   `visualizerData` bins; `data[i] ?? 0` so it always draws (data is `[]` until
@@ -688,8 +709,13 @@ Facts other tools (e.g. a beets-managed library feeding Vibes) must know:
   survives reload + renders offline). Manual only (auto-fetch is a future toggle).
 - `LyricsPanel` (`src/components/LyricsPanel.tsx`) is a slide-in panel right of
   SongList; auto-scrolls to the active line via `scrollIntoView`. Toggle: `L` key
-  or "Lyrics". (Toggling it from the now-playing view closes that view — it's
-  `z-[60]`, above the panel's `z-40`.)
+  or "Lyrics". **Inside the mobile now-playing view, the same toggle opens the
+  in-view `LyricsSheet` instead** (see "Mobile layout" and "The right-edge
+  panel slot") — the view no longer has to close for lyrics.
+- **`LyricsView` (`src/components/LyricsView.tsx`) owns the lyric body** —
+  empty state, synced list with click-to-seek, unsynced block, active-line
+  auto-scroll. `LyricsPanel` and `LyricsSheet` are chrome around it. Add a
+  third lyrics surface by wrapping `LyricsView`, never by copying its body.
 
 ## Cover art persistence
 

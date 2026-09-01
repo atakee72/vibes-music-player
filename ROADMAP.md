@@ -690,9 +690,10 @@ filter that ruled out most of that app's feature list, since its headline
 features run on `yt-dlp`, a Spotify client *secret*, and its own PocketBase
 server. See "Out of scope (forever)" — none of these cross those lines.
 
-**Items 1-4, 6 and 8 shipped** (1-2 on 2026-08-16, 3 on 2026-08-17, 4 on
-2026-08-19, 8 on 2026-08-25, 6 on 2026-08-31) — 1-4 and 6 have sections below.
-Items 5 and 7 stand.
+**Items 1-4, 6, 7 and 8 shipped** (1-2 on 2026-08-16, 3 on 2026-08-17, 4 on
+2026-08-19, 8 on 2026-08-25, 6 and 7 on 2026-08-31) — 1-4, 6 and 7 have
+sections below.
+Item 5 stands.
 
 3. ~~**Local listening stats**~~ — shipped. — play counts, history, top artists, total
    minutes. Their version needs PocketBase only because it syncs across
@@ -709,10 +710,7 @@ Items 5 and 7 stand.
    need a hosted service — not this.
 6. ~~**Format/quality badge**~~ — shipped 2026-08-31. See the section below;
    the "bitrate is already captured" premise turned out to be the catch.
-7. **Swipe-up-for-lyrics** from `MobileNowPlaying`. Not just polish: today
-   toggling lyrics there has to CLOSE the view, because `LyricsPanel` is
-   `z-40` and the view is `z-[60]`. A swipe-up sheet is the better model
-   for that relationship and removes the workaround.
+7. ~~**Swipe-up-for-lyrics**~~ — shipped 2026-08-31. See the section below.
 8. ~~**Mobile control-row layout**~~ — shipped 2026-08-25. Transport is now
    `shuffle · prev · play · next · repeat` on **every** surface, and
    `PlayerBar`'s duplicate responsive shuffle/repeat pair collapsed into one
@@ -961,3 +959,30 @@ Verified in Chromium against four real library files (the 2963 bps AAC, the
 forced two-row chip layout to confirm the fixed-height hero does not overflow.
 Not verifiable on this library: the lossless bit-depth branch — it has no
 lossless files.
+
+## Swipe-up-for-lyrics (shipped, 2026-08-31)
+
+Backlog item 7. Lyrics now open as a `LyricsSheet` *inside* `MobileNowPlaying`
+— by the Mic2 button or an upward drag — instead of forcing the view to close.
+The old workaround existed because `LyricsPanel` is `z-40` and the view is
+`z-[60]`; the sheet sidesteps the global z-order entirely by being `absolute`
+against the view's content area. Anchoring it to the view root was tried on
+paper and rejected after measuring in Chromium: the progress bar and
+transport are siblings of that content area, not descendants of it, so an
+`inset-0` sheet anchored to the root covered them too — lyrics and playback
+control would have been mutually exclusive inside the view, exactly the
+coverage this sheet exists to avoid.
+
+`LyricsView` was extracted first so the panel and the sheet render identical
+lyrics from one source — the extraction was verified faithful by requiring
+`LyricsPanel.test.tsx` to pass with zero edits.
+
+Scope decisions: both surfaces were kept (the right-edge panel still serves the
+song-list context on every screen size), and Queue/Stats deliberately still
+close the view, since they have no in-view surface of their own.
+
+**Known gap**: the swipe guard ignores drags starting on a button or other
+focusable control (transport, popovers), but the progress bar is a plain
+`<div>` with no such role — an upward drag starting there also opens the
+sheet, verified in a real browser. Not worth engineering around yet; noted
+here so it isn't mistaken for untested.
