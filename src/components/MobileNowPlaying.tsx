@@ -200,7 +200,7 @@ export function MobileNowPlaying({
         <span className="w-10 shrink-0" />
       </div>
 
-      <div className="relative flex flex-1 flex-col items-center justify-center gap-8 overflow-hidden">
+      <div className="relative flex flex-1 flex-col items-center justify-center gap-8">
         <div className="relative flex h-72 w-72 items-center justify-center">
           <OrbVisualizerRing data={visualizerData} isPlaying={isPlaying} />
           <VibeOrb coverArt={song.coverArt} isPlaying={isPlaying} className="h-56 w-56" />

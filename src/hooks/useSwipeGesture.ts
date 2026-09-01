@@ -48,8 +48,18 @@ export function useSwipeGesture({
     onPointerMove: () => {},
     onPointerUp: (e) => {
       const from = start.current;
-      if (!from || from.id !== e.pointerId) return;
+      // Reset BEFORE the id check, unconditionally, on every pointerup —
+      // deliberate self-healing. If reset only ran for the tracked pointer's
+      // own release, a mouse drag that starts here and is released OUTSIDE
+      // the browser window delivers no pointerup/pointercancel to the page,
+      // so start.current would stay set forever and (combined with
+      // onPointerDown's `if (start.current) return`) every later gesture on
+      // this long-lived surface would be silently dropped until reload. The
+      // accepted cost: an untracked pointerup cancels an in-flight tracked
+      // drag. That fails closed (swipe just doesn't fire) so it's the
+      // lesser problem. Do not move this below the id check again.
       reset();
+      if (!from || from.id !== e.pointerId) return;
 
       const dx = e.clientX - from.x;
       const dy = e.clientY - from.y;

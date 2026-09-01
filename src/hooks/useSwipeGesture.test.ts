@@ -115,10 +115,17 @@ describe('useSwipeGesture', () => {
     expect(onSwipeUp).toHaveBeenCalledTimes(1);
   });
 
-  it('an untracked pointer release does not cancel an in-flight gesture', () => {
+  it('an untracked pointer release cancels an in-flight gesture (accepted trade-off)', () => {
     // Pointer 2 never went through onPointerDown (e.g. it started on a
-    // control and was skipped by the interactive-element guard) — its
-    // release must not clear pointer 1's already-tracked drag.
+    // control and was skipped by the interactive-element guard). Its
+    // release now unconditionally resets start.current — reset() runs on
+    // EVERY pointerup, before the id check, deliberately. This is the
+    // accepted cost of that self-healing: a mouse drag released outside the
+    // browser window delivers no pointerup/pointercancel at all, so without
+    // an unconditional reset start.current would wedge forever and this
+    // long-lived surface would silently stop responding to swipes until
+    // reload. Failing closed here (the gesture just doesn't fire) is the
+    // lesser problem.
     const onSwipeUp = vi.fn();
     const { result } = renderHook(() => useSwipeGesture({ onSwipeUp }));
 
@@ -126,7 +133,7 @@ describe('useSwipeGesture', () => {
     result.current.onPointerUp(evt({ x: 150, y: 350, id: 2 }));
     result.current.onPointerUp(evt({ x: 100, y: 200, id: 1 }));
 
-    expect(onSwipeUp).toHaveBeenCalledTimes(1);
+    expect(onSwipeUp).not.toHaveBeenCalled();
   });
 
   it('does not call setPointerCapture', () => {
