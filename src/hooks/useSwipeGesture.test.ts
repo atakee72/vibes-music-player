@@ -65,6 +65,21 @@ describe('useSwipeGesture', () => {
     expect(onSwipeUp).not.toHaveBeenCalled();
   });
 
+  it('ignores a drag that starts on a [data-no-swipe] element', () => {
+    // The progress bar is a plain <div> with no ARIA role — it opts out via
+    // the data attribute instead of matching one of the role-based selectors.
+    const onSwipeUp = vi.fn();
+    const { result } = renderHook(() => useSwipeGesture({ onSwipeUp }));
+    const onScrubber = {
+      closest: (sel: string) => (sel.includes('data-no-swipe') ? {} : null),
+    };
+
+    result.current.onPointerDown(evt({ x: 100, y: 300, target: onScrubber }));
+    result.current.onPointerUp(evt({ x: 100, y: 200 }));
+
+    expect(onSwipeUp).not.toHaveBeenCalled();
+  });
+
   it('ignores a second pointer while one gesture is in flight', () => {
     const onSwipeUp = vi.fn();
     const { result } = renderHook(() => useSwipeGesture({ onSwipeUp }));

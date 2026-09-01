@@ -180,6 +180,21 @@ describe('MobileNowPlaying', () => {
     expect(onLyricsSheetChange).not.toHaveBeenCalled();
   });
 
+  it('does not open the sheet when a drag starts on the progress bar', () => {
+    // The scrubber is a plain <div onClick> with no ARIA role — the
+    // counterpart to the transport-button test above, guarding the one
+    // interactive surface a role-based selector can't see on its own.
+    const onLyricsSheetChange = vi.fn();
+    const { container } = renderView({ onLyricsSheetChange });
+    const scrubber = container.querySelector('.cursor-pointer') as HTMLElement;
+    expect(scrubber).toBeInTheDocument();
+
+    fireEvent.pointerDown(scrubber, { pointerId: 1, clientX: 100, clientY: 400 });
+    fireEvent.pointerUp(scrubber, { pointerId: 1, clientX: 100, clientY: 250 });
+
+    expect(onLyricsSheetChange).not.toHaveBeenCalled();
+  });
+
   it('renders the sheet when lyricsSheetOpen is set', () => {
     renderView({
       lyricsSheetOpen: true,

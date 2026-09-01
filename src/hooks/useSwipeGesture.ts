@@ -1,6 +1,10 @@
 import { useRef } from 'react';
 
-const INTERACTIVE = 'button, input, select, textarea, a, [role="button"], [role="slider"]';
+// [data-no-swipe] opts a subtree out of the gesture for controls that are
+// not one of the natively-focusable elements above and so can't otherwise be
+// matched — e.g. a click-to-seek `<div>` with no ARIA role.
+const INTERACTIVE =
+  'button, input, select, textarea, a, [role="button"], [role="slider"], [data-no-swipe]';
 
 interface SwipeHandlers {
   onPointerDown: (e: React.PointerEvent) => void;

@@ -571,12 +571,14 @@ Facts other tools (e.g. a beets-managed library feeding Vibes) must know:
   presence-only test can't catch that regression). `-inset-x-6` cancels the
   view's `p-6` so it still bleeds edge to edge. Reachable by the Mic2 button
   or an upward drag (`useSwipeGesture`, guarded by `.closest('button, input,
-  select, textarea, a, [role="button"], [role="slider"]')` — covers the
-  transport buttons and popover triggers, but **not** the progress-bar
-  `<div>` itself, which carries none of those roles: an upward drag starting
-  there also opens the sheet, a gap this guard doesn't close). **Queue and
-  Stats still close the view** — they are `z-40` beneath a `z-[60]` view and
-  have no in-view surface.
+  select, textarea, a, [role="button"], [role="slider"], [data-no-swipe]')`
+  — covers the transport buttons and popover triggers via their native roles,
+  and the click-to-seek progress-bar `<div>` (which has no such role) via an
+  explicit `data-no-swipe` attribute on the element itself. `[data-no-swipe]`
+  is a general opt-out any non-focusable control can use; the scrubber is
+  its first and so far only consumer. **Queue and Stats still close the
+  view** — they are `z-40` beneath a `z-[60]` view and have no in-view
+  surface.
 - **`OrbVisualizerRing`** (`src/components/OrbVisualizerRing.tsx`) draws 48 bars
   radially (each `rotate(i/N·360°)` + pushed to `BASE_RADIUS`), driven by
   `visualizerData` bins; `data[i] ?? 0` so it always draws (data is `[]` until

@@ -237,6 +237,11 @@ export function MobileNowPlaying({
             {formatTime(currentTime)}
           </span>
           <div
+            // Click-to-seek control with no ARIA role, so useSwipeGesture's
+            // selector can't recognise it as interactive on its own — opt it
+            // out explicitly or an upward drag starting here reads as swipe-
+            // to-open-lyrics instead of a scrub.
+            data-no-swipe
             className="group h-1.5 flex-1 cursor-pointer rounded-full bg-white/15"
             onClick={(e) => {
               const rect = e.currentTarget.getBoundingClientRect();

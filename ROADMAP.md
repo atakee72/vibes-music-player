@@ -981,8 +981,7 @@ Scope decisions: both surfaces were kept (the right-edge panel still serves the
 song-list context on every screen size), and Queue/Stats deliberately still
 close the view, since they have no in-view surface of their own.
 
-**Known gap**: the swipe guard ignores drags starting on a button or other
-focusable control (transport, popovers), but the progress bar is a plain
-`<div>` with no such role — an upward drag starting there also opens the
-sheet, verified in a real browser. Not worth engineering around yet; noted
-here so it isn't mistaken for untested.
+The swipe guard ignores drags starting on a button or other focusable
+control (transport, popovers) via role-based selectors, plus the progress
+bar — a plain `<div>` with no such role — via an explicit `data-no-swipe`
+attribute the selector also matches.
