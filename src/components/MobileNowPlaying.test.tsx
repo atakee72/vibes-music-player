@@ -195,6 +195,21 @@ describe('MobileNowPlaying', () => {
     expect(onLyricsSheetChange).not.toHaveBeenCalled();
   });
 
+  it('closes the sheet when the lyrics button is tapped while it is open', () => {
+    // The button is the primary touch affordance for the sheet — it must
+    // toggle, like the L key does, not just open it.
+    const onLyricsSheetChange = vi.fn();
+    renderView({
+      lyricsSheetOpen: true,
+      onLyricsSheetChange,
+      lyrics: [{ time: 0, text: 'a line' }],
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle lyrics' }));
+
+    expect(onLyricsSheetChange).toHaveBeenCalledWith(false);
+  });
+
   it('renders the sheet when lyricsSheetOpen is set', () => {
     renderView({
       lyricsSheetOpen: true,

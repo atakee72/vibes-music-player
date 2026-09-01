@@ -51,7 +51,7 @@ export function LyricsSheet({
       role="complementary"
       aria-label="Lyrics"
       className={`absolute inset-y-0 -inset-x-6 z-10 flex flex-col rounded-t-card border-t border-white/10 bg-surface/95 backdrop-blur-xl motion-safe:transition-transform motion-safe:duration-300 ${
-        visible ? 'translate-y-0' : 'translate-y-full'
+        visible ? 'translate-y-0' : 'translate-y-full pointer-events-none'
       }`}
     >
       <div

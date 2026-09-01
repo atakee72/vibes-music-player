@@ -48,8 +48,8 @@ export function useSwipeGesture({
     onPointerMove: () => {},
     onPointerUp: (e) => {
       const from = start.current;
-      reset();
       if (!from || from.id !== e.pointerId) return;
+      reset();
 
       const dx = e.clientX - from.x;
       const dy = e.clientY - from.y;

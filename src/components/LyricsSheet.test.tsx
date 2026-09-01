@@ -51,4 +51,17 @@ describe('LyricsSheet', () => {
 
     expect(onClose).not.toHaveBeenCalled();
   });
+
+  it('stops swallowing taps while it is mid-exit', () => {
+    const { rerender } = renderSheet();
+
+    rerender(<LyricsSheet open={false} onClose={vi.fn()} lyrics={lines} currentTime={0} />);
+
+    // usePresence keeps the sheet mounted (translate-y-full) through its
+    // ~300ms exit animation — while still mounted, it must not sit on top
+    // of the transport/scrubber underneath eating taps.
+    const sheet = screen.getByRole('complementary', { name: 'Lyrics' });
+    expect(sheet).toHaveClass('translate-y-full');
+    expect(sheet).toHaveClass('pointer-events-none');
+  });
 });

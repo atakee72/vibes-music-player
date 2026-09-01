@@ -692,6 +692,31 @@ describe('lyrics sheet inside the now-playing view', () => {
     expect(screen.getByRole('dialog', { name: 'Now playing' })).not.toHaveClass('opacity-0');
   });
 
+  it('L supersedes an already-open right-edge panel instead of stacking both', async () => {
+    await renderApp({ playlists: [libraryWith(makeSong({ title: 'Cemalım' }))] });
+    await screen.findByText('Cemalım');
+
+    // Open the right-edge Lyrics panel first — before the view exists, so
+    // "Toggle lyrics" resolves to the desktop header button unambiguously
+    // (the in-view button, also labelled "Toggle lyrics", doesn't exist yet).
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle lyrics' }));
+    await screen.findByRole('complementary', { name: 'Lyrics' });
+
+    await openNowPlaying('Cemalım');
+
+    fireEvent.keyDown(document, { code: 'KeyL' });
+
+    // The in-view sheet must supersede the right-edge panel: it should
+    // actually close (and finish unmounting after its exit animation), not
+    // just sit open-but-hidden behind the z-[60] view. Two mounted "Lyrics"
+    // landmarks at once is an a11y duplicate, and it would leave a stale
+    // panel revealed the moment the view closes.
+    await waitFor(
+      () => expect(screen.getAllByRole('complementary', { name: 'Lyrics' })).toHaveLength(1),
+      { timeout: 2000 },
+    );
+  });
+
   it('Escape closes the sheet before the view', async () => {
     await renderApp({ playlists: [libraryWith(makeSong({ title: 'Cemalım' }))] });
     await openNowPlaying('Cemalım');

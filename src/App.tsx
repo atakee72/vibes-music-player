@@ -591,6 +591,7 @@ export default function App() {
     // above the view instead of being hidden beneath it, so the view stays.
     if (panel === 'lyrics' && mobilePlayerOpenRef.current) {
       setLyricsSheetOpen((v) => !v);
+      setShowLyrics(false);
       return;
     }
     setShowLyrics((v) => (panel === 'lyrics' ? !v : false));

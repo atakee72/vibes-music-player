@@ -200,7 +200,7 @@ export function MobileNowPlaying({
         <span className="w-10 shrink-0" />
       </div>
 
-      <div className="relative flex flex-1 flex-col items-center justify-center gap-8">
+      <div className="relative flex flex-1 flex-col items-center justify-center gap-8 overflow-hidden">
         <div className="relative flex h-72 w-72 items-center justify-center">
           <OrbVisualizerRing data={visualizerData} isPlaying={isPlaying} />
           <VibeOrb coverArt={song.coverArt} isPlaying={isPlaying} className="h-56 w-56" />
@@ -302,7 +302,9 @@ export function MobileNowPlaying({
             does the spreading everywhere else. */}
         <div className="flex items-center justify-between gap-2">
           <button
-            onClick={() => (onLyricsSheetChange ? onLyricsSheetChange(true) : onToggleLyrics())}
+            onClick={() =>
+              onLyricsSheetChange ? onLyricsSheetChange(!lyricsSheetOpen) : onToggleLyrics()
+            }
             className="p-2 rounded-full bg-white/5 text-white/70 hover:bg-white/10 transition-colors"
             aria-label="Toggle lyrics"
           >

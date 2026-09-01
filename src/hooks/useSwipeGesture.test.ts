@@ -115,6 +115,20 @@ describe('useSwipeGesture', () => {
     expect(onSwipeUp).toHaveBeenCalledTimes(1);
   });
 
+  it('an untracked pointer release does not cancel an in-flight gesture', () => {
+    // Pointer 2 never went through onPointerDown (e.g. it started on a
+    // control and was skipped by the interactive-element guard) — its
+    // release must not clear pointer 1's already-tracked drag.
+    const onSwipeUp = vi.fn();
+    const { result } = renderHook(() => useSwipeGesture({ onSwipeUp }));
+
+    result.current.onPointerDown(evt({ x: 100, y: 300, id: 1 }));
+    result.current.onPointerUp(evt({ x: 150, y: 350, id: 2 }));
+    result.current.onPointerUp(evt({ x: 100, y: 200, id: 1 }));
+
+    expect(onSwipeUp).toHaveBeenCalledTimes(1);
+  });
+
   it('does not call setPointerCapture', () => {
     const onSwipeUp = vi.fn();
     const { result } = renderHook(() => useSwipeGesture({ onSwipeUp }));

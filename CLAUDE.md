@@ -317,10 +317,14 @@ Facts other tools (e.g. a beets-managed library feeding Vibes) must know:
 - Panels are non-modal: `role="complementary"` + `aria-label`, no focus trap,
   closed via the App Escape chain.
 - **`togglePanel('lyrics')` is context-sensitive**: while `mobilePlayerOpen`,
-  it toggles `lyricsSheetOpen` and returns, leaving `showLyrics` untouched.
-  It reads the view's state through `mobilePlayerOpenRef`, not the state
-  value — `togglePanel` is a stable `useCallback([])` consumed by memoized
-  children and must not gain a dependency.
+  it toggles `lyricsSheetOpen` AND closes `showLyrics`, then returns — the
+  in-view sheet supersedes the right-edge panel rather than stacking on top
+  of it, so the two can never both be showing lyrics (two mounted
+  `role="complementary" aria-label="Lyrics"` landmarks at once is an a11y
+  duplicate, and it would leave a stale panel revealed the moment the view
+  closes). It reads the view's state through `mobilePlayerOpenRef`, not the
+  state value — `togglePanel` is a stable `useCallback([])` consumed by
+  memoized children and must not gain a dependency.
 
 ## Keyboard shortcuts
 
