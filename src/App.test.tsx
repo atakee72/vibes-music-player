@@ -670,6 +670,12 @@ describe('lyrics sheet inside the now-playing view', () => {
     await screen.findByText(title);
     playRow(0);
     fireEvent.click(screen.getAllByLabelText('Open now playing')[0]);
+    // usePresence's enter transition flips `visible` across two rAFs, not
+    // synchronously — wait for it to settle so callers see the view fully
+    // open (opacity-100), not caught mid-mount at opacity-0.
+    await waitFor(() =>
+      expect(screen.getByRole('dialog', { name: 'Now playing' })).not.toHaveClass('opacity-0'),
+    );
   };
 
   it('opens the sheet from L and leaves the now-playing view open', async () => {
@@ -679,8 +685,11 @@ describe('lyrics sheet inside the now-playing view', () => {
     fireEvent.keyDown(document, { code: 'KeyL' });
 
     expect(await screen.findByRole('complementary', { name: 'Lyrics' })).toBeInTheDocument();
-    // The regression this whole feature exists to prevent.
-    expect(screen.getByRole('dialog', { name: 'Now playing' })).toBeInTheDocument();
+    // The regression this whole feature exists to prevent: `MobileNowPlaying`
+    // is a `usePresence` surface, so mere presence doesn't distinguish "still
+    // open" from "mid-exit" (both leave the dialog mounted). Assert the
+    // positive open/visible state, not just that the node is in the DOM.
+    expect(screen.getByRole('dialog', { name: 'Now playing' })).not.toHaveClass('opacity-0');
   });
 
   it('Escape closes the sheet before the view', async () => {
@@ -691,7 +700,16 @@ describe('lyrics sheet inside the now-playing view', () => {
 
     fireEvent.keyDown(document, { code: 'Escape' });
 
-    expect(screen.getByRole('dialog', { name: 'Now playing' })).toBeInTheDocument();
+    // Pin the state after the FIRST Escape — the only point where correct and
+    // buggy ordering (checking `mobilePlayerOpen` before `lyricsSheetOpen`)
+    // diverge. Under the bug, the first Escape closes the view directly (it
+    // goes straight to `opacity-0`), and the pre-existing auto-close effect
+    // then independently zeroes `lyricsSheetOpen` as a side effect — so by
+    // the second Escape the DOM is indistinguishable from correct behaviour.
+    // The view must still be open and VISIBLE (not merely present)...
+    expect(screen.getByRole('dialog', { name: 'Now playing' })).not.toHaveClass('opacity-0');
+    // ...while the sheet has been dismissed (exiting, per usePresence).
+    expect(screen.getByRole('complementary', { name: 'Lyrics' })).toHaveClass('translate-y-full');
 
     fireEvent.keyDown(document, { code: 'Escape' });
     // The view is a `usePresence` surface (Task 4): closing leaves it mounted
