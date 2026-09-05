@@ -64,4 +64,23 @@ describe('LyricsSheet', () => {
     expect(sheet).toHaveClass('translate-y-full');
     expect(sheet).toHaveClass('pointer-events-none');
   });
+
+  it('cannot take focus while it is mid-exit', () => {
+    const { rerender } = renderSheet();
+    const close = screen.getByRole('button', { name: 'Close lyrics' });
+
+    close.focus();
+    expect(close).toHaveFocus(); // baseline: reachable while open
+
+    rerender(<LyricsSheet open={false} onClose={vi.fn()} lyrics={lines} currentTime={0} />);
+
+    // The sheet is still mounted and still on screen through its ~300ms exit,
+    // and a transform does not remove a subtree from the tab order — so Tab
+    // could land on a control the user can no longer see. `inert` is what
+    // stops that; asserting the attribute alone would pass even if it did
+    // nothing, so assert the behaviour it buys.
+    close.blur();
+    close.focus();
+    expect(close).not.toHaveFocus();
+  });
 });

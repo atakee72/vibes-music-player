@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import type { LyricLine } from '../types';
 import { usePresence } from '../hooks/usePresence';
@@ -39,15 +40,36 @@ export function LyricsSheet({
   fetchError,
 }: LyricsSheetProps) {
   const { mounted, visible } = usePresence(open);
+  const sheetRef = useRef<HTMLDivElement>(null);
 
   // Only the handle is draggable. The body scrolls, and a downward scroll
   // there must not read as a dismissal.
   const drag = useSwipeGesture({ onSwipeDown: onClose });
 
+  // The sheet stays mounted and on screen through its ~300ms exit, and a
+  // transform removes nothing from the tab order — so Tab could reach the
+  // close button and the lyric lines of a sheet the user just dismissed.
+  // `inert` is the only attribute that takes a whole subtree out of both the
+  // tab order and the a11y tree without hiding it, and React 18's JSX types
+  // have no `inert` prop (React 19 added it), so it goes on imperatively.
+  //
+  // Keyed on `open`, NOT `visible`: `visible` is also false for the two
+  // frames of the ENTER, where the sheet must stay reachable. `mounted` is a
+  // dep because the node does not exist on the render where `open` first
+  // flips true. MUST stay above the early return below — a hook after a
+  // conditional return breaks the Rules of Hooks.
+  useEffect(() => {
+    const el = sheetRef.current;
+    if (!el) return;
+    if (open) el.removeAttribute('inert');
+    else el.setAttribute('inert', '');
+  }, [open, mounted]);
+
   if (!mounted) return null;
 
   return (
     <div
+      ref={sheetRef}
       role="complementary"
       aria-label="Lyrics"
       className={`absolute inset-y-0 -inset-x-6 z-10 flex flex-col rounded-t-card border-t border-white/10 bg-surface/95 backdrop-blur-xl motion-safe:transition-transform motion-safe:duration-300 ${

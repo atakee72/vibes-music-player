@@ -525,6 +525,20 @@ Facts other tools (e.g. a beets-managed library feeding Vibes) must know:
   the child's transform, which silently broke `LyricsSheet`'s deliberate
   `-inset-x-6` edge-to-edge bleed. The overlap during exit is normal sheet
   motion; only the swallowed taps were the defect.
+  **`pointer-events-none` handles taps; it does NOT handle focus.** The exiting
+  node is still in the tab order, so Tab lands on controls the user just
+  dismissed. A surface that stays on screen while exiting sets `inert` on
+  itself for the exit — imperatively, via a ref, because React 18's JSX types
+  have no `inert` prop (React 19 added it). Key it on the `open` PROP, not
+  `visible`: `visible` is also false for the two frames of the enter, where the
+  surface must stay reachable. `LyricsSheet` is the reference implementation.
+  **An inert surface inside a focus trap needs `useDialogFocus` to know**: its
+  `visibleFocusables` skips `[inert]` alongside `display:none`/
+  `visibility:hidden`, because focusing any of the three is a silent no-op that
+  strands Tab at that edge. Setting `inert` also blurs whatever inside it had
+  focus, so focus drops to `<body>` at dismiss time rather than at unmount —
+  same end state, ~300ms earlier. Nothing restores focus to the opener; these
+  sheets are non-modal by design.
   - `MobileNowPlaying` fades + slides (`opacity`/`translate-y-4`); it no longer
     early-returns on `!open` — it calls the hook, then `if (!mounted) return null`.
   - `LyricsPanel` slides in from the right (`translate-x-full`→`0`) + backdrop
