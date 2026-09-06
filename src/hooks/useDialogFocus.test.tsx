@@ -123,6 +123,40 @@ describe('useDialogFocus', () => {
     expect(browse).toHaveFocus();
   });
 
+  it('never picks an element inside an inert subtree (a surface mid-exit)', () => {
+    function WithExitingSheet() {
+      const [open, setOpen] = useState(false);
+      const ref = useRef<HTMLDivElement>(null);
+      useDialogFocus(open, ref);
+      return (
+        <div>
+          <button onClick={() => setOpen(true)}>Open dialog</button>
+          {open && (
+            <div ref={ref} role="dialog" aria-label="With exiting sheet">
+              <div ref={(el) => el?.setAttribute('inert', '')}>
+                <button>Close lyrics</button>
+              </div>
+              <button>Browse</button>
+            </div>
+          )}
+        </div>
+      );
+    }
+    render(<WithExitingSheet />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open dialog' }));
+
+    // "Close lyrics" is first in DOM order but sits in an inert subtree, so
+    // focusing it is a silent no-op — the same trap the display:none filter
+    // above exists for. Initial focus must skip to the first control that can
+    // actually take it, and the inert one must never become a wrap target.
+    const browse = screen.getByRole('button', { name: 'Browse' });
+    expect(browse).toHaveFocus();
+    tab();
+    expect(browse).toHaveFocus();
+    tab(true);
+    expect(browse).toHaveFocus();
+  });
+
   it('is inert while inactive (no listener, no restore bookkeeping)', () => {
     render(<Harness />);
     const outside = screen.getByRole('button', { name: 'Outside button' });

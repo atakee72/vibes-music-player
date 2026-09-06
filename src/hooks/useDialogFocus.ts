@@ -43,13 +43,20 @@ export function useDialogFocus(
     restoreRef.current =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
 
-    // Hidden elements (e.g. the upload dialog's `className="hidden"` file
-    // input) must not become wrap targets: focusing a display:none node is a
-    // silent no-op, which would kill Shift+Tab at that edge and let forward
-    // Tab escape the dialog. Computed style (not getClientRects) on purpose:
-    // happy-dom has no layout engine and reports rects for everything.
+    // Elements that cannot actually take focus must not become wrap targets:
+    // focusing one is a silent no-op, which would kill Shift+Tab at that edge
+    // and let forward Tab escape the dialog. Three ways that happens here:
+    //   - display:none (the upload dialog's `className="hidden"` file input),
+    //   - visibility:hidden,
+    //   - an `inert` ancestor — LyricsSheet marks itself inert for its ~300ms
+    //     exit, and it renders INSIDE this trap's container. It is safe today
+    //     only because it sits mid-DOM and so is never the first/last wrap
+    //     target; that is DOM position, not an invariant, so filter for it.
+    // Computed style (not getClientRects) on purpose: happy-dom has no layout
+    // engine and reports rects for everything.
     const visibleFocusables = (container: HTMLElement): HTMLElement[] =>
       Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((el) => {
+        if (el.closest('[inert]')) return false;
         const style = window.getComputedStyle(el);
         return style.display !== 'none' && style.visibility !== 'hidden';
       });

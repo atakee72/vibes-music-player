@@ -986,7 +986,13 @@ control (transport, popovers) via role-based selectors, plus the progress
 bar — a plain `<div>` with no such role — via an explicit `data-no-swipe`
 attribute the selector also matches.
 
-**Known, deferred**: focus can still reach the sheet during its 300ms exit
-(`useDialogFocus` filters on `display`/`visibility`, which a translate does not
-change), so Tab can land on the closing sheet's buttons. Cosmetic; a correct
-fix needs `inert` via a ref.
+**Exit focus (fixed 2026-09-06)**: focus could reach the sheet during its 300ms
+exit — a translate removes nothing from the tab order — so Tab landed on the
+closing sheet's buttons. The sheet now sets `inert` on itself for the exit via
+a ref (React 18's JSX types have no `inert` prop). That alone would have been a
+half-fix: `useDialogFocus.visibleFocusables` filtered only on
+`display`/`visibility`, so inert controls stayed in its wrap-target list, where
+focusing one is the same silent no-op its `display:none` filter already exists
+to prevent. It skips `[inert]` subtrees now too. Verified in Chromium: mid-exit
+the sheet is still mounted and on screen, carries `inert`, and `focus()` on its
+close button no longer lands.
