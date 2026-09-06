@@ -693,21 +693,35 @@ server. See "Out of scope (forever)" — none of these cross those lines.
 **Items 1-4, 6, 7 and 8 shipped** (1-2 on 2026-08-16, 3 on 2026-08-17, 4 on
 2026-08-19, 8 on 2026-08-25, 6 and 7 on 2026-08-31) — 1-4, 6 and 7 have
 sections below.
-Item 5 stands.
+**Item 5 is closed unbuilt** (2026-09-06) — see its entry.
 
 3. ~~**Local listening stats**~~ — shipped. — play counts, history, top artists, total
    minutes. Their version needs PocketBase only because it syncs across
    devices; the personal version is `storage.ts` + a new IDB key. Skip
    leaderboards and profiles (accounts are out of scope forever).
 4. ~~**Cover art fetch for songs missing embedded art**~~ — shipped.
-5. **Lyrics romanization** — Japanese (Kanji/Kana→Romaji), Chinese
-   (Hanzi→Pinyin), Korean (Hangul→Revised Romanization) for the lyrics
-   panel. The source app routes this through its own Vercel function;
-   **Vibes needs no service at all** — `kuroshiro`/`wanakana`, `pinyin-pro`,
-   and an algorithmic Hangul→RR are client-side JS. Weigh bundle cost:
-   `kuroshiro`'s dictionary is heavy, so load it dynamically like the
-   other on-demand libs. Lyrics *translation* is the sibling that does
-   need a hosted service — not this.
+5. ~~**Lyrics romanization**~~ — **closed unbuilt 2026-09-06, premise
+   measured false.** The idea was Japanese (Kanji/Kana→Romaji), Chinese
+   (Hanzi→Pinyin) and Korean (Hangul→Revised Romanization) in the lyrics
+   panel, client-side via `kuroshiro`/`wanakana` + `pinyin-pro` + an
+   algorithmic Hangul→RR. It rested on an unstated assumption — that this
+   library has CJK tracks. It does not:
+
+   ```
+   find /mnt/c/Users/atakee/Dropbox/Music -type f \( -iname '*.m4a' -o -iname '*.mp3' \
+     -o -iname '*.flac' -o -iname '*.opus' -o -iname '*.ogg' -o -iname '*.wav' \)
+   total=460 cjk=0
+   ```
+
+   Zero of 460 files have a Japanese, Chinese or Korean character anywhere in
+   their path, and beets writes paths from the tags — so there is nothing here
+   to romanize. Building it would ship `kuroshiro`'s heavy dictionary for no
+   listener. **Reopen only on evidence**, and measure before designing: the
+   command above, or CJK turning up in *fetched* lyrics for a romaji-tagged
+   track (LRCLIB can return the original script) — that case is real but
+   unconfirmed, and it would need a different trigger than a tag scan.
+   Lyrics *translation* remains the sibling that needs a hosted service, and
+   is still out of scope.
 6. ~~**Format/quality badge**~~ — shipped 2026-08-31. See the section below;
    the "bitrate is already captured" premise turned out to be the catch.
 7. ~~**Swipe-up-for-lyrics**~~ — shipped 2026-08-31. See the section below.
