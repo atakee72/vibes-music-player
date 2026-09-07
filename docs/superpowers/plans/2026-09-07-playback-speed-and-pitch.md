@@ -18,6 +18,7 @@
 - **`playbackRate` must never be set to 0 or a negative number.** Verified in Chromium 2026-09-06: `audio.playbackRate = 0` is silently accepted and acts as a pause; `audio.playbackRate = -1` throws `NotSupportedError`. Every write goes through `clampRate`.
 - **`preservesPitch` is unprefixed and defaults to `true`.** Verified in the same probe: `'preservesPitch' in audio === true`, `'webkitPreservesPitch' in audio === false`, `'mozPreservesPitch' in audio === false`. Do **not** add prefixed fallbacks — they do not exist in this browser, and on an engine that lacks the property the assignment is an inert no-op (pitch shifts, nothing breaks).
 - **Preferences persist through `prefsLoadedRef`, never `loadedRef`.** `loadedRef` guards the library and is deliberately false during a pending folder permission; gating a preference on it would stop preferences saving. See `App.tsx:516-535` for the existing pattern.
+- **happy-dom already defaults `playbackRate` to `1` and `preservesPitch` to `true`** (probed 2026-09-07; both are writable, and an effect's writes are visible on the element). So **no test may assert `playbackRate === 1` or `preservesPitch === true` on a freshly rendered element** — it would pass with the implementation deleted. Assert a non-default value, or a transition away from one.
 - **Do not touch the ReplayGain/fade gain split.** `filters → gain (ReplayGain) → fade (crossfade) → mixer`. Playback rate is a property of the `<audio>` element and never enters the graph.
 
 ## Decisions (approved 2026-09-06)
@@ -384,23 +385,28 @@ describe('useAudioEngine — playback rate', () => {
   });
 
   it('clamps a rate of 0, which the browser would accept as a silent pause', async () => {
-    const view = render(<TestHarness song={makeSong({ title: 'A' })} playbackRate={0} />);
+    // Deliberately written as a TRANSITION from 1.5, not a fresh render at 0.
+    // happy-dom's audio element already defaults `playbackRate` to 1 (probed
+    // 2026-09-07), so asserting `toBe(1)` after a fresh render at 0 passes
+    // whether the clamp works, whether the effect ran, or neither. Coming from
+    // 1.5, the assertion fails at 0 if the clamp is missing and at 1.5 if the
+    // effect never re-ran — it can only pass for the right reason.
+    const song = makeSong({ title: 'A' });
+    const view = render(<TestHarness song={song} playbackRate={1.5} />);
+    await act(async () => {});
+    expect(engineRef.current!.audioRefA.current!.playbackRate).toBe(1.5);
+
+    view.rerender(<TestHarness song={song} playbackRate={0} />);
     await act(async () => {});
 
     expect(engineRef.current!.audioRefA.current!.playbackRate).toBe(1);
-    view.unmount();
-  });
-
-  it('defaults to normal speed with pitch preserved when no props are given', async () => {
-    const view = render(<TestHarness song={makeSong({ title: 'A' })} />);
-    await act(async () => {});
-
-    expect(engineRef.current!.audioRefA.current!.playbackRate).toBe(1);
-    expect(engineRef.current!.audioRefA.current!.preservesPitch).toBe(true);
     view.unmount();
   });
 
   it('applies the pitch preference to both elements', async () => {
+    // Asserts `false`, never `true`: happy-dom defaults `preservesPitch` to
+    // true (probed 2026-09-07), so a `toBe(true)` assertion here would pass
+    // with the effect deleted.
     const view = render(
       <TestHarness song={makeSong({ title: 'A' })} playbackRate={1.5} preservePitch={false} />,
     );
@@ -416,7 +422,7 @@ describe('useAudioEngine — playback rate', () => {
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pnpm exec vitest run src/hooks/useAudioEngine.test.tsx -t "playback rate"`
-Expected: FAIL — the first test reports `expected undefined to be 1.5` (happy-dom's audio element has no `playbackRate` until something sets it), and the default test fails on `preservesPitch`.
+Expected: FAIL — `expected 1 to be 1.5` on the first test (happy-dom's element sits at its default rate of 1 because nothing writes to it yet), and `expected true to be false` on the pitch test.
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -560,9 +566,13 @@ Append to the `describe('useAudioEngine — crossfade', ...)` block in `src/hook
   });
 
   it('does not crossfade a track too short for the fade AT THE CURRENT RATE', async () => {
-    // 30s track, 6s fade, 2x: the fade would consume 12 media seconds of it.
-    // The existing guard (duration > xfade * 2 = 12) passes and would let it
-    // through; scaled (duration > 6 * 2 * 2 = 24) correctly rejects it.
+    // The duration must sit BETWEEN the two guards or the test proves nothing.
+    // 6s fade at 2x: unscaled guard is `duration > 12` (passes, would fade),
+    // scaled guard is `duration > 6 * 2 * 2 = 24` (fails, correctly rejected).
+    // A 20s track is inside that window. Do not raise it to 30 — 30 > 24, so
+    // the scaled guard would pass too and the test would fail.
+    // Position: remaining = 10, which is <= 6 * 2 = 12, so the trigger is
+    // reached and the ONLY thing rejecting the fade is the duration guard.
     const songA = makeSong({ title: 'A' });
     const songB = makeSong({ title: 'B' });
     render(
@@ -572,7 +582,7 @@ Append to the `describe('useAudioEngine — crossfade', ...)` block in `src/hook
     const audioA = engineRef.current!.audioRefA.current!;
 
     await act(async () => {
-      fireTimeUpdate(audioA, { currentTime: 20, duration: 30 });
+      fireTimeUpdate(audioA, { currentTime: 10, duration: 20 });
     });
 
     expect(gains.fadeA.gain.setValueCurveAtTime).not.toHaveBeenCalled();
@@ -595,6 +605,26 @@ Append to the `describe('useAudioEngine — crossfade', ...)` block in `src/hook
     });
 
     expect(audioB.src).toContain(songB.url);
+  });
+
+  it('does not preload at 1x from the same position that preloads at 2x', async () => {
+    // Control for the test above: without it, that test passes even if the
+    // preload fired unconditionally.
+    const songA = makeSong({ title: 'A' });
+    const songB = makeSong({ title: 'B' });
+    render(
+      <TestHarness song={songA} nextSong={songB} crossfadeSeconds={0} playbackRate={1} />,
+    );
+    await act(async () => {});
+    const audioA = engineRef.current!.audioRefA.current!;
+    const audioB = engineRef.current!.audioRefB.current!;
+
+    // 8 media seconds left, outside the unscaled 5s lead.
+    await act(async () => {
+      fireTimeUpdate(audioA, { currentTime: 172, duration: 180 });
+    });
+
+    expect(audioB.src).toBe('');
   });
 ```
 
@@ -1177,4 +1207,11 @@ git commit -m "docs: record the playback speed feature and its timing rules"
 
 **3. Type consistency.** `clampRate`/`DEFAULT_RATE`/`RATE_OPTIONS`/`formatRate` are defined in Task 1 and used with those exact names in Tasks 2, 3, 4, 7. `playbackRateRef` is created in Task 3 and consumed in Task 4. `recordFinish`'s fourth parameter is optional in Task 5 and passed positionally in Task 7. The `MobileNowPlaying` prop names in Task 7's implementation match its test.
 
-**4. Known gaps, stated rather than fixed.** Changing speed *during* an in-flight crossfade leaves the already-scheduled curve running on the old timing; the outgoing element may reach its natural end a moment early. The existing `fadingOutRef` and `!== activeAudio()` guards swallow it, so the failure mode is a slightly clipped tail on one transition. Not worth engineering around — the same call the codebase already makes for re-scanning during the last 5 seconds of a track.
+**4. Second audit pass (requested), axes: probe-the-test-environment and check-the-arithmetic.** Four defects found and fixed inline:
+- **Two vacuous tests.** happy-dom's audio element already defaults `playbackRate` to 1 and `preservesPitch` to true, so Task 3's "clamps a rate of 0" and "defaults to normal speed" both asserted values the environment supplies for free — they would have passed with the whole effect deleted. The clamp test is now a transition from 1.5; the default test is gone, and the constraint is recorded in Global Constraints so no later task reintroduces the shape.
+- **An arithmetically wrong test.** Task 4's short-track case used a 30s track against a scaled guard of `duration > 24`. 30 > 24, so the guard passes and the fade fires — the test asserted the opposite and would have failed, sending an implementer hunting a bug in correct code. The duration must sit between the unscaled guard (12) and the scaled one (24); it is now 20.
+- **A missing control.** The preload test had no 1× counterpart, so it would have passed if the preload fired unconditionally. Added.
+
+**5. Line-number claims re-verified against source** (2026-09-07): `storage.ts:183-185` `saveVolume`, `App.tsx:2010` `useMediaSession({`, `MobileNowPlaying.tsx:385` the indicator ternary, `useAudioEngine.ts:506-509` the volume effect. All correct.
+
+**6. Known gaps, stated rather than fixed.** Changing speed *during* an in-flight crossfade leaves the already-scheduled curve running on the old timing; the outgoing element may reach its natural end a moment early. The existing `fadingOutRef` and `!== activeAudio()` guards swallow it, so the failure mode is a slightly clipped tail on one transition. Not worth engineering around — the same call the codebase already makes for re-scanning during the last 5 seconds of a track.
