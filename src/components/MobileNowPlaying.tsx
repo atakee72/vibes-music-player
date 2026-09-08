@@ -20,6 +20,7 @@ import {
 import type { LyricLine, RepeatMode, Song } from '../types';
 import { EQ_PRESET_NAMES, type EqPreset } from '../lib/eq';
 import { CROSSFADE_OPTIONS, formatCrossfade } from '../lib/crossfade';
+import { RATE_OPTIONS, formatRate } from '../lib/playback-rate';
 import { SleepTimerMenu } from './SleepTimerMenu';
 import { describeFormat } from '../lib/audio-format';
 import { VibeOrb } from './VibeOrb';
@@ -42,6 +43,10 @@ interface MobileNowPlayingProps {
   repeatMode: RepeatMode;
   shuffle: boolean;
   eqPreset: EqPreset;
+  playbackRate: number;
+  onPlaybackRateChange: (rate: number) => void;
+  preservePitch: boolean;
+  onPreservePitchChange: (on: boolean) => void;
   /** Crossfade duration in seconds; 0 = off. */
   crossfade?: number;
   onCrossfadeChange?: (seconds: number) => void;
@@ -97,6 +102,10 @@ export function MobileNowPlaying({
   repeatMode,
   shuffle,
   eqPreset,
+  playbackRate,
+  onPlaybackRateChange,
+  preservePitch,
+  onPreservePitchChange,
   crossfade = 0,
   onCrossfadeChange,
   sleepDeadline = null,
@@ -376,13 +385,45 @@ export function MobileNowPlaying({
                     {formatCrossfade(seconds)}
                   </button>
                 ))}
+                <p className="mt-1 border-t border-white/10 px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-faint">
+                  Speed
+                </p>
+                {RATE_OPTIONS.map((rate) => (
+                  <button
+                    key={rate}
+                    role="menuitem"
+                    onClick={() => {
+                      onPlaybackRateChange(rate);
+                      setAudioOpen(false);
+                    }}
+                    className={`w-full px-3 py-1.5 text-left text-sm transition-colors ${
+                      rate === playbackRate
+                        ? 'bg-gradient-to-r from-amber/30 to-coral/30 text-cream'
+                        : 'text-white/80 hover:bg-white/5'
+                    }`}
+                  >
+                    {formatRate(rate)}
+                  </button>
+                ))}
+                <button
+                  role="menuitemcheckbox"
+                  aria-checked={preservePitch}
+                  aria-label="Preserve pitch"
+                  onClick={() => onPreservePitchChange(!preservePitch)}
+                  className="mt-1 flex w-full items-center justify-between border-t border-white/10 px-3 py-2 text-left text-sm text-white/80 transition-colors hover:bg-white/5"
+                >
+                  <span>Preserve pitch</span>
+                  <span className={preservePitch ? 'text-amber' : 'text-faint'}>
+                    {preservePitch ? 'On' : 'Off'}
+                  </span>
+                </button>
               </div>
             )}
             <button
               ref={audioTriggerRef}
               onClick={() => setAudioOpen((v) => !v)}
               className={`rounded-full bg-white/5 p-2 transition-colors hover:bg-white/10 ${
-                eqPreset !== 'Off' || crossfade > 0 ? 'text-amber' : 'text-white/70'
+                eqPreset !== 'Off' || crossfade > 0 || playbackRate !== 1 ? 'text-amber' : 'text-white/70'
               }`}
               aria-label="Audio settings"
               aria-haspopup="menu"

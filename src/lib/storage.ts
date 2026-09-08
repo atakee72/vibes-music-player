@@ -2,6 +2,7 @@ import { get, set } from 'idb-keyval';
 import type { LibraryRoot, Playlist, Song } from '../types';
 import type { EqPreset } from './eq';
 import { CROSSFADE_OPTIONS } from './crossfade';
+import { clampRate, DEFAULT_RATE } from './playback-rate';
 import type { StatsMap } from './stats';
 
 const ROOTS_KEY = 'library-roots';
@@ -10,6 +11,8 @@ const EQ_PRESET_KEY = 'eq-preset';
 const VOLUME_KEY = 'volume';
 const CROSSFADE_KEY = 'crossfade';
 const STATS_KEY = 'listening-stats';
+const PLAYBACK_RATE_KEY = 'playback-rate';
+const PRESERVE_PITCH_KEY = 'preserve-pitch';
 
 type SongMeta = Omit<Song, 'file' | 'url' | 'fileHandle' | 'coverArt'>;
 type HandleStoredSong = SongMeta & { fileHandle: FileSystemFileHandle };
@@ -182,6 +185,29 @@ export async function getVolume(): Promise<number> {
 
 export async function saveVolume(volume: number): Promise<void> {
   await set(VOLUME_KEY, volume);
+}
+
+/**
+ * Clamped on READ as well as write: a rate of 0 silently stops playback in
+ * every browser, and this value survives across releases in IDB. Reading it
+ * back through the clamp means one bad write can never become permanent.
+ */
+export async function getPlaybackRate(): Promise<number> {
+  const v = await get<number>(PLAYBACK_RATE_KEY);
+  return v === undefined ? DEFAULT_RATE : clampRate(v);
+}
+
+export async function savePlaybackRate(rate: number): Promise<void> {
+  await set(PLAYBACK_RATE_KEY, clampRate(rate));
+}
+
+export async function getPreservePitch(): Promise<boolean> {
+  const v = await get<boolean>(PRESERVE_PITCH_KEY);
+  return v ?? true;
+}
+
+export async function savePreservePitch(on: boolean): Promise<void> {
+  await set(PRESERVE_PITCH_KEY, on);
 }
 
 export async function getCrossfade(): Promise<number> {

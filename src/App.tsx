@@ -55,6 +55,7 @@ import type { ImportEntry } from './lib/playlist-import';
 import { sortSongs, SORT_LABELS, type SortKey } from './lib/sort';
 import { SLEEP_FADE_SECONDS } from './lib/sleep';
 import { recordFinish, type StatsMap } from './lib/stats';
+import { clampRate } from './lib/playback-rate';
 import { extractLyrics } from './lib/lyrics';
 import { downscaleCover } from './lib/cover';
 import { mergeRescan, hasMetaChanged, type RescanReplacements } from './lib/rescan';
@@ -142,6 +143,8 @@ export default function App() {
   const [eqPreset, setEqPreset] = useState<EqPreset>('Off');
   const [volume, setVolume] = useState(1);
   const [crossfade, setCrossfade] = useState(0);
+  const [playbackRate, setPlaybackRate] = useState(1);
+  const [preservePitch, setPreservePitch] = useState(true);
   const [stats, setStats] = useState<StatsMap>({});
   /**
    * Sleep timer deadline as an epoch ms, or null when disarmed.
@@ -311,6 +314,8 @@ export default function App() {
     eqPreset,
     volume,
     crossfadeSeconds: crossfade,
+    playbackRate,
+    preservePitch,
     onEnded: () => onEndedRef.current(),
     // A play is counted only when a track FINISHES. This is the engine's
     // dedicated signal, not `onEnded` — they differ at repeat-one, and under
@@ -319,7 +324,7 @@ export default function App() {
       const song = currentSongRef.current;
       // A song whose metadata never loaded has duration 0; don't record it.
       if (!song || !(song.duration > 0)) return;
-      setStats((prev) => recordFinish(prev, song, Date.now()));
+      setStats((prev) => recordFinish(prev, song, Date.now(), playbackRate));
     },
   });
 
@@ -341,12 +346,16 @@ export default function App() {
         const storedEq = await storage.getEqPreset();
         const storedVolume = await storage.getVolume();
         const storedCrossfade = await storage.getCrossfade();
+        const storedRate = await storage.getPlaybackRate();
+        const storedPreservePitch = await storage.getPreservePitch();
         const storedStats = await storage.getStats();
         setLibraryRoots(roots);
         setPlaylists(ensureLibrary(loaded));
         setEqPreset(storedEq);
         setVolume(storedVolume);
         setCrossfade(storedCrossfade);
+        setPlaybackRate(storedRate);
+        setPreservePitch(storedPreservePitch);
         setStats(storedStats);
         setLibraryStatus(needsPrompt ? 'needs-prompt' : 'ready');
         // ONLY now may saving begin — and only when the in-memory library
@@ -528,6 +537,20 @@ export default function App() {
       .saveCrossfade(crossfade)
       .catch((err) => console.error('Crossfade save failed:', err));
   }, [crossfade]);
+
+  useEffect(() => {
+    if (!prefsLoadedRef.current) return;
+    storage
+      .savePlaybackRate(playbackRate)
+      .catch((err) => console.error('Playback rate save failed:', err));
+  }, [playbackRate]);
+
+  useEffect(() => {
+    if (!prefsLoadedRef.current) return;
+    storage
+      .savePreservePitch(preservePitch)
+      .catch((err) => console.error('Pitch preference save failed:', err));
+  }, [preservePitch]);
 
   useEffect(() => {
     if (!prefsLoadedRef.current) return;
@@ -2012,6 +2035,7 @@ export default function App() {
     isPlaying,
     currentTime,
     duration,
+    playbackRate,
     onPlay: togglePlayPause,
     onPause: togglePlayPause,
     onNext: playNext,
@@ -2597,6 +2621,10 @@ export default function App() {
             repeatMode={repeatMode}
             shuffle={shuffle}
             eqPreset={eqPreset}
+            playbackRate={playbackRate}
+            onPlaybackRateChange={(r) => setPlaybackRate(clampRate(r))}
+            preservePitch={preservePitch}
+            onPreservePitchChange={setPreservePitch}
             volume={volume}
             onPlayPause={togglePlayPause}
             onPrev={playPrev}

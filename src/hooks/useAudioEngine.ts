@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Song } from '../types';
 import { EQ_FREQS, applyPreset, type EqPreset } from '../lib/eq';
 import { fadeCurve } from '../lib/crossfade';
+import { clampRate, DEFAULT_RATE } from '../lib/playback-rate';
 
 interface Chain {
   source: MediaElementAudioSourceNode;
@@ -26,6 +27,10 @@ interface UseAudioEngineArgs {
   volume?: number;
   /** Crossfade duration in seconds; 0 disables it (plain gapless). */
   crossfadeSeconds?: number;
+  /** Playback speed. Clamped — 0 silently stops audio, negatives throw. */
+  playbackRate?: number;
+  /** Keep pitch constant while the rate changes. Default true. */
+  preservePitch?: boolean;
   onEnded?: () => void;
   /**
    * "This track reached its end." Deliberately NOT the same signal as
@@ -74,6 +79,8 @@ export function useAudioEngine({
   eqPreset = 'Off',
   volume = 1,
   crossfadeSeconds = 0,
+  playbackRate = DEFAULT_RATE,
+  preservePitch = true,
   onEnded,
   onTrackFinished,
 }: UseAudioEngineArgs): UseAudioEngineResult {
@@ -91,6 +98,7 @@ export function useAudioEngine({
   const onTrackFinishedRef = useRef(onTrackFinished);
   const nextSongRef = useRef<Song | null>(nextSong ?? null);
   const crossfadeRef = useRef(crossfadeSeconds);
+  const playbackRateRef = useRef(clampRate(playbackRate));
   /**
    * Non-null exactly while a crossfade is sounding. Doubles as the re-entry
    * guard for the trigger: no second "already faded this track" flag is
@@ -110,6 +118,7 @@ export function useAudioEngine({
     onTrackFinishedRef.current = onTrackFinished;
     nextSongRef.current = nextSong ?? null;
     crossfadeRef.current = crossfadeSeconds;
+    playbackRateRef.current = clampRate(playbackRate);
   });
 
   /** ReplayGain ratio for a song (1 when the tag is absent). */
@@ -307,6 +316,15 @@ export function useAudioEngine({
       const inactive = activeRef.current === 'A' ? audioB : audioA;
       const remaining = target.duration - target.currentTime;
 
+      // `remaining` is in MEDIA seconds; every deadline below is really about
+      // WALL-CLOCK time, because the fade curve is scheduled against the
+      // AudioContext clock (`setValueCurveAtTime`) and torn down by a
+      // `setTimeout`. At rate r, `remaining` media seconds elapse in
+      // `remaining / r` real seconds — so each media-second threshold is
+      // multiplied by r. Get this wrong and at 2x a 6s crossfade begins with
+      // 3 real seconds of audio left and the outgoing track dies mid-curve.
+      const rate = playbackRateRef.current;
+
       // Preload next song on the inactive element when we're near the end. The
       // lead must cover the crossfade, or the incoming track wouldn't be
       // loaded yet when the fade is due to start.
@@ -314,24 +332,34 @@ export function useAudioEngine({
       // Skipped entirely while a crossfade is sounding: "inactive" is then the
       // element still fading out, and writing its src would cut the tail dead.
       // (Reachable when the incoming track is shorter than the lead.)
-      const preloadLead = Math.max(PRELOAD_LEAD_SECONDS, xfade + 1);
+      const preloadLead = Math.max(PRELOAD_LEAD_SECONDS, xfade + 1) * rate;
       if (!fadingOutRef.current && remaining < preloadLead && inactive.src !== nextSong.url) {
         inactive.src = nextSong.url;
         inactive.load();
+        // `load()` synchronously resets `playbackRate` to 1 (measured in
+        // Chromium: [2, false] -> [1, false] across this exact call) but
+        // NOT `preservesPitch`. Reapplying immediately after `load()` is
+        // sufficient and sticks through `loadedmetadata` — this is not
+        // defensive padding, it's the fix for the gapless preload silently
+        // reverting to 1x.
+        inactive.playbackRate = playbackRateRef.current;
       }
 
       if (
         xfade > 0 &&
         !fadingOutRef.current &&
-        remaining <= xfade &&
+        remaining <= xfade * rate &&
         // Don't fade a track shorter than twice the fade — there'd be no
-        // steady-state left in the middle.
-        target.duration > xfade * 2 &&
+        // steady-state left in the middle. Scaled too: the fade eats
+        // `xfade * rate` media seconds, so a faster rate needs a longer track.
+        target.duration > xfade * rate * 2 &&
         // Repeat-one replays the SAME element in place (see the ended
         // handler); one element cannot crossfade with itself.
         nextSong.url !== target.src &&
         inactive.src === nextSong.url
       ) {
+        // NOT scaled: the curve duration is wall-clock, and a 6-second
+        // crossfade must sound like six seconds at any speed.
         startCrossfade(target, inactive, xfade);
       }
     };
@@ -446,6 +474,12 @@ export function useAudioEngine({
     // Random click on a non-sequential song — load on active and play
     active.src = song.url;
     active.load();
+    // `load()` synchronously resets `playbackRate` to 1 (measured in
+    // Chromium: [2, false] -> [1, false] across this exact call) but NOT
+    // `preservesPitch`. Reapplying immediately after `load()` is
+    // sufficient — this is the fix for the speed control silently
+    // reverting to 1x on every track change.
+    active.playbackRate = playbackRateRef.current;
     resumeAndPlay(active);
   }, [song]);
 
@@ -507,6 +541,19 @@ export function useAudioEngine({
     if (audioRefA.current) audioRefA.current.volume = volume;
     if (audioRefB.current) audioRefB.current.volume = volume;
   }, [volume]);
+
+  // Both elements, every time. The INACTIVE element is the gapless/crossfade
+  // preload target — it is already loaded and about to become active, so an
+  // active-only write means the next track starts at 1x with no UI change to
+  // explain it. Same reasoning as the volume effect directly above.
+  useEffect(() => {
+    const rate = clampRate(playbackRate);
+    for (const el of [audioRefA.current, audioRefB.current]) {
+      if (!el) continue;
+      el.preservesPitch = preservePitch;
+      el.playbackRate = rate;
+    }
+  }, [playbackRate, preservePitch]);
 
   const seek = useCallback(
     (t: number) => {

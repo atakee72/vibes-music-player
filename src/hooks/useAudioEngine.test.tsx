@@ -125,12 +125,16 @@ function TestHarness({
   song,
   nextSong = null,
   crossfadeSeconds = 0,
+  playbackRate,
+  preservePitch,
   onEnded,
   onTrackFinished,
 }: {
   song: HarnessSong;
   nextSong?: HarnessSong;
   crossfadeSeconds?: number;
+  playbackRate?: number;
+  preservePitch?: boolean;
   onEnded?: () => void;
   onTrackFinished?: () => void;
 }) {
@@ -138,6 +142,8 @@ function TestHarness({
     song,
     nextSong,
     crossfadeSeconds,
+    playbackRate,
+    preservePitch,
     onEnded,
     onTrackFinished,
   });
@@ -389,6 +395,111 @@ describe('useAudioEngine — crossfade', () => {
     });
     expect(gains.rgA.gain.setValueAtTime.mock.calls.length).toBeGreaterThan(callsWhileFading);
   });
+
+  it('starts the fade earlier in MEDIA time at 2x, so it still lasts the full wall-clock duration', async () => {
+    const songA = makeSong({ title: 'A' });
+    const songB = makeSong({ title: 'B' });
+    render(
+      <TestHarness song={songA} nextSong={songB} crossfadeSeconds={6} playbackRate={2} />,
+    );
+    await act(async () => {});
+    const audioA = engineRef.current!.audioRefA.current!;
+
+    // 8 media seconds left. At 2x that is 4 WALL seconds — less than the 6s
+    // fade, so the fade must already be running or its tail would be cut.
+    await act(async () => {
+      fireTimeUpdate(audioA, { currentTime: 172, duration: 180 });
+    });
+
+    expect(gains.fadeA.gain.setValueCurveAtTime).toHaveBeenCalledTimes(1);
+    // The curve duration itself is wall-clock and must NOT be scaled: the
+    // user asked for a 6-second crossfade and must hear six seconds of it.
+    expect(gains.fadeA.gain.setValueCurveAtTime).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      6,
+    );
+  });
+
+  it('does not fade at 1x from the same position that fades at 2x', async () => {
+    // The control for the test above. Without it, that test would pass even
+    // if the trigger ignored the rate and simply fired too early always.
+    const songA = makeSong({ title: 'A' });
+    const songB = makeSong({ title: 'B' });
+    render(
+      <TestHarness song={songA} nextSong={songB} crossfadeSeconds={6} playbackRate={1} />,
+    );
+    await act(async () => {});
+    const audioA = engineRef.current!.audioRefA.current!;
+
+    await act(async () => {
+      fireTimeUpdate(audioA, { currentTime: 172, duration: 180 });
+    });
+
+    expect(gains.fadeA.gain.setValueCurveAtTime).not.toHaveBeenCalled();
+  });
+
+  it('does not crossfade a track too short for the fade AT THE CURRENT RATE', async () => {
+    // The duration must sit BETWEEN the two guards or the test proves nothing.
+    // 6s fade at 2x: unscaled guard is `duration > 12` (passes, would fade),
+    // scaled guard is `duration > 6 * 2 * 2 = 24` (fails, correctly rejected).
+    // A 20s track is inside that window. Do not raise it to 30 — 30 > 24, so
+    // the scaled guard would pass too and the test would fail.
+    // Position: remaining = 10, which is <= 6 * 2 = 12, so the trigger is
+    // reached and the ONLY thing rejecting the fade is the duration guard.
+    const songA = makeSong({ title: 'A' });
+    const songB = makeSong({ title: 'B' });
+    render(
+      <TestHarness song={songA} nextSong={songB} crossfadeSeconds={6} playbackRate={2} />,
+    );
+    await act(async () => {});
+    const audioA = engineRef.current!.audioRefA.current!;
+
+    await act(async () => {
+      fireTimeUpdate(audioA, { currentTime: 10, duration: 20 });
+    });
+
+    expect(gains.fadeA.gain.setValueCurveAtTime).not.toHaveBeenCalled();
+  });
+
+  it('preloads the next track earlier in media time at 2x', async () => {
+    const songA = makeSong({ title: 'A' });
+    const songB = makeSong({ title: 'B' });
+    render(
+      <TestHarness song={songA} nextSong={songB} crossfadeSeconds={0} playbackRate={2} />,
+    );
+    await act(async () => {});
+    const audioA = engineRef.current!.audioRefA.current!;
+    const audioB = engineRef.current!.audioRefB.current!;
+
+    // 8 media seconds left = 4 wall seconds, inside the 5s preload lead once
+    // scaled. Unscaled (remaining < 5) this would not preload.
+    await act(async () => {
+      fireTimeUpdate(audioA, { currentTime: 172, duration: 180 });
+    });
+
+    expect(audioB.src).toContain(songB.url);
+  });
+
+  it('does not preload at 1x from the same position that preloads at 2x', async () => {
+    // Control for the test above: without it, that test passes even if the
+    // preload fired unconditionally.
+    const songA = makeSong({ title: 'A' });
+    const songB = makeSong({ title: 'B' });
+    render(
+      <TestHarness song={songA} nextSong={songB} crossfadeSeconds={0} playbackRate={1} />,
+    );
+    await act(async () => {});
+    const audioA = engineRef.current!.audioRefA.current!;
+    const audioB = engineRef.current!.audioRefB.current!;
+
+    // 8 media seconds left, outside the unscaled 5s lead.
+    await act(async () => {
+      fireTimeUpdate(audioA, { currentTime: 172, duration: 180 });
+    });
+
+    expect(audioB.src).toBe('');
+  });
 });
 
 describe('useAudioEngine — onTrackFinished', () => {
@@ -536,5 +647,118 @@ describe('useAudioEngine — sleep fade', () => {
     });
     expect(pauseSpy.mock.calls.length).toBe(pausesBefore);
     expect(gains.mixer.gain.cancelScheduledValues).toHaveBeenCalled();
+  });
+});
+
+describe('useAudioEngine — playback rate', () => {
+  it('applies the rate to BOTH elements, not just the active one', async () => {
+    const view = render(<TestHarness song={makeSong({ title: 'A' })} playbackRate={1.5} />);
+    await act(async () => {});
+
+    // Both, because the inactive element is the gapless/crossfade preload
+    // target: set only the active one and every track snaps back to 1x at
+    // the flip, mid-listen, with nothing in the UI changing.
+    expect(engineRef.current!.audioRefA.current!.playbackRate).toBe(1.5);
+    expect(engineRef.current!.audioRefB.current!.playbackRate).toBe(1.5);
+    view.unmount();
+  });
+
+  it('updates both elements when the rate changes', async () => {
+    const song = makeSong({ title: 'A' });
+    const view = render(<TestHarness song={song} playbackRate={1} />);
+    await act(async () => {});
+
+    view.rerender(<TestHarness song={song} playbackRate={2} />);
+    await act(async () => {});
+
+    expect(engineRef.current!.audioRefA.current!.playbackRate).toBe(2);
+    expect(engineRef.current!.audioRefB.current!.playbackRate).toBe(2);
+    view.unmount();
+  });
+
+  it('clamps a rate of 0, which the browser would accept as a silent pause', async () => {
+    // Deliberately written as a TRANSITION from 1.5, not a fresh render at 0.
+    // happy-dom's audio element already defaults `playbackRate` to 1 (probed
+    // 2026-09-07), so asserting `toBe(1)` after a fresh render at 0 passes
+    // whether the clamp works, whether the effect ran, or neither. Coming from
+    // 1.5, the assertion fails at 0 if the clamp is missing and at 1.5 if the
+    // effect never re-ran — it can only pass for the right reason.
+    const song = makeSong({ title: 'A' });
+    const view = render(<TestHarness song={song} playbackRate={1.5} />);
+    await act(async () => {});
+    expect(engineRef.current!.audioRefA.current!.playbackRate).toBe(1.5);
+
+    view.rerender(<TestHarness song={song} playbackRate={0} />);
+    await act(async () => {});
+
+    expect(engineRef.current!.audioRefA.current!.playbackRate).toBe(1);
+    view.unmount();
+  });
+
+  it('applies the pitch preference to both elements', async () => {
+    // Asserts `false`, never `true`: happy-dom defaults `preservesPitch` to
+    // true (probed 2026-09-07), so a `toBe(true)` assertion here would pass
+    // with the effect deleted.
+    const view = render(
+      <TestHarness song={makeSong({ title: 'A' })} playbackRate={1.5} preservePitch={false} />,
+    );
+    await act(async () => {});
+
+    expect(engineRef.current!.audioRefA.current!.preservesPitch).toBe(false);
+    expect(engineRef.current!.audioRefB.current!.preservesPitch).toBe(false);
+    view.unmount();
+  });
+
+  // `load()` synchronously resets `playbackRate` to 1 in real browsers
+  // (measured in Chromium: [2, false] -> [1, false] across the call — see
+  // the comments at the two `.load()` sites in useAudioEngine.ts) but
+  // happy-dom's mocked `load()` (stubbed in `beforeEach` above) is a no-op,
+  // so it does NOT reproduce that reset on its own — a test that merely
+  // renders and asserts would pass even with the reapply lines deleted.
+  // Both tests below simulate the reset explicitly, by writing the wrong
+  // value onto the element right before the action that calls `load()`.
+  // With the reapply line in place nothing else touches `playbackRate`
+  // afterwards, so if it's missing the wrong value survives untouched.
+
+  it('reapplies the rate to the active element after a song change (load() resets it)', async () => {
+    const songA = makeSong({ title: 'A' });
+    const songB = makeSong({ title: 'B' });
+    const view = render(<TestHarness song={songA} playbackRate={2} />);
+    await act(async () => {});
+    const audioA = engineRef.current!.audioRefA.current!;
+    expect(audioA.playbackRate).toBe(2);
+
+    audioA.playbackRate = 1; // simulate the browser's load() reset
+
+    view.rerender(<TestHarness song={songB} playbackRate={2} />);
+    await act(async () => {});
+
+    expect(audioA.playbackRate).toBe(2);
+    view.unmount();
+  });
+
+  it('reapplies the rate to the inactive element after a gapless preload (load() resets it)', async () => {
+    const songA = makeSong({ title: 'A' });
+    const songB = makeSong({ title: 'B' });
+    const view = render(
+      <TestHarness song={songA} nextSong={songB} crossfadeSeconds={0} playbackRate={2} />,
+    );
+    await act(async () => {});
+    const audioA = engineRef.current!.audioRefA.current!;
+    const audioB = engineRef.current!.audioRefB.current!;
+    expect(audioB.playbackRate).toBe(2);
+
+    audioB.playbackRate = 1; // simulate the browser's load() reset
+
+    // 8 media seconds left = 4 wall seconds, inside the 5s preload lead
+    // once scaled at 2x — same trigger as the "preloads the next track
+    // earlier in media time at 2x" test above.
+    await act(async () => {
+      fireTimeUpdate(audioA, { currentTime: 172, duration: 180 });
+    });
+
+    expect(audioB.src).toContain(songB.url);
+    expect(audioB.playbackRate).toBe(2);
+    view.unmount();
   });
 });

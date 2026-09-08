@@ -98,6 +98,10 @@ vi.mock('./lib/storage', async () => {
     saveVolume: vi.fn(async () => {}),
     getCrossfade: vi.fn(async () => 0),
     saveCrossfade: vi.fn(async () => {}),
+    getPlaybackRate: vi.fn(async () => 1),
+    savePlaybackRate: vi.fn(async () => {}),
+    getPreservePitch: vi.fn(async () => true),
+    savePreservePitch: vi.fn(async () => {}),
     getStats: vi.fn(async () => ({})),
     saveStats: vi.fn(async () => {}),
     addLibraryRoot: vi.fn(async () => null),
@@ -553,6 +557,15 @@ describe('App', () => {
 
     await waitFor(() => expect(vi.mocked(storage.saveCrossfade)).toHaveBeenCalledWith(6));
     expect(engine.crossfadeSeconds).toBe(6);
+  });
+
+  it('reads the stored playback rate on mount', async () => {
+    await renderApp();
+
+    // This is a load call, made during the mount effect before
+    // prefsLoadedRef is set — prefsLoadedRef gates the SAVE effects below,
+    // not this read.
+    await waitFor(() => expect(storage.getPlaybackRate).toHaveBeenCalled());
   });
 });
 

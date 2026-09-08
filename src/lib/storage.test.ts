@@ -4,12 +4,16 @@ import {
   formatStorageWarning,
   getCrossfade,
   getEqPreset,
+  getPlaybackRate,
+  getPreservePitch,
   getStats,
   getLibraryRoots,
   getPlaylists,
   getVolume,
   saveCrossfade,
   saveEqPreset,
+  savePlaybackRate,
+  savePreservePitch,
   saveStats,
   savePlaylists,
   saveVolume,
@@ -304,5 +308,35 @@ describe('storage — early quota warning', () => {
     expect(formatStorageWarning({ usage: 924, quota: 1000, percent: 92.4 })).toBe(
       'Storage almost full (92% used) — new songs may fail to save.',
     );
+  });
+});
+
+describe('playback rate + pitch preferences', () => {
+  it('round-trips a stored rate', async () => {
+    await savePlaybackRate(1.5);
+    expect(await getPlaybackRate()).toBe(1.5);
+  });
+
+  it('defaults to normal speed when nothing is stored', async () => {
+    expect(await getPlaybackRate()).toBe(1);
+  });
+
+  it('clamps a corrupt stored rate on READ, not just on write', async () => {
+    // A value written by an older build, a hand-edited IDB, or a bug elsewhere
+    // must not reach the audio element. 0 is the dangerous one: the browser
+    // accepts it and silently stops playback. Bypass savePlaybackRate to write
+    // the corrupt value directly to the store, proving the read clamp catches it.
+    const { set: mockSet } = await import('idb-keyval');
+    await mockSet('playback-rate', 0);
+    expect(await getPlaybackRate()).toBe(1);
+  });
+
+  it('round-trips the pitch preference', async () => {
+    await savePreservePitch(false);
+    expect(await getPreservePitch()).toBe(false);
+  });
+
+  it('defaults to preserving pitch when nothing is stored', async () => {
+    expect(await getPreservePitch()).toBe(true);
   });
 });
