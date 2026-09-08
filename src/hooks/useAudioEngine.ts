@@ -336,6 +336,13 @@ export function useAudioEngine({
       if (!fadingOutRef.current && remaining < preloadLead && inactive.src !== nextSong.url) {
         inactive.src = nextSong.url;
         inactive.load();
+        // `load()` synchronously resets `playbackRate` to 1 (measured in
+        // Chromium: [2, false] -> [1, false] across this exact call) but
+        // NOT `preservesPitch`. Reapplying immediately after `load()` is
+        // sufficient and sticks through `loadedmetadata` — this is not
+        // defensive padding, it's the fix for the gapless preload silently
+        // reverting to 1x.
+        inactive.playbackRate = playbackRateRef.current;
       }
 
       if (
@@ -467,6 +474,12 @@ export function useAudioEngine({
     // Random click on a non-sequential song — load on active and play
     active.src = song.url;
     active.load();
+    // `load()` synchronously resets `playbackRate` to 1 (measured in
+    // Chromium: [2, false] -> [1, false] across this exact call) but NOT
+    // `preservesPitch`. Reapplying immediately after `load()` is
+    // sufficient — this is the fix for the speed control silently
+    // reverting to 1x on every track change.
+    active.playbackRate = playbackRateRef.current;
     resumeAndPlay(active);
   }, [song]);
 

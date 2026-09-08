@@ -1062,15 +1062,20 @@ Each was caught by implementers checking the brief's own reasoning against
 the code it specified, not by a downstream test failure — the same
 verify-against-source discipline this section itself was written under.
 
-**Known defect, found during this task's browser verification (2026-09-08,
-not yet fixed):** a song change can silently drop playback back to 1× while
-every UI surface (the amber trigger, the highlighted rate in the popover,
-even the Media Session position state reported to the OS) still shows the
-selected rate as active. Root cause and full repro are recorded in
-`CLAUDE.md` → "Playback speed" → "Known defect". In short:
-`HTMLMediaElement.load()` resets `.playbackRate` to `1` in this Chromium
-build, `useAudioEngine.ts` calls `.load()` on every song change and preload,
-and nothing reapplies the rate afterward because the sync effect only re-runs
-when the `playbackRate`/`preservePitch` React state changes — not when an
-element is reloaded. The one path that works correctly is changing the rate
-while a song is already playing.
+**Fixed (2026-09-08): a song change was silently dropping playback back to
+1× while every UI surface (the amber trigger, the highlighted rate in the
+popover, even the Media Session position state reported to the OS) kept
+showing the selected rate as active.** Root cause: `HTMLMediaElement.load()`
+resets `.playbackRate` to `1` in Chromium, `useAudioEngine.ts` calls
+`.load()` on every song change and gapless preload, and nothing reapplied
+the rate afterward — the sync effect only re-runs when the
+`playbackRate`/`preservePitch` React state changes, not when an element is
+reloaded. Fix: both `.load()` call sites (the song-change effect's
+`active.load()` and the preload branch's `inactive.load()`) now reapply
+`element.playbackRate = playbackRateRef.current` on the line immediately
+after — the reset is synchronous, so no `loadedmetadata`/`canplay` listener
+is needed. `.preservesPitch` was confirmed NOT reset by `.load()`, so only
+the one property needed the fix. Full detail in `CLAUDE.md` → "Playback
+speed". Regression-tested in `useAudioEngine.test.tsx`, using a
+deliberately-simulated reset (happy-dom's `load()` mock doesn't reproduce
+Chromium's behavior on its own).

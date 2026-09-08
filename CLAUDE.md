@@ -314,29 +314,29 @@ Facts other tools (e.g. a beets-managed library feeding Vibes) must know:
 - **Media Session position state reports the rate too**
   (`useMediaSession.ts:92`, `playbackRate` passed straight into
   `setPositionState`), so the OS lock-screen scrubber advances at the
-  right pace — when the underlying audio element's rate agrees with React
-  state (see the known defect below).
-- **Known defect (found via browser verification, 2026-09-08, headless
-  Chromium 148 — not yet fixed): a song change can silently drop playback
-  back to 1x while the UI still shows the selected rate as active.**
-  `HTMLMediaElement.load()` resets `.playbackRate` to `1` in this Chromium
-  build (confirmed in isolation: setting `playbackRate = 2` on a bare
-  `<audio>` then calling `.load()` reads back `1`; `.preservesPitch`
-  survives `.load()` unaffected). `useAudioEngine.ts` calls `.load()` in two
-  places — the song-change effect (`active.load()`) and the preload branch
-  of the `timeupdate` handler (`inactive.load()`) — and neither reapplies
-  `playbackRate`/`preservePitch` afterward; only the effect at lines
-  536-543 does that, and it re-runs solely when the `playbackRate` or
-  `preservePitch` REACT STATE changes, not when an element's `src` is
-  (re)loaded. Net effect, reproduced cleanly: reload the app with a
-  persisted non-default rate (e.g. 2x saved from a prior session), press
-  Play on any song for the first time — the Audio settings trigger is
-  amber, "2x" is highlighted in the popover, and Media Session reports
-  `playbackRate: 2`, but both `<audio>` elements' real `.playbackRate` is
-  `1` and the track is audibly normal speed. The one path that works
-  correctly is changing the rate while a song is *already* playing (a
-  genuine state change re-runs the sync effect against the live elements).
-  Every subsequent gapless preload or song switch re-triggers the same gap.
+  right pace — which now agrees with the actual element rate on every
+  song change too (see the `.load()` fix below).
+- **`HTMLMediaElement.load()` resets `.playbackRate` to `1`, and both
+  `.load()` call sites reapply it immediately after.** Found via browser
+  verification (2026-09-08, headless Chromium 148): setting
+  `playbackRate = 2` on a bare `<audio>` then calling `.load()` reads back
+  `1` (confirmed in isolation; `.preservesPitch` survives `.load()`
+  unaffected, so it needs no equivalent reapply). The reset is
+  **synchronous**, so a bare `element.playbackRate = playbackRateRef.current`
+  on the line right after `.load()` is sufficient — no `loadedmetadata`/
+  `canplay` listener needed. `useAudioEngine.ts` calls `.load()` in two
+  places, and both now carry the reapply: the preload branch of the
+  `timeupdate` handler (`inactive.load()`, ~line 338) and the song-change
+  effect (`active.load()`, ~line 469). The pre-existing sync effect
+  (536-543) is not enough on its own — it only re-runs when the
+  `playbackRate`/`preservePitch` REACT STATE changes, not when an
+  element's `src` is (re)loaded, which is exactly the gap the two new
+  lines close. Regression-tested in `useAudioEngine.test.tsx`
+  ("useAudioEngine — playback rate" describe block): since happy-dom's
+  mocked `load()` doesn't reproduce the Chromium reset, both tests
+  simulate it explicitly (write the wrong rate onto the element right
+  before the action that calls `.load()`) so they fail if either reapply
+  line is removed.
 
 ## Format/quality badge
 

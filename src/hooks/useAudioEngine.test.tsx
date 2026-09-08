@@ -708,4 +708,57 @@ describe('useAudioEngine — playback rate', () => {
     expect(engineRef.current!.audioRefB.current!.preservesPitch).toBe(false);
     view.unmount();
   });
+
+  // `load()` synchronously resets `playbackRate` to 1 in real browsers
+  // (measured in Chromium: [2, false] -> [1, false] across the call — see
+  // the comments at the two `.load()` sites in useAudioEngine.ts) but
+  // happy-dom's mocked `load()` (stubbed in `beforeEach` above) is a no-op,
+  // so it does NOT reproduce that reset on its own — a test that merely
+  // renders and asserts would pass even with the reapply lines deleted.
+  // Both tests below simulate the reset explicitly, by writing the wrong
+  // value onto the element right before the action that calls `load()`.
+  // With the reapply line in place nothing else touches `playbackRate`
+  // afterwards, so if it's missing the wrong value survives untouched.
+
+  it('reapplies the rate to the active element after a song change (load() resets it)', async () => {
+    const songA = makeSong({ title: 'A' });
+    const songB = makeSong({ title: 'B' });
+    const view = render(<TestHarness song={songA} playbackRate={2} />);
+    await act(async () => {});
+    const audioA = engineRef.current!.audioRefA.current!;
+    expect(audioA.playbackRate).toBe(2);
+
+    audioA.playbackRate = 1; // simulate the browser's load() reset
+
+    view.rerender(<TestHarness song={songB} playbackRate={2} />);
+    await act(async () => {});
+
+    expect(audioA.playbackRate).toBe(2);
+    view.unmount();
+  });
+
+  it('reapplies the rate to the inactive element after a gapless preload (load() resets it)', async () => {
+    const songA = makeSong({ title: 'A' });
+    const songB = makeSong({ title: 'B' });
+    const view = render(
+      <TestHarness song={songA} nextSong={songB} crossfadeSeconds={0} playbackRate={2} />,
+    );
+    await act(async () => {});
+    const audioA = engineRef.current!.audioRefA.current!;
+    const audioB = engineRef.current!.audioRefB.current!;
+    expect(audioB.playbackRate).toBe(2);
+
+    audioB.playbackRate = 1; // simulate the browser's load() reset
+
+    // 8 media seconds left = 4 wall seconds, inside the 5s preload lead
+    // once scaled at 2x — same trigger as the "preloads the next track
+    // earlier in media time at 2x" test above.
+    await act(async () => {
+      fireTimeUpdate(audioA, { currentTime: 172, duration: 180 });
+    });
+
+    expect(audioB.src).toContain(songB.url);
+    expect(audioB.playbackRate).toBe(2);
+    view.unmount();
+  });
 });
