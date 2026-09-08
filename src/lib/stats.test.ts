@@ -141,13 +141,25 @@ describe('recordFinish at a non-default playback rate', () => {
 
   it('defaults to 1x when no rate is given, so existing callers are unchanged', () => {
     const song = makeSong({ id: 's1', duration: 240 });
-    const stats = recordFinish({}, song, 1000);
-    expect(stats[song.id].msPlayed).toBe(240_000);
+    const noRateStats = recordFinish({}, song, 1000);
+    const withRate1Stats = recordFinish({}, song, 1000, 1);
+    const withRate2Stats = recordFinish({}, song, 1000, 2);
+
+    // Omitting the rate should match passing 1 explicitly, not passing 2.
+    expect(noRateStats[song.id].msPlayed).toBe(240_000);
+    expect(noRateStats[song.id].msPlayed).toBe(withRate1Stats[song.id].msPlayed);
+    expect(noRateStats[song.id].msPlayed).not.toBe(withRate2Stats[song.id].msPlayed);
   });
 
   it('falls back to 1x for a nonsensical rate rather than dividing by zero', () => {
     const song = makeSong({ id: 's1', duration: 240 });
-    const stats = recordFinish({}, song, 1000, 0);
-    expect(stats[song.id].msPlayed).toBe(240_000);
+    const zeroRateStats = recordFinish({}, song, 1000, 0);
+    const rate1Stats = recordFinish({}, song, 1000, 1);
+    const rate2Stats = recordFinish({}, song, 1000, 2);
+
+    // Rate 0 should fall back to 1, not divide by zero.
+    expect(zeroRateStats[song.id].msPlayed).toBe(240_000);
+    expect(zeroRateStats[song.id].msPlayed).toBe(rate1Stats[song.id].msPlayed);
+    expect(zeroRateStats[song.id].msPlayed).not.toBe(rate2Stats[song.id].msPlayed);
   });
 });
