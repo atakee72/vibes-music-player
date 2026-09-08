@@ -324,8 +324,10 @@ describe('playback rate + pitch preferences', () => {
   it('clamps a corrupt stored rate on READ, not just on write', async () => {
     // A value written by an older build, a hand-edited IDB, or a bug elsewhere
     // must not reach the audio element. 0 is the dangerous one: the browser
-    // accepts it and silently stops playback.
-    await savePlaybackRate(0);
+    // accepts it and silently stops playback. Bypass savePlaybackRate to write
+    // the corrupt value directly to the store, proving the read clamp catches it.
+    const { set: mockSet } = await import('idb-keyval');
+    await mockSet('playback-rate', 0);
     expect(await getPlaybackRate()).toBe(1);
   });
 
