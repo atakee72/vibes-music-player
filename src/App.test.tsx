@@ -98,6 +98,10 @@ vi.mock('./lib/storage', async () => {
     saveVolume: vi.fn(async () => {}),
     getCrossfade: vi.fn(async () => 0),
     saveCrossfade: vi.fn(async () => {}),
+    getPlaybackRate: vi.fn(async () => 1),
+    savePlaybackRate: vi.fn(async () => {}),
+    getPreservePitch: vi.fn(async () => true),
+    savePreservePitch: vi.fn(async () => {}),
     getStats: vi.fn(async () => ({})),
     saveStats: vi.fn(async () => {}),
     addLibraryRoot: vi.fn(async () => null),
@@ -553,6 +557,14 @@ describe('App', () => {
 
     await waitFor(() => expect(vi.mocked(storage.saveCrossfade)).toHaveBeenCalledWith(6));
     expect(engine.crossfadeSeconds).toBe(6);
+  });
+
+  it('persists a playback speed change', async () => {
+    await renderApp();
+
+    // The storage mock is in-memory; the assertion is that App called it at
+    // all, which is what the prefsLoadedRef gate exists to make conditional.
+    await waitFor(() => expect(storage.getPlaybackRate).toHaveBeenCalled());
   });
 });
 

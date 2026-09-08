@@ -18,6 +18,8 @@ function renderView(overrides = {}) {
     onToggleLyrics: vi.fn(),
     onToggleQueue: vi.fn(),
     onShare: vi.fn(),
+    onPlaybackRateChange: vi.fn(),
+    onPreservePitchChange: vi.fn(),
   };
   const utils = render(
     <MobileNowPlaying
@@ -32,6 +34,8 @@ function renderView(overrides = {}) {
       shuffle={false}
       eqPreset="Off"
       volume={1}
+      playbackRate={1}
+      preservePitch
       {...handlers}
       {...overrides}
     />,
@@ -253,5 +257,49 @@ describe('MobileNowPlaying', () => {
     const { onToggleLyrics } = renderView();
     fireEvent.click(screen.getByRole('button', { name: 'Toggle lyrics' }));
     expect(onToggleLyrics).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('MobileNowPlaying — playback speed', () => {
+  it('offers the speed options in the audio settings popover', async () => {
+    renderView({ playbackRate: 1 });
+    fireEvent.click(screen.getByRole('button', { name: 'Audio settings' }));
+
+    expect(await screen.findByRole('menuitem', { name: '1.5x' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: '0.5x' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: '2x' })).toBeInTheDocument();
+  });
+
+  it('reports the chosen speed', () => {
+    const onPlaybackRateChange = vi.fn();
+    renderView({ playbackRate: 1, onPlaybackRateChange });
+    fireEvent.click(screen.getByRole('button', { name: 'Audio settings' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: '1.5x' }));
+
+    expect(onPlaybackRateChange).toHaveBeenCalledWith(1.5);
+  });
+
+  it('toggles pitch preservation', () => {
+    const onPreservePitchChange = vi.fn();
+    renderView({ playbackRate: 1.5, preservePitch: true, onPreservePitchChange });
+    fireEvent.click(screen.getByRole('button', { name: 'Audio settings' }));
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Preserve pitch' }));
+
+    expect(onPreservePitchChange).toHaveBeenCalledWith(false);
+  });
+
+  it('marks the audio-settings trigger as modified when only the speed is off-normal', () => {
+    // The indicator already covers EQ and crossfade. A speed of 2x with both
+    // of those at default is still modified audio — without this the button
+    // says "nothing changed" while every track plays at double speed.
+    renderView({ playbackRate: 2, eqPreset: 'Off', crossfade: 0 });
+
+    expect(screen.getByRole('button', { name: 'Audio settings' })).toHaveClass('text-amber');
+  });
+
+  it('leaves the trigger unmarked at normal speed with everything else default', () => {
+    renderView({ playbackRate: 1, eqPreset: 'Off', crossfade: 0 });
+
+    expect(screen.getByRole('button', { name: 'Audio settings' })).not.toHaveClass('text-amber');
   });
 });
