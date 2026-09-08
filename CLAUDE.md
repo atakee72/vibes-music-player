@@ -253,9 +253,11 @@ Facts other tools (e.g. a beets-managed library feeding Vibes) must know:
 - Persisted under `listening-stats` via `storage.getStats`/`saveStats`, gated on
   `prefsLoadedRef` (**not** `loadedRef` — that one guards the library).
 - Consequences of the count-on-finish rule, by design: a skip at 95% counts
-  nothing; **total listening time is the sum of completed durations**, so
-  partial listens are invisible; and under crossfade the count lands `xfade`
-  seconds early.
+  nothing, so partial listens are invisible; **total listening time is the
+  wall-clock time actually spent, not track duration summed** — `msPlayed`
+  divides the finished duration by the playback rate (see "Playback speed"
+  below), so a 4-minute track finished at 2x adds two minutes, not four; and
+  under crossfade the count lands `xfade * rate` seconds early (media time).
 
 ## Playback speed
 
@@ -272,12 +274,15 @@ Facts other tools (e.g. a beets-managed library feeding Vibes) must know:
   `storage.getPlaybackRate` and every consumer route the value through the
   clamp rather than trusting it.
 - **`preservesPitch` is unprefixed and defaults `true`** — confirmed
-  2026-09-08 against a bare `document.createElement('audio')` in Chromium
-  (headless 148): no `mozPreservesPitch`/`webkitPreservesPitch` fallback
-  exists in the codebase, and none is needed for the browsers this project
-  targets.
+  2026-09-08 against a bare `document.createElement('audio')` in **Chromium
+  only** (headless 148): no `mozPreservesPitch`/`webkitPreservesPitch`
+  fallback exists in the codebase. Firefox/Safari were not measured — both
+  are first-class here (the whole blob-persistence path in "Persistence"
+  exists for them) — so whether they need the prefixed fallback is
+  unverified. If they do, the degradation is silent, not broken: pitch
+  shifts audibly with speed, playback itself keeps working.
 - **The rate is applied to BOTH `<audio>` elements, every time** —
-  `useAudioEngine.ts:536-543` loops `[audioRefA.current, audioRefB.current]`
+  `useAudioEngine.ts:546-556` loops `[audioRefA.current, audioRefB.current]`
   unconditionally, the same pattern as the volume effect directly above it.
   The inactive element is the gapless/crossfade preload target: it is
   already loaded and about to become active, so an active-only write would
@@ -300,12 +305,26 @@ Facts other tools (e.g. a beets-managed library feeding Vibes) must know:
   `remaining / r` real seconds, so three guards are multiplied by the rate:
   the preload lead (`preloadLead = max(PRELOAD_LEAD_SECONDS, xfade + 1) *
   rate`, line 335), the crossfade trigger (`remaining <= xfade * rate`, line
-  344), and the minimum-track-length guard (`target.duration > xfade * rate
-  * 2`, line 348). The curve's own duration, passed to
-  `startCrossfade(target, inactive, xfade)` (line 356), is deliberately
+  351), and the minimum-track-length guard (`target.duration > xfade * rate
+  * 2`, line 355). The curve's own duration, passed to
+  `startCrossfade(target, inactive, xfade)` (line 363), is deliberately
   **not** scaled — a 6-second crossfade must sound like six seconds at any
   speed, because `setValueCurveAtTime`'s third argument is already
   wall-clock seconds on the `AudioContext` timeline.
+- **Raising the rate DURING an in-flight crossfade can run the outgoing
+  track's media dry before the wall-clock curve finishes.** The rate-sync
+  effect (`useAudioEngine.ts:546-556`) writes to both elements unconditionally
+  — it has no `fadingOutRef` guard — so a mid-fade speed change also speeds
+  up the OUTGOING element, which then consumes its remaining media faster
+  than the fade curve (still running on the `AudioContext` clock at its
+  original, unscaled duration) is fading it out. If the outgoing element
+  reaches its own end first, the curve keeps ramping toward an element that
+  has gone silent — heard as silence for whatever's left of the fade. This
+  is inherent to a wall-clock curve paired with a media-time end, not a bug:
+  no state corrupts. The outgoing element's `ended` fires but is swallowed by
+  the existing `!== activeAudio()` guard (line 275), and `endCrossfade`'s
+  `setTimeout` still fires on schedule and cleans up normally. Accepted,
+  like the re-scan-during-last-5-seconds note under "Refresh library".
 - **`msPlayed` divides by the rate** (`stats.ts:56`:
   `(Math.max(0, song.duration) / safeRate) * 1000`), so "listening time"
   means time actually spent, not track duration: a 4-minute track finished
@@ -327,8 +346,8 @@ Facts other tools (e.g. a beets-managed library feeding Vibes) must know:
   `canplay` listener needed. `useAudioEngine.ts` calls `.load()` in two
   places, and both now carry the reapply: the preload branch of the
   `timeupdate` handler (`inactive.load()`, ~line 338) and the song-change
-  effect (`active.load()`, ~line 469). The pre-existing sync effect
-  (536-543) is not enough on its own — it only re-runs when the
+  effect (`active.load()`, ~line 476). The pre-existing sync effect
+  (546-556) is not enough on its own — it only re-runs when the
   `playbackRate`/`preservePitch` REACT STATE changes, not when an
   element's `src` is (re)loaded, which is exactly the gap the two new
   lines close. Regression-tested in `useAudioEngine.test.tsx`

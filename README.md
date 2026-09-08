@@ -75,8 +75,9 @@ pnpm test:run  # Vitest single pass
   Acoustic presets, persisted across reloads (shares the ⚙ popover with
   crossfade)
 - **Playback speed** — 0.5×–2×, with an optional "preserve pitch" toggle
-  (on by default); persists across reloads in the same audio-settings
-  popover as EQ and crossfade
+  (on by default); persists across reloads. Lives in the "Now playing" view's
+  audio-settings popover (alongside EQ and crossfade) — the desktop
+  `PlayerBar` popover doesn't have it
 - **Listening stats** — play counts, total time listened, top artists, top
   tracks and recently played, in a slide-in panel (`S`). A play is counted
   when a track finishes; counts also show on song rows, with "Most played"

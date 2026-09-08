@@ -1018,8 +1018,8 @@ independently. A persisted 0.5×–2× playback-speed control with an explicit
 "preserve pitch" toggle (defaulting on), added to the Speed/Preserve pitch
 sections of the existing audio-settings popover in `MobileNowPlaying`
 (alongside Equalizer and Crossfade). Like volume and the EQ preset, the rate
-is never auto-reset on a track change — same persistence lifecycle. 9 commits
-on branch `playback-speed`, 581 tests passing.
+is never auto-reset on a track change — same persistence lifecycle. 11 commits
+on branch `playback-speed`, 583 tests passing.
 
 **The crossfade-scaling decision**: three of the engine's timing guards are
 media-seconds comparisons being asked wall-clock questions, because the fade
@@ -1048,10 +1048,12 @@ is not more trustworthy than code; it is less, because nothing executes it:
   value; it would have passed with the read-side clamp deleted. Fixed by
   writing the corrupt value straight through the mocked `idb-keyval` `set`,
   bypassing the write-side clamp entirely.
-- A stats test asserted on `.msPlayed` read directly off the `StatsMap`
-  (an object keyed by song id) instead of off that song's entry within it —
-  comparing a plain object to a number, which fails, but not for the reason
-  the test intended to check.
+- A stats test asserted `recordFinish(...).msPlayed` directly — but
+  `recordFinish` returns a `StatsMap` (`Record<string, SongStat>`, keyed by
+  song id), not that song's entry within it. The index signature lets
+  `.msPlayed` typecheck, but at runtime it reads `undefined` off the map, so
+  the assertion compared `undefined` to a number, which fails, but not for
+  the reason the test intended to check.
 - The "preserve pitch" popover control's accessible name is `"Preserve
   pitch"` with the On/Off state in a separate child `<span>` — the brief's
   markup concatenated them into a single label (`"Preserve pitchOn"`), which

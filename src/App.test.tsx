@@ -559,11 +559,12 @@ describe('App', () => {
     expect(engine.crossfadeSeconds).toBe(6);
   });
 
-  it('persists a playback speed change', async () => {
+  it('reads the stored playback rate on mount', async () => {
     await renderApp();
 
-    // The storage mock is in-memory; the assertion is that App called it at
-    // all, which is what the prefsLoadedRef gate exists to make conditional.
+    // This is a load call, made during the mount effect before
+    // prefsLoadedRef is set — prefsLoadedRef gates the SAVE effects below,
+    // not this read.
     await waitFor(() => expect(storage.getPlaybackRate).toHaveBeenCalled());
   });
 });
