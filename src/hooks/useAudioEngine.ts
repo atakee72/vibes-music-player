@@ -316,6 +316,15 @@ export function useAudioEngine({
       const inactive = activeRef.current === 'A' ? audioB : audioA;
       const remaining = target.duration - target.currentTime;
 
+      // `remaining` is in MEDIA seconds; every deadline below is really about
+      // WALL-CLOCK time, because the fade curve is scheduled against the
+      // AudioContext clock (`setValueCurveAtTime`) and torn down by a
+      // `setTimeout`. At rate r, `remaining` media seconds elapse in
+      // `remaining / r` real seconds — so each media-second threshold is
+      // multiplied by r. Get this wrong and at 2x a 6s crossfade begins with
+      // 3 real seconds of audio left and the outgoing track dies mid-curve.
+      const rate = playbackRateRef.current;
+
       // Preload next song on the inactive element when we're near the end. The
       // lead must cover the crossfade, or the incoming track wouldn't be
       // loaded yet when the fade is due to start.
@@ -323,7 +332,7 @@ export function useAudioEngine({
       // Skipped entirely while a crossfade is sounding: "inactive" is then the
       // element still fading out, and writing its src would cut the tail dead.
       // (Reachable when the incoming track is shorter than the lead.)
-      const preloadLead = Math.max(PRELOAD_LEAD_SECONDS, xfade + 1);
+      const preloadLead = Math.max(PRELOAD_LEAD_SECONDS, xfade + 1) * rate;
       if (!fadingOutRef.current && remaining < preloadLead && inactive.src !== nextSong.url) {
         inactive.src = nextSong.url;
         inactive.load();
@@ -332,15 +341,18 @@ export function useAudioEngine({
       if (
         xfade > 0 &&
         !fadingOutRef.current &&
-        remaining <= xfade &&
+        remaining <= xfade * rate &&
         // Don't fade a track shorter than twice the fade — there'd be no
-        // steady-state left in the middle.
-        target.duration > xfade * 2 &&
+        // steady-state left in the middle. Scaled too: the fade eats
+        // `xfade * rate` media seconds, so a faster rate needs a longer track.
+        target.duration > xfade * rate * 2 &&
         // Repeat-one replays the SAME element in place (see the ended
         // handler); one element cannot crossfade with itself.
         nextSong.url !== target.src &&
         inactive.src === nextSong.url
       ) {
+        // NOT scaled: the curve duration is wall-clock, and a 6-second
+        // crossfade must sound like six seconds at any speed.
         startCrossfade(target, inactive, xfade);
       }
     };

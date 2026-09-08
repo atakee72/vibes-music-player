@@ -395,6 +395,111 @@ describe('useAudioEngine — crossfade', () => {
     });
     expect(gains.rgA.gain.setValueAtTime.mock.calls.length).toBeGreaterThan(callsWhileFading);
   });
+
+  it('starts the fade earlier in MEDIA time at 2x, so it still lasts the full wall-clock duration', async () => {
+    const songA = makeSong({ title: 'A' });
+    const songB = makeSong({ title: 'B' });
+    render(
+      <TestHarness song={songA} nextSong={songB} crossfadeSeconds={6} playbackRate={2} />,
+    );
+    await act(async () => {});
+    const audioA = engineRef.current!.audioRefA.current!;
+
+    // 8 media seconds left. At 2x that is 4 WALL seconds — less than the 6s
+    // fade, so the fade must already be running or its tail would be cut.
+    await act(async () => {
+      fireTimeUpdate(audioA, { currentTime: 172, duration: 180 });
+    });
+
+    expect(gains.fadeA.gain.setValueCurveAtTime).toHaveBeenCalledTimes(1);
+    // The curve duration itself is wall-clock and must NOT be scaled: the
+    // user asked for a 6-second crossfade and must hear six seconds of it.
+    expect(gains.fadeA.gain.setValueCurveAtTime).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      6,
+    );
+  });
+
+  it('does not fade at 1x from the same position that fades at 2x', async () => {
+    // The control for the test above. Without it, that test would pass even
+    // if the trigger ignored the rate and simply fired too early always.
+    const songA = makeSong({ title: 'A' });
+    const songB = makeSong({ title: 'B' });
+    render(
+      <TestHarness song={songA} nextSong={songB} crossfadeSeconds={6} playbackRate={1} />,
+    );
+    await act(async () => {});
+    const audioA = engineRef.current!.audioRefA.current!;
+
+    await act(async () => {
+      fireTimeUpdate(audioA, { currentTime: 172, duration: 180 });
+    });
+
+    expect(gains.fadeA.gain.setValueCurveAtTime).not.toHaveBeenCalled();
+  });
+
+  it('does not crossfade a track too short for the fade AT THE CURRENT RATE', async () => {
+    // The duration must sit BETWEEN the two guards or the test proves nothing.
+    // 6s fade at 2x: unscaled guard is `duration > 12` (passes, would fade),
+    // scaled guard is `duration > 6 * 2 * 2 = 24` (fails, correctly rejected).
+    // A 20s track is inside that window. Do not raise it to 30 — 30 > 24, so
+    // the scaled guard would pass too and the test would fail.
+    // Position: remaining = 10, which is <= 6 * 2 = 12, so the trigger is
+    // reached and the ONLY thing rejecting the fade is the duration guard.
+    const songA = makeSong({ title: 'A' });
+    const songB = makeSong({ title: 'B' });
+    render(
+      <TestHarness song={songA} nextSong={songB} crossfadeSeconds={6} playbackRate={2} />,
+    );
+    await act(async () => {});
+    const audioA = engineRef.current!.audioRefA.current!;
+
+    await act(async () => {
+      fireTimeUpdate(audioA, { currentTime: 10, duration: 20 });
+    });
+
+    expect(gains.fadeA.gain.setValueCurveAtTime).not.toHaveBeenCalled();
+  });
+
+  it('preloads the next track earlier in media time at 2x', async () => {
+    const songA = makeSong({ title: 'A' });
+    const songB = makeSong({ title: 'B' });
+    render(
+      <TestHarness song={songA} nextSong={songB} crossfadeSeconds={0} playbackRate={2} />,
+    );
+    await act(async () => {});
+    const audioA = engineRef.current!.audioRefA.current!;
+    const audioB = engineRef.current!.audioRefB.current!;
+
+    // 8 media seconds left = 4 wall seconds, inside the 5s preload lead once
+    // scaled. Unscaled (remaining < 5) this would not preload.
+    await act(async () => {
+      fireTimeUpdate(audioA, { currentTime: 172, duration: 180 });
+    });
+
+    expect(audioB.src).toContain(songB.url);
+  });
+
+  it('does not preload at 1x from the same position that preloads at 2x', async () => {
+    // Control for the test above: without it, that test passes even if the
+    // preload fired unconditionally.
+    const songA = makeSong({ title: 'A' });
+    const songB = makeSong({ title: 'B' });
+    render(
+      <TestHarness song={songA} nextSong={songB} crossfadeSeconds={0} playbackRate={1} />,
+    );
+    await act(async () => {});
+    const audioA = engineRef.current!.audioRefA.current!;
+    const audioB = engineRef.current!.audioRefB.current!;
+
+    // 8 media seconds left, outside the unscaled 5s lead.
+    await act(async () => {
+      fireTimeUpdate(audioA, { currentTime: 172, duration: 180 });
+    });
+
+    expect(audioB.src).toBe('');
+  });
 });
 
 describe('useAudioEngine — onTrackFinished', () => {
