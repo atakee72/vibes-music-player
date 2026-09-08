@@ -125,12 +125,16 @@ function TestHarness({
   song,
   nextSong = null,
   crossfadeSeconds = 0,
+  playbackRate,
+  preservePitch,
   onEnded,
   onTrackFinished,
 }: {
   song: HarnessSong;
   nextSong?: HarnessSong;
   crossfadeSeconds?: number;
+  playbackRate?: number;
+  preservePitch?: boolean;
   onEnded?: () => void;
   onTrackFinished?: () => void;
 }) {
@@ -138,6 +142,8 @@ function TestHarness({
     song,
     nextSong,
     crossfadeSeconds,
+    playbackRate,
+    preservePitch,
     onEnded,
     onTrackFinished,
   });
@@ -536,5 +542,65 @@ describe('useAudioEngine — sleep fade', () => {
     });
     expect(pauseSpy.mock.calls.length).toBe(pausesBefore);
     expect(gains.mixer.gain.cancelScheduledValues).toHaveBeenCalled();
+  });
+});
+
+describe('useAudioEngine — playback rate', () => {
+  it('applies the rate to BOTH elements, not just the active one', async () => {
+    const view = render(<TestHarness song={makeSong({ title: 'A' })} playbackRate={1.5} />);
+    await act(async () => {});
+
+    // Both, because the inactive element is the gapless/crossfade preload
+    // target: set only the active one and every track snaps back to 1x at
+    // the flip, mid-listen, with nothing in the UI changing.
+    expect(engineRef.current!.audioRefA.current!.playbackRate).toBe(1.5);
+    expect(engineRef.current!.audioRefB.current!.playbackRate).toBe(1.5);
+    view.unmount();
+  });
+
+  it('updates both elements when the rate changes', async () => {
+    const song = makeSong({ title: 'A' });
+    const view = render(<TestHarness song={song} playbackRate={1} />);
+    await act(async () => {});
+
+    view.rerender(<TestHarness song={song} playbackRate={2} />);
+    await act(async () => {});
+
+    expect(engineRef.current!.audioRefA.current!.playbackRate).toBe(2);
+    expect(engineRef.current!.audioRefB.current!.playbackRate).toBe(2);
+    view.unmount();
+  });
+
+  it('clamps a rate of 0, which the browser would accept as a silent pause', async () => {
+    // Deliberately written as a TRANSITION from 1.5, not a fresh render at 0.
+    // happy-dom's audio element already defaults `playbackRate` to 1 (probed
+    // 2026-09-07), so asserting `toBe(1)` after a fresh render at 0 passes
+    // whether the clamp works, whether the effect ran, or neither. Coming from
+    // 1.5, the assertion fails at 0 if the clamp is missing and at 1.5 if the
+    // effect never re-ran — it can only pass for the right reason.
+    const song = makeSong({ title: 'A' });
+    const view = render(<TestHarness song={song} playbackRate={1.5} />);
+    await act(async () => {});
+    expect(engineRef.current!.audioRefA.current!.playbackRate).toBe(1.5);
+
+    view.rerender(<TestHarness song={song} playbackRate={0} />);
+    await act(async () => {});
+
+    expect(engineRef.current!.audioRefA.current!.playbackRate).toBe(1);
+    view.unmount();
+  });
+
+  it('applies the pitch preference to both elements', async () => {
+    // Asserts `false`, never `true`: happy-dom defaults `preservesPitch` to
+    // true (probed 2026-09-07), so a `toBe(true)` assertion here would pass
+    // with the effect deleted.
+    const view = render(
+      <TestHarness song={makeSong({ title: 'A' })} playbackRate={1.5} preservePitch={false} />,
+    );
+    await act(async () => {});
+
+    expect(engineRef.current!.audioRefA.current!.preservesPitch).toBe(false);
+    expect(engineRef.current!.audioRefB.current!.preservesPitch).toBe(false);
+    view.unmount();
   });
 });

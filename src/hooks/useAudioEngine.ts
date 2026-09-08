@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Song } from '../types';
 import { EQ_FREQS, applyPreset, type EqPreset } from '../lib/eq';
 import { fadeCurve } from '../lib/crossfade';
+import { clampRate, DEFAULT_RATE } from '../lib/playback-rate';
 
 interface Chain {
   source: MediaElementAudioSourceNode;
@@ -26,6 +27,10 @@ interface UseAudioEngineArgs {
   volume?: number;
   /** Crossfade duration in seconds; 0 disables it (plain gapless). */
   crossfadeSeconds?: number;
+  /** Playback speed. Clamped — 0 silently stops audio, negatives throw. */
+  playbackRate?: number;
+  /** Keep pitch constant while the rate changes. Default true. */
+  preservePitch?: boolean;
   onEnded?: () => void;
   /**
    * "This track reached its end." Deliberately NOT the same signal as
@@ -74,6 +79,8 @@ export function useAudioEngine({
   eqPreset = 'Off',
   volume = 1,
   crossfadeSeconds = 0,
+  playbackRate = DEFAULT_RATE,
+  preservePitch = true,
   onEnded,
   onTrackFinished,
 }: UseAudioEngineArgs): UseAudioEngineResult {
@@ -91,6 +98,7 @@ export function useAudioEngine({
   const onTrackFinishedRef = useRef(onTrackFinished);
   const nextSongRef = useRef<Song | null>(nextSong ?? null);
   const crossfadeRef = useRef(crossfadeSeconds);
+  const playbackRateRef = useRef(clampRate(playbackRate));
   /**
    * Non-null exactly while a crossfade is sounding. Doubles as the re-entry
    * guard for the trigger: no second "already faded this track" flag is
@@ -110,6 +118,7 @@ export function useAudioEngine({
     onTrackFinishedRef.current = onTrackFinished;
     nextSongRef.current = nextSong ?? null;
     crossfadeRef.current = crossfadeSeconds;
+    playbackRateRef.current = clampRate(playbackRate);
   });
 
   /** ReplayGain ratio for a song (1 when the tag is absent). */
@@ -507,6 +516,19 @@ export function useAudioEngine({
     if (audioRefA.current) audioRefA.current.volume = volume;
     if (audioRefB.current) audioRefB.current.volume = volume;
   }, [volume]);
+
+  // Both elements, every time. The INACTIVE element is the gapless/crossfade
+  // preload target — it is already loaded and about to become active, so an
+  // active-only write means the next track starts at 1x with no UI change to
+  // explain it. Same reasoning as the volume effect directly above.
+  useEffect(() => {
+    const rate = clampRate(playbackRate);
+    for (const el of [audioRefA.current, audioRefB.current]) {
+      if (!el) continue;
+      el.preservesPitch = preservePitch;
+      el.playbackRate = rate;
+    }
+  }, [playbackRate, preservePitch]);
 
   const seek = useCallback(
     (t: number) => {
