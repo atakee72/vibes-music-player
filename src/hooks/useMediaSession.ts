@@ -6,6 +6,8 @@ interface Args {
   isPlaying: boolean;
   currentTime: number;
   duration: number;
+  /** Current playback speed, so the OS scrubber advances at the right rate. */
+  playbackRate?: number;
   onPlay: () => void;
   onPause: () => void;
   onNext: () => void;
@@ -29,6 +31,7 @@ export function useMediaSession({
   isPlaying,
   currentTime,
   duration,
+  playbackRate = 1,
   onPlay,
   onPause,
   onNext,
@@ -86,10 +89,10 @@ export function useMediaSession({
       navigator.mediaSession.setPositionState({
         duration,
         position: Math.min(currentTime, duration),
-        playbackRate: 1,
+        playbackRate,
       });
     } catch {
       // Some browsers reject mid-load; ignore — it'll succeed on the next tick.
     }
-  }, [currentTime, duration]);
+  }, [currentTime, duration, playbackRate]);
 }
