@@ -115,3 +115,39 @@ describe('formatListenTime', () => {
     expect(formatListenTime(3_600_000)).toBe('1h 0m');
   });
 });
+
+describe('recordFinish at a non-default playback rate', () => {
+  it('counts wall-clock time actually spent, not the track duration', () => {
+    const song = makeSong({ id: 's1', duration: 240 });
+    const stats = recordFinish({}, song, 1000, 2);
+
+    // A 4-minute track played at 2x took 2 minutes of the listener's evening.
+    expect(stats.s1.msPlayed).toBe(120_000);
+  });
+
+  it('counts more time than the duration at a slow rate', () => {
+    const song = makeSong({ id: 's1', duration: 240 });
+    const stats = recordFinish({}, song, 1000, 0.5);
+
+    expect(stats.s1.msPlayed).toBe(480_000);
+  });
+
+  it('still counts one play regardless of rate', () => {
+    const song = makeSong({ id: 's1', duration: 240 });
+    const stats = recordFinish({}, song, 1000, 2);
+
+    expect(stats.s1.plays).toBe(1);
+  });
+
+  it('defaults to 1x when no rate is given, so existing callers are unchanged', () => {
+    const song = makeSong({ id: 's1', duration: 240 });
+    const stats = recordFinish({}, song, 1000);
+    expect(stats[song.id].msPlayed).toBe(240_000);
+  });
+
+  it('falls back to 1x for a nonsensical rate rather than dividing by zero', () => {
+    const song = makeSong({ id: 's1', duration: 240 });
+    const stats = recordFinish({}, song, 1000, 0);
+    expect(stats[song.id].msPlayed).toBe(240_000);
+  });
+});
