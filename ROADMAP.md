@@ -1010,3 +1010,67 @@ focusing one is the same silent no-op its `display:none` filter already exists
 to prevent. It skips `[inert]` subtrees now too. Verified in Chromium: mid-exit
 the sheet is still mounted and on screen, carries `inert`, and `focus()` on its
 close button no longer lands.
+
+## Playback speed + pitch (shipped, 2026-09-08)
+
+Mined from Harmonoid and Museeks, which both ship a speed control
+independently. A persisted 0.5×–2× playback-speed control with an explicit
+"preserve pitch" toggle (defaulting on), added to the Speed/Preserve pitch
+sections of the existing audio-settings popover in `MobileNowPlaying`
+(alongside Equalizer and Crossfade). Like volume and the EQ preset, the rate
+is never auto-reset on a track change — same persistence lifecycle. 9 commits
+on branch `playback-speed`, 581 tests passing.
+
+**The crossfade-scaling decision**: three of the engine's timing guards are
+media-seconds comparisons being asked wall-clock questions, because the fade
+curve runs on the `AudioContext` clock while `remaining` is measured in media
+seconds. The preload lead, the crossfade trigger threshold, and the
+minimum-track-length guard are all multiplied by the rate. The fade curve's
+own duration is deliberately **not** scaled — a 6-second crossfade must sound
+like six seconds of wall-clock time at any speed, whether that's 3 media
+seconds at 2× or 12 at 0.5×. Getting the scaling direction backwards on any of
+the three guards was the main risk this plan called out up front, and it's
+where a reviewer should look first if crossfade-plus-speed ever misbehaves.
+
+**Stats semantics changed, not just the number.** `recordFinish` now divides
+the finished track's duration by the playback rate before adding it to
+`msPlayed`, so "listening time" means time the listener actually spent, not
+track duration summed. A 4-minute track finished at 2× now costs two minutes
+against the total, not four. The parameter defaults to 1, so every
+pre-existing call site is unaffected.
+
+**Three of this plan's own task briefs contained defects that only their
+implementers caught — the most useful thing this branch learned.** Plan text
+is not more trustworthy than code; it is less, because nothing executes it:
+- Task 2's brief specified a "clamps a corrupt stored rate on read" test that
+  wrote the corrupt value through `savePlaybackRate` — which clamps on WRITE,
+  before the value ever reaches storage. The test read back an already-clean
+  value; it would have passed with the read-side clamp deleted. Fixed by
+  writing the corrupt value straight through the mocked `idb-keyval` `set`,
+  bypassing the write-side clamp entirely.
+- A stats test asserted on `.msPlayed` read directly off the `StatsMap`
+  (an object keyed by song id) instead of off that song's entry within it —
+  comparing a plain object to a number, which fails, but not for the reason
+  the test intended to check.
+- The "preserve pitch" popover control's accessible name is `"Preserve
+  pitch"` with the On/Off state in a separate child `<span>` — the brief's
+  markup concatenated them into a single label (`"Preserve pitchOn"`), which
+  the accessible-name algorithm would have produced literally, and the test
+  querying for `"Preserve pitch"` could never have matched it.
+
+Each was caught by implementers checking the brief's own reasoning against
+the code it specified, not by a downstream test failure — the same
+verify-against-source discipline this section itself was written under.
+
+**Known defect, found during this task's browser verification (2026-09-08,
+not yet fixed):** a song change can silently drop playback back to 1× while
+every UI surface (the amber trigger, the highlighted rate in the popover,
+even the Media Session position state reported to the OS) still shows the
+selected rate as active. Root cause and full repro are recorded in
+`CLAUDE.md` → "Playback speed" → "Known defect". In short:
+`HTMLMediaElement.load()` resets `.playbackRate` to `1` in this Chromium
+build, `useAudioEngine.ts` calls `.load()` on every song change and preload,
+and nothing reapplies the rate afterward because the sync effect only re-runs
+when the `playbackRate`/`preservePitch` React state changes — not when an
+element is reloaded. The one path that works correctly is changing the rate
+while a song is already playing.

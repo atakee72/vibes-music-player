@@ -74,6 +74,9 @@ pnpm test:run  # Vitest single pass
 - **5-band equalizer** — Off / Bass Boost / Vocal Boost / Treble Boost /
   Acoustic presets, persisted across reloads (shares the ⚙ popover with
   crossfade)
+- **Playback speed** — 0.5×–2×, with an optional "preserve pitch" toggle
+  (on by default); persists across reloads in the same audio-settings
+  popover as EQ and crossfade
 - **Listening stats** — play counts, total time listened, top artists, top
   tracks and recently played, in a slide-in panel (`S`). A play is counted
   when a track finishes; counts also show on song rows, with "Most played"

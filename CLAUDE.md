@@ -257,6 +257,87 @@ Facts other tools (e.g. a beets-managed library feeding Vibes) must know:
   partial listens are invisible; and under crossfade the count lands `xfade`
   seconds early.
 
+## Playback speed
+
+- **`src/lib/playback-rate.ts`** is the pure module: `MIN_RATE = 0.5`,
+  `MAX_RATE = 2`, `DEFAULT_RATE = 1`, `RATE_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5,
+  1.75, 2]` (quarter steps — a tap list, not a slider), `clampRate`, and
+  `formatRate` (`1.5` → `"1.5x"`, no trailing `".0"`).
+- **`clampRate` is load-bearing, not defensive padding.** Verified in
+  Chromium 2026-09-06 (per the comment at the top of `playback-rate.ts`):
+  `audio.playbackRate = 0` is silently ACCEPTED and behaves as a pause — no
+  event, no state change, nothing in the UI looks wrong — and
+  `audio.playbackRate = -1` throws `NotSupportedError` out of whatever
+  handler set it. Both are reachable from a corrupt persisted value, so
+  `storage.getPlaybackRate` and every consumer route the value through the
+  clamp rather than trusting it.
+- **`preservesPitch` is unprefixed and defaults `true`** — confirmed
+  2026-09-08 against a bare `document.createElement('audio')` in Chromium
+  (headless 148): no `mozPreservesPitch`/`webkitPreservesPitch` fallback
+  exists in the codebase, and none is needed for the browsers this project
+  targets.
+- **The rate is applied to BOTH `<audio>` elements, every time** —
+  `useAudioEngine.ts:536-543` loops `[audioRefA.current, audioRefB.current]`
+  unconditionally, the same pattern as the volume effect directly above it.
+  The inactive element is the gapless/crossfade preload target: it is
+  already loaded and about to become active, so an active-only write would
+  mean the next track starts at 1x with no UI change to explain it.
+- **Only one surface exposes the control: the full-screen "Now playing" view**
+  (`MobileNowPlaying.tsx`, which — despite the name — renders at every
+  viewport size, opened by clicking the `PlayerBar`'s cover/title block).
+  `PlayerBar.tsx` has no `playbackRate`/`preservePitch` props at all — its
+  "Audio settings" popover offers only EQ and crossfade. The Speed/Preserve
+  pitch sections live at the bottom of the same popover in
+  `MobileNowPlaying`, and the trigger turns amber whenever
+  `eqPreset !== 'Off' || crossfade > 0 || playbackRate !== 1`
+  (`MobileNowPlaying.tsx:426`).
+- **Crossfade timing is scaled by the rate; the fade curve itself is not.**
+  `remaining` (in the `timeupdate` handler, `useAudioEngine.ts:317`) is
+  MEDIA seconds, but every deadline it's compared against is really about
+  WALL-CLOCK time, because the fade curve is scheduled against the
+  `AudioContext` clock (`setValueCurveAtTime`) and torn down by a
+  `setTimeout`. At rate `r`, `remaining` media seconds elapse in
+  `remaining / r` real seconds, so three guards are multiplied by the rate:
+  the preload lead (`preloadLead = max(PRELOAD_LEAD_SECONDS, xfade + 1) *
+  rate`, line 335), the crossfade trigger (`remaining <= xfade * rate`, line
+  344), and the minimum-track-length guard (`target.duration > xfade * rate
+  * 2`, line 348). The curve's own duration, passed to
+  `startCrossfade(target, inactive, xfade)` (line 356), is deliberately
+  **not** scaled — a 6-second crossfade must sound like six seconds at any
+  speed, because `setValueCurveAtTime`'s third argument is already
+  wall-clock seconds on the `AudioContext` timeline.
+- **`msPlayed` divides by the rate** (`stats.ts:56`:
+  `(Math.max(0, song.duration) / safeRate) * 1000`), so "listening time"
+  means time actually spent, not track duration: a 4-minute track finished
+  at 2x cost the listener two minutes. `recordFinish`'s `rate` parameter
+  defaults to `1`, so every pre-speed call site is unaffected.
+- **Media Session position state reports the rate too**
+  (`useMediaSession.ts:92`, `playbackRate` passed straight into
+  `setPositionState`), so the OS lock-screen scrubber advances at the
+  right pace — when the underlying audio element's rate agrees with React
+  state (see the known defect below).
+- **Known defect (found via browser verification, 2026-09-08, headless
+  Chromium 148 — not yet fixed): a song change can silently drop playback
+  back to 1x while the UI still shows the selected rate as active.**
+  `HTMLMediaElement.load()` resets `.playbackRate` to `1` in this Chromium
+  build (confirmed in isolation: setting `playbackRate = 2` on a bare
+  `<audio>` then calling `.load()` reads back `1`; `.preservesPitch`
+  survives `.load()` unaffected). `useAudioEngine.ts` calls `.load()` in two
+  places — the song-change effect (`active.load()`) and the preload branch
+  of the `timeupdate` handler (`inactive.load()`) — and neither reapplies
+  `playbackRate`/`preservePitch` afterward; only the effect at lines
+  536-543 does that, and it re-runs solely when the `playbackRate` or
+  `preservePitch` REACT STATE changes, not when an element's `src` is
+  (re)loaded. Net effect, reproduced cleanly: reload the app with a
+  persisted non-default rate (e.g. 2x saved from a prior session), press
+  Play on any song for the first time — the Audio settings trigger is
+  amber, "2x" is highlighted in the popover, and Media Session reports
+  `playbackRate: 2`, but both `<audio>` elements' real `.playbackRate` is
+  `1` and the track is audibly normal speed. The one path that works
+  correctly is changing the rate while a song is *already* playing (a
+  genuine state change re-runs the sync effect against the live elements).
+  Every subsequent gapless preload or song switch re-triggers the same gap.
+
 ## Format/quality badge
 
 - **`describeFormat(song)` (`src/lib/audio-format.ts`) is the only place that
