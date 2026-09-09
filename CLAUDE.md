@@ -357,6 +357,48 @@ Facts other tools (e.g. a beets-managed library feeding Vibes) must know:
   before the action that calls `.load()`) so they fail if either reapply
   line is removed.
 
+## Screen wake lock
+
+- **`useWakeLock(active)` (`src/hooks/useWakeLock.ts`) is the only file that
+  touches `navigator.wakeLock`.** App calls it as
+  `useWakeLock(mobilePlayerOpen && isPlaying && sleepDeadline === null)` —
+  nothing else.
+- **An armed sleep timer releases the lock.** The two features state opposite
+  intentions and sit three taps apart in the same button row, so without the
+  third operand a 30-minute timer means 30 minutes of a fully-lit screen in a
+  dark room. Regression-tested in `App.test.tsx` ("releases the lock when a
+  sleep timer is armed").
+- **The lock is deliberately NOT tied to playback alone.** Audio keeps
+  playing with the screen off, so playback needs no wake lock; the feature
+  exists for the full-screen now-playing view used as an ambient display
+  (orb, `OrbVisualizerRing`, scrolling synced lyrics). Holding it for any
+  playing track would keep a desk-idle browser lit for no reason. There is
+  no toggle and no persisted preference: opening the view IS the intent.
+- **The browser auto-releases the lock whenever the document becomes
+  hidden**, so the hook re-acquires on `visibilitychange`. That listener is
+  not a refinement — without it the lock is gone permanently after the first
+  tab switch.
+- **Four more guards, each with a test that goes red without it** (verified
+  by deletion, not assumed): a `cancelled` flag checked AFTER the await
+  (React 18 StrictMode tears the effect down mid-request, and a sentinel
+  that arrives orphaned is a lock nothing can ever release); `acquiring`
+  reset in a `finally` (else one refused request latches the hook off
+  forever); an already-held check (else a spurious `visibilitychange`
+  stacks a second sentinel and leaks the first); and the cleanup's
+  `release()`.
+- **A refused request is not an error.** `request()` rejects for power
+  saving, low battery, or a document that stopped being visible mid-flight,
+  and MDN does not name the error — so the hook catches everything and
+  surfaces nothing. The screen simply behaves normally.
+- **No `src/vite-env.d.ts` entry.** Unlike FS Access and Document PiP,
+  `WakeLock`/`WakeLockSentinel` are already in TypeScript 5.9's `lib.dom`.
+  They are typed as always present, which is a lie off a secure context and
+  in older Firefox/iOS Safari, so the hook feature-detects anyway.
+- **Unit-tested, unlike `useMediaSession`/`useInstallPrompt`.** Those two are
+  untested because happy-dom cannot observe their APIs. happy-dom ships no
+  `navigator.wakeLock` at all and both it and `document.visibilityState` are
+  `Object.defineProperty`-able, so this hook's whole lifecycle is testable.
+
 ## Format/quality badge
 
 - **`describeFormat(song)` (`src/lib/audio-format.ts`) is the only place that

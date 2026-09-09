@@ -518,7 +518,7 @@ Four notes on why this block looks the way it does:
 - [ ] **Step 2: Run the tests and watch them fail**
 
 Run: `pnpm vitest run src/App.test.tsx -t "wake lock"`
-Expected: all 4 fail. The first two fail on the `expect(requestWakeLock)` assertions (nothing calls the API yet); the last two fail at `requestWakeLock.mock.results[0]` being `undefined`.
+Expected: **3 of the 4 fail.** `holds the screen awake…` fails on its `expect(requestWakeLock).toHaveBeenCalledWith('screen')`; `releases the lock when the now-playing view closes` and `releases the lock when a sleep timer is armed` fail at `requestWakeLock.mock.results[0]` being `undefined`. The fourth — `does not hold the screen awake when the view is open but paused` — **passes vacuously** at this point: its only assertion is that the API was *not* called, which trivially holds while nothing calls it at all. That test only earns its keep once the wiring exists, which is what Step 6's second mutation proves.
 
 - [ ] **Step 3: Add the import**
 
@@ -549,13 +549,13 @@ Expected: `Tests  4 passed | 64 skipped (68)`
 
 - [ ] **Step 6: Prove both halves of the predicate are pinned**
 
-Run `pnpm vitest run src/App.test.tsx -t "wake lock"` after each of these, restoring the call in between. All three were verified to fail exactly as stated:
+Run `pnpm vitest run src/App.test.tsx -t "wake lock"` after each of these, restoring the call in between. The counts below are the MEASURED results. Note that only the third row isolates a single operand: the first two mutations drop the `sleepDeadline === null` term as well as their target, so each fails the sleep-timer test too. (An earlier draft of this table undercounted rows 1 and 2 — it was measured when the predicate still had only two operands, and not re-measured after the sleep-timer operand was added.)
 
 | Change the call to | Must fail |
 |---|---|
-| `useWakeLock(isPlaying)` | 2 tests — `holds the screen awake…` and `releases the lock when the now-playing view closes` |
-| `useWakeLock(mobilePlayerOpen)` | 1 test — `does not hold the screen awake when the view is open but paused` |
-| `useWakeLock(mobilePlayerOpen && isPlaying)` | 1 test — `releases the lock when a sleep timer is armed` |
+| `useWakeLock(isPlaying)` | **3 tests** — `holds the screen awake…`, `releases the lock when the now-playing view closes`, and `releases the lock when a sleep timer is armed` |
+| `useWakeLock(mobilePlayerOpen)` | **2 tests** — `does not hold the screen awake when the view is open but paused`, and `releases the lock when a sleep timer is armed` |
+| `useWakeLock(mobilePlayerOpen && isPlaying)` | **1 test** — `releases the lock when a sleep timer is armed`. The only row that isolates one operand. |
 
 If any mutation leaves the suite green, report it — the wiring is not actually pinned.
 

@@ -78,6 +78,7 @@ pnpm test:run  # Vitest single pass
   (on by default); persists across reloads. Lives in the "Now playing" view's
   audio-settings popover (alongside EQ and crossfade) — the desktop
   `PlayerBar` popover doesn't have it
+- **Screen stays awake** in the full-screen now-playing view while a track plays — so the visualizer and synced lyrics keep showing.
 - **Listening stats** — play counts, total time listened, top artists, top
   tracks and recently played, in a slide-in panel (`S`). A play is counted
   when a track finishes; counts also show on song rows, with "Most played"

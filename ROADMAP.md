@@ -1081,3 +1081,18 @@ the one property needed the fix. Full detail in `CLAUDE.md` → "Playback
 speed". Regression-tested in `useAudioEngine.test.tsx`, using a
 deliberately-simulated reset (happy-dom's `load()` mock doesn't reproduce
 Chromium's behavior on its own).
+
+## Screen wake lock (shipped, 2026-09-09)
+
+Status: ✅ branch `screen-wake-lock`. **12 tests added** (10 hook tests + 4 App tests), **597 total**.
+
+The full-screen now-playing view is used as an ambient display (orb, visualizer ring, scrolling lyrics). Without this feature, the screen would go dark after a few minutes' inactivity, defeating its purpose. Two commits: `ee11efb` (`useWakeLock` hook), `50203db` (App wiring).
+
+**Three approved decisions**:
+1. **Trigger is view-open AND playing** — audio keeps playing with the screen off, so the lock only matters for the visual surface. Playback alone gets no lock.
+2. **Automatic with no UI or persisted preference** — opening the view IS the intent; there is no toggle to turn it on/off.
+3. **An armed sleep timer releases the lock** — the two features state opposite intentions and sit three taps apart (timer arms in the same button row the lock guards). A 30-minute timer means "I am going to sleep", so it must not leave the screen lit for the whole countdown.
+
+**Notable implementation**: The hook re-acquires on `visibilitychange` (the browser auto-releases when the document is hidden). Without that listener, the lock is gone permanently after the first tab switch — a tab-switching regression would be silent and only surface under real use.
+
+The feature came from the 2026-09-06 feature-mining research (Harmonoid and Museeks both ship this, independently), not from the ROADMAP backlog (which is now exhausted: 7 shipped, item 5 closed unbuilt).
