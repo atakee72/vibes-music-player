@@ -65,6 +65,7 @@ import { resolveNextSong, safeQueueMove, upNextPreview } from './lib/queue';
 import type { EqPreset } from './lib/eq';
 import { useDominantColor } from './hooks/useDominantColor';
 import { useInstallPrompt } from './hooks/useInstallPrompt';
+import { useWakeLock } from './hooks/useWakeLock';
 import { encodeSharePayload, decodeSharePayload, type SharedTrack } from './lib/share';
 
 // Code-split: these surfaces aren't needed for first paint, so they load on
@@ -2029,6 +2030,13 @@ export default function App() {
   };
 
   const supportsFolderPicker = typeof window !== 'undefined' && 'showDirectoryPicker' in window;
+
+  // Keep the display awake only while the full-screen view is open AND a
+  // track is playing: that view is the ambient-display surface (orb,
+  // visualizer ring, scrolling lyrics). Audio alone needs no wake lock.
+  // An armed sleep timer wins: it means "I am going to sleep", so it
+  // must not leave the screen lit for the whole countdown.
+  useWakeLock(mobilePlayerOpen && isPlaying && sleepDeadline === null);
 
   useMediaSession({
     song: currentSong,

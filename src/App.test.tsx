@@ -1816,3 +1816,79 @@ describe('Refresh and files it could not read', () => {
     expect(screen.getByText('Under Locked')).toBeInTheDocument();
   });
 });
+
+describe('screen wake lock', () => {
+  const requestWakeLock = vi.fn(async () => ({
+    released: false,
+    release: vi.fn(async () => {}),
+  }));
+
+  beforeEach(() => {
+    Object.defineProperty(navigator, 'wakeLock', {
+      value: { request: requestWakeLock },
+      configurable: true,
+    });
+  });
+
+  afterEach(() => {
+    // happy-dom ships no `navigator.wakeLock`; restore that absence so every
+    // other test in this file keeps exercising the unsupported-browser path.
+    Reflect.deleteProperty(navigator, 'wakeLock');
+  });
+
+  const openNowPlaying = async (title: string) => {
+    await screen.findByText(title);
+    playRow(0);
+    fireEvent.click(screen.getAllByLabelText('Open now playing')[0]);
+    await waitFor(() =>
+      expect(screen.getByRole('dialog', { name: 'Now playing' })).not.toHaveClass('opacity-0'),
+    );
+  };
+
+  it('holds the screen awake while the now-playing view is open and playing', async () => {
+    engine.isPlaying = true;
+    await renderApp({ playlists: [libraryWith(makeSong({ title: 'Cemalım' }))] });
+    expect(requestWakeLock).not.toHaveBeenCalled();
+
+    await openNowPlaying('Cemalım');
+
+    await waitFor(() => expect(requestWakeLock).toHaveBeenCalledWith('screen'));
+  });
+
+  it('does not hold the screen awake when the view is open but paused', async () => {
+    engine.isPlaying = false;
+    await renderApp({ playlists: [libraryWith(makeSong({ title: 'Cemalım' }))] });
+
+    await openNowPlaying('Cemalım');
+
+    expect(requestWakeLock).not.toHaveBeenCalled();
+  });
+
+  it('releases the lock when the now-playing view closes', async () => {
+    engine.isPlaying = true;
+    await renderApp({ playlists: [libraryWith(makeSong({ title: 'Cemalım' }))] });
+    await openNowPlaying('Cemalım');
+    await waitFor(() => expect(requestWakeLock).toHaveBeenCalled());
+    const sentinel = await requestWakeLock.mock.results[0].value;
+
+    fireEvent.keyDown(document, { code: 'Escape' });
+
+    await waitFor(() => expect(sentinel.release).toHaveBeenCalled());
+  });
+
+  it('releases the lock when a sleep timer is armed', async () => {
+    engine.isPlaying = true;
+    await renderApp({ playlists: [libraryWith(makeSong({ title: 'Cemalım' }))] });
+    await openNowPlaying('Cemalım');
+    await waitFor(() => expect(requestWakeLock).toHaveBeenCalled());
+    const sentinel = await requestWakeLock.mock.results[0].value;
+
+    // Both the player bar and the open view render a sleep-timer trigger, so
+    // scope to the view.
+    const view = screen.getByRole('dialog', { name: 'Now playing' });
+    fireEvent.click(within(view).getByRole('button', { name: /Sleep timer/ }));
+    fireEvent.click(within(view).getByRole('menuitem', { name: '15 minutes' }));
+
+    await waitFor(() => expect(sentinel.release).toHaveBeenCalled());
+  });
+});
