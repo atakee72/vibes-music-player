@@ -1084,7 +1084,7 @@ Chromium's behavior on its own).
 
 ## Screen wake lock (shipped, 2026-09-09)
 
-Status: ✅ branch `screen-wake-lock`. **12 tests added** (10 hook tests + 4 App tests), **597 total**.
+Status: ✅ branch `screen-wake-lock`. **14 tests added** (10 hook tests + 4 App tests), **597 total**.
 
 The full-screen now-playing view is used as an ambient display (orb, visualizer ring, scrolling lyrics). Without this feature, the screen would go dark after a few minutes' inactivity, defeating its purpose. Two commits: `ee11efb` (`useWakeLock` hook), `50203db` (App wiring).
 
@@ -1095,4 +1095,4 @@ The full-screen now-playing view is used as an ambient display (orb, visualizer 
 
 **Notable implementation**: The hook re-acquires on `visibilitychange` (the browser auto-releases when the document is hidden). Without that listener, the lock is gone permanently after the first tab switch — a tab-switching regression would be silent and only surface under real use.
 
-The feature came from the 2026-09-06 feature-mining research (Harmonoid and Museeks both ship this, independently), not from the ROADMAP backlog (which is now exhausted: 7 shipped, item 5 closed unbuilt).
+The feature came from the 2026-09-06 feature-mining research — specifically the Museeks review, where its "sleep mode blocker" was the one remaining portable item — not from the ROADMAP backlog (which is now exhausted: 7 shipped, item 5 closed unbuilt).
