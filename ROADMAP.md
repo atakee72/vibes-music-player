@@ -923,8 +923,12 @@ patching `FileSystemFileHandle.prototype.getFile` to reject with
 | Cover art fetch | `e416235` — iTunes Search API lookup for art-less songs (row action + Library-wide sweep); strict scored matching, apply-time liveness checkpoint so a sweep can't overwrite art the self-heal just recovered |
 | Ingest + Refresh reliability | `d5456cf` — re-picking a known folder re-walks instead of dead-ending; `2ba12c6` — Refresh keeps and reports unreadable files instead of deleting them |
 | Mobile control row | `8b34583` — one transport order everywhere (shuffle left, repeat right), `PlayerBar`'s duplicate responsive shuffle/repeat pair collapsed 4 buttons into 2, utility row spread edge to edge (4 commits) |
+| Format/quality badge | `c7e8f41` — codec · sample rate · bitrate chip in the now-playing views; the parsed bitrate is kept only when it agrees with a size÷duration derivation, because music-metadata misreports it for most AAC |
+| Swipe-up-for-lyrics | `b16cdfb` — lyrics as an in-view bottom sheet, opened by button or upward drag, so the now-playing view no longer has to close; `2e744e6` takes the sheet out of the tab order while it exits |
+| Playback speed + pitch | `9acdf1d` — 0.5×–2× with a preserve-pitch toggle, crossfade/preload thresholds scaled by rate; `30dc6e6` — reapply the rate after `HTMLMediaElement.load()` silently resets it, a defect only a real browser could find |
+| Screen wake lock | `50203db` — hold a Screen Wake Lock while the now-playing view is open and playing, released when a sleep timer is armed (5 commits) |
 
-Total: 479 tests, all green; `pnpm build` clean; production live.
+Total: 597 tests, all green; `pnpm build` clean; production live.
 
 ## Real-library milestone (2026-08-11)
 
