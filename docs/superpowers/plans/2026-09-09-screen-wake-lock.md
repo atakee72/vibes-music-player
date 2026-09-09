@@ -14,6 +14,7 @@
 
 1. **Trigger: full-screen view open AND playing.** Not "whenever playing". Audio keeps playing with the screen off, so a wake lock is not needed for playback — it exists for the ambient-display case (orb, `OrbVisualizerRing`, scrolling synced lyrics). Closing the view or pausing releases the lock.
 2. **Automatic, no UI.** No toggle, no persisted preference, no popover row, no storage key. Opening the view is itself the intent signal.
+3. **An armed sleep timer wins** (added 2026-09-09 after an audit found the conflict). The sleep timer and the wake lock state opposite intentions, and both are reachable from the same button row in the now-playing view (`SleepTimerMenu`, `MobileNowPlaying.tsx:437`). Arming a timer means "I am going to sleep", so it must not leave the screen lit at full brightness for the whole countdown. The predicate is therefore `mobilePlayerOpen && isPlaying && sleepDeadline === null`. Accepted trade-off: arm a timer and keep reading lyrics, and the screen sleeps on its normal OS schedule.
 
 ## Global Constraints
 
@@ -40,6 +41,7 @@ Every fact below was measured in this repo on 2026-09-09, not assumed. Do not re
 | TypeScript version | 5.9.3, and `lib.dom.d.ts` already has `WakeLock` + `WakeLockSentinel` |
 | React StrictMode | **On** (`src/main.tsx:19`) — every effect mounts, tears down, and mounts again in dev |
 | Baseline test count before this work | **583** passing across 48 files, `main` @ `a521c21` |
+| Test count after this work | **597** across 48 files (583 + 10 hook + 4 App) — verified by running it |
 
 **Browser API facts** (from MDN, Screen Wake Lock API):
 
@@ -57,7 +59,7 @@ Every fact below was measured in this repo on 2026-09-09, not assumed. Do not re
 | `src/hooks/useWakeLock.ts` | **new** — the entire wake-lock lifecycle. The only file in the project that touches `navigator.wakeLock`. |
 | `src/hooks/useWakeLock.test.ts` | **new** — 10 unit tests, each pinned to a specific guard in the hook. |
 | `src/App.tsx` | one import + one call. No other change. |
-| `src/App.test.tsx` | 3 tests pinning the `mobilePlayerOpen && isPlaying` predicate — the one thing hook-level tests cannot see. |
+| `src/App.test.tsx` | 4 tests pinning the `mobilePlayerOpen && isPlaying && sleepDeadline === null` predicate — the one thing hook-level tests cannot see. |
 | `CLAUDE.md`, `README.md`, `ROADMAP.md` | docs. |
 
 **Why the hook is unit-tested when `useMediaSession` and `useInstallPrompt` are not.** Those two carry a comment calling them "thin browser-API wrapper, untested by convention". That convention exists because their APIs cannot be observed under happy-dom, not because hooks are exempt. `navigator.wakeLock` is absent from happy-dom *and* trivially fakeable, and this hook holds real state (a sentinel) across an async boundary with a StrictMode race in it. It gets tests. A reviewer noticing the inconsistency should read this paragraph, not file it as a finding.
@@ -74,13 +76,14 @@ Every fact below was measured in this repo on 2026-09-09, not assumed. Do not re
 - Consumes: nothing from earlier tasks.
 - Produces: `export function useWakeLock(active: boolean): void` — a hook taking one boolean and returning nothing. Task 2 calls it.
 
-**The five guards this hook exists for.** Each has exactly one test that goes red when the guard is deleted; this was verified by mutation, not asserted. Do not "simplify" any of them away:
+**The six guards this hook exists for.** Every one of them was deleted in turn and the suite re-run, so each is known to have at least one test that goes red without it — verified, not asserted. Do not "simplify" any of them away:
 
 1. **`if (cancelled)` after the await** — StrictMode tears the effect down while the request is still in flight. Without this, the arriving sentinel is stored in a ref nobody will ever clean up: the lock leaks and the screen never sleeps again.
 2. **The `visibilitychange` listener** — the browser auto-releases on hide; without re-acquiring, the lock is gone forever after the first tab switch.
 3. **`finally { acquiring = false }`** — without it, one refused request latches the hook off permanently.
 4. **`if (held && !held.released) return`** — without it, a spurious `visibilitychange` stacks a second sentinel and leaks the first.
 5. **The cleanup's `release()`** — without it, closing the view leaves the screen locked awake.
+6. **Registering the `visibilitychange` listener even when the first acquire bails** — the effect can mount while the document is hidden (OS lock-screen or Bluetooth transport controls flip `isPlaying` with the tab backgrounded). Bailing out of the whole effect when hidden looks like a harmless simplification and silently kills the feature for that path.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -159,13 +162,22 @@ describe('useWakeLock', () => {
     expect(request).not.toHaveBeenCalled();
   });
 
-  it('does not request while the document is hidden', async () => {
+  it('defers the request until a hidden document becomes visible', async () => {
     const { request } = installGrantingWakeLock();
     setVisibility('hidden');
     await act(async () => {
       renderHook(() => useWakeLock(true));
     });
     expect(request).not.toHaveBeenCalled();
+
+    // Reachable: OS lock-screen / Bluetooth transport controls flip
+    // `isPlaying` while the tab is hidden, so the effect can mount hidden.
+    // The listener must be registered even when the first acquire bails.
+    setVisibility('visible');
+    await act(async () => {
+      fireVisibilityChange();
+    });
+    expect(request).toHaveBeenCalledWith('screen');
   });
 
   it('releases the lock when it stops being active', async () => {
@@ -378,6 +390,12 @@ Green tests prove nothing until you have watched them go red for the right reaso
 | the `finally { acquiring = false; }` clause | `recovers from a refused request` |
 | the `if (held && !held.released) return;` line | `does not stack a second lock while one is still held` |
 | the cleanup's `void sentinel?.release()…` line | `releases the lock on unmount` |
+| add `if (document.visibilityState !== 'visible') return;` as the effect's first line | `defers the request until a hidden document becomes visible` |
+
+**Two traps when doing this, both hit while verifying this plan:**
+
+- **Diff every mutation before trusting its result.** A mutation that silently fails to apply looks exactly like a vacuous test. Run `git diff src/hooks/useWakeLock.ts` and confirm you changed what you meant to.
+- **Keep the syntax valid.** Deleting the `finally` clause means replacing `} finally { acquiring = false; }` with `}` — deleting those three lines outright unbalances the `try` and yields a collection error (`Tests no tests`), which is not the same thing as a test failing.
 
 If any deletion leaves all 10 tests green, the corresponding test is vacuous — **report that rather than continuing**; it means the plan's test is wrong.
 
@@ -405,7 +423,7 @@ git commit -m "feat: add useWakeLock hook"
 - Consumes: `useWakeLock(active: boolean): void` from `src/hooks/useWakeLock.ts` (Task 1).
 - Produces: nothing for later tasks.
 
-The predicate is `mobilePlayerOpen && isPlaying`. Both operands already exist in `App.tsx`: `mobilePlayerOpen` is `useState` (declared around line 128) and `isPlaying` is destructured from `useAudioEngine` (around line 305). Do **not** use `mobilePlayerOpenRef` — that ref exists for `togglePanel`, a stable `useCallback([])` that must not gain dependencies. This is a render-time boolean, so the state value is correct and the ref would not re-render the hook.
+The predicate is `mobilePlayerOpen && isPlaying && sleepDeadline === null`. All three operands already exist in `App.tsx`: `mobilePlayerOpen` is `useState` (declared around line 128), `isPlaying` is destructured from `useAudioEngine` (around line 305), and `sleepDeadline` is `useState<number | null>` (line 154). Do **not** use `mobilePlayerOpenRef` — that ref exists for `togglePanel`, a stable `useCallback([])` that must not gain dependencies. This is a render-time boolean, so the state value is correct and the ref would not re-render the hook.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -470,19 +488,37 @@ describe('screen wake lock', () => {
 
     await waitFor(() => expect(sentinel.release).toHaveBeenCalled());
   });
+
+  it('releases the lock when a sleep timer is armed', async () => {
+    engine.isPlaying = true;
+    await renderApp({ playlists: [libraryWith(makeSong({ title: 'Cemalım' }))] });
+    await openNowPlaying('Cemalım');
+    await waitFor(() => expect(requestWakeLock).toHaveBeenCalled());
+    const sentinel = await requestWakeLock.mock.results[0].value;
+
+    // Both the player bar and the open view render a sleep-timer trigger, so
+    // scope to the view.
+    const view = screen.getByRole('dialog', { name: 'Now playing' });
+    fireEvent.click(within(view).getByRole('button', { name: /Sleep timer/ }));
+    fireEvent.click(within(view).getByRole('menuitem', { name: '15 minutes' }));
+
+    await waitFor(() => expect(sentinel.release).toHaveBeenCalled());
+  });
 });
 ```
 
-Three notes on why this block looks the way it does:
+`within` is already imported at the top of `src/App.test.tsx`; the `Sleep timer` / `15 minutes` selectors are the same ones the existing `armTimer` helper uses in `describe('sleep timer')`.
+
+Four notes on why this block looks the way it does:
 
 - `openNowPlaying` is copied from the identically-named helper inside the existing `describe('lyrics sheet inside the now-playing view')`. It is duplicated on purpose: it is local to that describe and moving it to module scope would touch a passing test block for no benefit. `playRow(0)` starts playback because a bare row click outside selection mode is a no-op in `SongList`, and `getAllByLabelText(...)[0]` is used because "Open now playing" is not unique — both the pull-up handle and the cover/title row carry it.
 - `Escape` closes the view because `mobilePlayerOpen` is the **first** branch of App's Escape chain.
-- The `afterEach` deleting `navigator.wakeLock` is not tidiness — leaving a fake installed would silently change what every other test in the 596-test suite exercises.
+- The `afterEach` deleting `navigator.wakeLock` is not tidiness — leaving a fake installed would silently change what every other test in this file exercises (Vitest isolates per file, so the blast radius is `App.test.tsx`, not the whole suite).
 
 - [ ] **Step 2: Run the tests and watch them fail**
 
 Run: `pnpm vitest run src/App.test.tsx -t "wake lock"`
-Expected: all 3 fail. The first two fail on the `expect(requestWakeLock)` assertions (nothing calls the API yet); the third fails at `requestWakeLock.mock.results[0]` being `undefined`.
+Expected: all 4 fail. The first two fail on the `expect(requestWakeLock)` assertions (nothing calls the API yet); the last two fail at `requestWakeLock.mock.results[0]` being `undefined`.
 
 - [ ] **Step 3: Add the import**
 
@@ -500,27 +536,33 @@ In `src/App.tsx`, immediately above the existing `useMediaSession({` call, inser
   // Keep the display awake only while the full-screen view is open AND a
   // track is playing: that view is the ambient-display surface (orb,
   // visualizer ring, scrolling lyrics). Audio alone needs no wake lock.
-  useWakeLock(mobilePlayerOpen && isPlaying);
+  // An armed sleep timer wins: it means "I am going to sleep", so it
+  // must not leave the screen lit for the whole countdown.
+  useWakeLock(mobilePlayerOpen && isPlaying && sleepDeadline === null);
 
 ```
 
 - [ ] **Step 5: Run the tests and watch them pass**
 
 Run: `pnpm vitest run src/App.test.tsx -t "wake lock"`
-Expected: `Tests  3 passed | 64 skipped (67)`
+Expected: `Tests  4 passed | 64 skipped (68)`
 
 - [ ] **Step 6: Prove both halves of the predicate are pinned**
 
-Change the call to `useWakeLock(isPlaying)`, run `pnpm vitest run src/App.test.tsx -t "wake lock"`, and confirm **2 tests fail** (`holds the screen awake…` and `releases the lock…`). Restore it.
+Run `pnpm vitest run src/App.test.tsx -t "wake lock"` after each of these, restoring the call in between. All three were verified to fail exactly as stated:
 
-Then change it to `useWakeLock(mobilePlayerOpen)`, run again, and confirm **1 test fails** (`does not hold the screen awake when the view is open but paused`). Restore it.
+| Change the call to | Must fail |
+|---|---|
+| `useWakeLock(isPlaying)` | 2 tests — `holds the screen awake…` and `releases the lock when the now-playing view closes` |
+| `useWakeLock(mobilePlayerOpen)` | 1 test — `does not hold the screen awake when the view is open but paused` |
+| `useWakeLock(mobilePlayerOpen && isPlaying)` | 1 test — `releases the lock when a sleep timer is armed` |
 
-If either mutation leaves the suite green, report it — the wiring is not actually pinned.
+If any mutation leaves the suite green, report it — the wiring is not actually pinned.
 
 - [ ] **Step 7: Run the whole suite and typecheck**
 
 Run: `pnpm test:run && pnpm build`
-Expected: **596 tests passing across 48 files** (583 before this work + 10 from Task 1 + 3 from this task), and a clean `tsc`. A different total means something else changed — investigate before committing.
+Expected: **597 tests passing across 48 files** (583 before this work + 10 from Task 1 + 4 from this task), and a clean `tsc`. A different total means something else changed — investigate before committing.
 
 - [ ] **Step 8: Commit**
 
@@ -549,7 +591,13 @@ Insert a new `## Screen wake lock` section immediately **after** the `## Playbac
 
 - **`useWakeLock(active)` (`src/hooks/useWakeLock.ts`) is the only file that
   touches `navigator.wakeLock`.** App calls it as
-  `useWakeLock(mobilePlayerOpen && isPlaying)` — nothing else.
+  `useWakeLock(mobilePlayerOpen && isPlaying && sleepDeadline === null)` —
+  nothing else.
+- **An armed sleep timer releases the lock.** The two features state opposite
+  intentions and sit three taps apart in the same button row, so without the
+  third operand a 30-minute timer means 30 minutes of a fully-lit screen in a
+  dark room. Regression-tested in `App.test.tsx` ("releases the lock when a
+  sleep timer is armed").
 - **The lock is deliberately NOT tied to playback alone.** Audio keeps
   playing with the screen off, so playback needs no wake lock; the feature
   exists for the full-screen now-playing view used as an ambient display
@@ -592,12 +640,12 @@ In `README.md`, find the feature bullet list that already mentions playback spee
 
 - [ ] **Step 3: Add a ROADMAP shipped section**
 
-Append to `ROADMAP.md`, after the `## Playback speed + pitch (shipped, 2026-09-08)` section, following the same shape as its neighbours (status line, what shipped, decisions, and the commits). Record the two approved decisions verbatim: **trigger is view-open AND playing**, and **automatic with no UI or persisted preference**. Note that it came from the 2026-09-06 feature-mining research rather than the (now exhausted) backlog.
+Append to `ROADMAP.md`, after the `## Playback speed + pitch (shipped, 2026-09-08)` section, following the same shape as its neighbours (status line, what shipped, decisions, and the commits). Record the three approved decisions verbatim: **trigger is view-open AND playing**, **automatic with no UI or persisted preference**, and **an armed sleep timer releases the lock**. Note that it came from the 2026-09-06 feature-mining research rather than the (now exhausted) backlog.
 
 - [ ] **Step 4: Verify nothing else broke**
 
 Run: `pnpm test:run`
-Expected: still 596 passing. Docs-only changes must not move that number.
+Expected: still 597 passing. Docs-only changes must not move that number.
 
 - [ ] **Step 5: Commit**
 
@@ -672,7 +720,7 @@ No commit unless a defect was found and fixed.
 
 ## Verification (whole feature)
 
-- `pnpm test:run && pnpm build` — **596 tests across 48 files**, clean `tsc`.
+- `pnpm test:run && pnpm build` — **597 tests across 48 files**, clean `tsc`.
 - Task 1 Step 5 and Task 2 Step 6 are the real gates: every new test must have been watched failing for the right reason.
 - Task 4 is the browser gate.
 - **What none of this covers:** whether the screen actually stays lit on a real phone. That needs the user's hardware — the same category as the audio checks (crossfade quality, ReplayGain levels) that `CLAUDE.md` already flags as human-only.
@@ -681,5 +729,6 @@ No commit unless a defect was found and fixed.
 
 - Any toggle, setting, or persisted preference (decision 2).
 - Holding the lock for playback outside the full-screen view (decision 1).
+- Dimming the view instead of releasing the lock when a sleep timer is armed — considered during the audit and declined as a bigger design change than this feature warrants.
 - A visible indicator of lock state — considered and declined; it would make an invisible feature legible at the cost of chrome in a view built to be uncluttered.
 - The `'system'` wake lock type. It is not implemented by browsers, and Vibes has no use for it.
