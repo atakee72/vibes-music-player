@@ -382,8 +382,8 @@ Facts other tools (e.g. a beets-managed library feeding Vibes) must know:
   by deletion, not assumed): a `cancelled` flag checked AFTER the await
   (React 18 StrictMode tears the effect down mid-request, and a sentinel
   that arrives orphaned is a lock nothing can ever release); `acquiring`
-  reset in a `finally` (else one refused request latches the hook off
-  forever); an already-held check (else a spurious `visibilitychange`
+  reset in a `finally` (else one completed request — granted or refused —
+  latches the hook off forever); an already-held check (else a spurious `visibilitychange`
   stacks a second sentinel and leaks the first); and the cleanup's
   `release()`.
 - **A refused request is not an error.** `request()` rejects for power
@@ -398,6 +398,16 @@ Facts other tools (e.g. a beets-managed library feeding Vibes) must know:
   untested because happy-dom cannot observe their APIs. happy-dom ships no
   `navigator.wakeLock` at all and both it and `document.visibilityState` are
   `Object.defineProperty`-able, so this hook's whole lifecycle is testable.
+- **The `visibilitychange` re-acquire is the one part no browser we can drive
+  has confirmed.** Headless Chromium never flips `document.visibilityState`,
+  so the 2026-09-09 browser pass verified the request, the grant, and a real
+  `sentinel.released` transition, but could NOT verify that the browser
+  auto-releases the lock when the document hides, nor that our listener
+  re-acquires it afterwards. Both halves are covered by unit tests against a
+  fake `navigator.wakeLock`, and the browser half is spec-mandated. Checking
+  it for real needs hardware: play a track with the now-playing view open on
+  a phone, switch apps, come back, and see whether the screen still refuses
+  to sleep. A human-only check like the audio ones — not a hole in the tests.
 
 ## Format/quality badge
 
